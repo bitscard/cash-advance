@@ -25,6 +25,8 @@ const publicApp = (row) => ({
   payday: fmtDate(row.payday),
   status: row.status,
   plaid_connected: Boolean(row.access_token),
+  stripe_card_saved: Boolean(row.stripe_payment_method_id),
+  stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
     due_date: fmtDate(row.repayment_due_date),
@@ -115,6 +117,30 @@ async function getMessages(application_id) {
   return rows;
 }
 
+async function saveStripeCustomer(id, stripe_customer_id) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET stripe_customer_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+    [stripe_customer_id, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveStripePaymentMethod(id, stripe_payment_method_id) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET stripe_payment_method_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+    [stripe_payment_method_id, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveStripeCharge(id, charge_id, charge_status) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET stripe_charge_id=$1, stripe_charge_status=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
+    [charge_id, charge_status, id],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   publicApp,
   createApplication,
@@ -127,4 +153,7 @@ module.exports = {
   markRepaymentPaid,
   addMessage,
   getMessages,
+  saveStripeCustomer,
+  saveStripePaymentMethod,
+  saveStripeCharge,
 };

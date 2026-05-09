@@ -2,6 +2,7 @@
 
 // read env vars from .env file
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { Configuration, PlaidApi, Products, PlaidEnvironments, CraCheckReportProduct } = require('plaid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -486,6 +487,98 @@ app.post('/api/advance/admin/applications/:id/repayment', async function (reques
     await db.addMessage(row.id, 'system', `Repayment of $${amount.toFixed(2)} is due by ${due_date}. You have 30 days from funding to repay this advance.`);
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
+});
+
+// ── Stripe card endpoints ──────────────────────────────────────────────────────
+
+app.post('/api/advance/applications/:id/stripe/setup-intent', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session',
+    });
+
+    response.json({ client_secret: setupIntent.client_secret });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/applications/:id/stripe/save-payment-method', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { payment_method_id } = request.body;
+    if (!payment_method_id) {
+      return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
+    }
+    const updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
+    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/admin/applications/:id/charge', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!row.stripe_customer_id || !row.stripe_payment_method_id) {
+      return response.status(400).json({ error: { error_message: 'No card on file for this application' } });
+    }
+
+    const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'usd',
+      customer: row.stripe_customer_id,
+      payment_method: row.stripe_payment_method_id,
+      off_session: true,
+      confirm: true,
+      description: `Cash advance repayment — ${row.name}`,
+      metadata: { application_id: row.id },
+    });
+
+    await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
+
+    if (paymentIntent.status === 'succeeded') {
+      await db.markRepaymentPaid(row.id);
+      await db.addMessage(row.id, 'system', `Card payment of $${(amount / 100).toFixed(2)} collected successfully.`);
+    }
+
+    const updated = await db.getApplicationById(request.params.id);
+    response.json({ application: db.publicApp(updated), status: paymentIntent.status });
+  } catch (err) {
+    if (err.type === 'StripeCardError') {
+      await db.saveStripeCharge(request.params.id, err.payment_intent?.id || null, 'failed');
+      await db.updateApplicationStatus(request.params.id, 'repayment_failed');
+      await db.addMessage(request.params.id, 'system', `Card payment failed: ${err.message}`);
+      return response.status(402).json({ error: { error_message: err.message } });
+    }
+    next(err);
+  }
 });
 
 // Create a link token with configs which we can then use to initialize Plaid Link client-side.
@@ -1292,9 +1385,9 @@ app.post('/api/link_exit_error', function (request, response, next) {
 app.use('/api', function (error, request, response, next) {
   if (error.response?.data) {
     prettyPrintResponse(error.response);
+    response.status(error.response.status || 500).json(formatError(error.response));
   } else {
     console.log(error.message || error);
+    response.status(500).json({ error: { error_message: error.message || 'Internal server error' } });
   }
-  const statusCode = error.response?.status || 500;
-  response.status(statusCode).json(formatError(error.response));
 });

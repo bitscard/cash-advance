@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
 
 type Status =
   | "intake"
@@ -27,6 +31,8 @@ interface Application {
   payday: string;
   status: Status;
   plaid_connected: boolean;
+  stripe_card_saved: boolean;
+  stripe_charge_status: string | null;
   repayment: null | {
     amount: number;
     due_date: string;
@@ -91,6 +97,7 @@ const formatMoney = (amount: number | null | undefined) => {
 };
 
 const today = new Date().toISOString().slice(0, 10);
+const thirtyDaysFromNow = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
 
 function levenshtein(a: string, b: string): number {
   const dp = Array.from({ length: a.length + 1 }, (_, i) =>
@@ -389,6 +396,13 @@ const CustomerApp = () => {
           <p className={styles.kicker}>Application</p>
           <h2>{formatMoney(application.requested_amount)}</h2>
           <div className={styles.status}>{statusLabel[application.status]}</div>
+          <button className={styles.logoutBtn} onClick={() => {
+            localStorage.removeItem(applicationStorageKey);
+            localStorage.removeItem(userTokenStorageKey);
+            setApplication(null);
+            setMessages([]);
+            setView("landing");
+          }}>Log out</button>
           <dl>
             <dt>Name</dt>
             <dd>{application.customer.name}</dd>
@@ -411,9 +425,20 @@ const CustomerApp = () => {
         </aside>
         <section className={styles.chat}>
           <header>
-            <p className={styles.kicker}>Live review chat</p>
-            <h1>Continue your review</h1>
-            <p>Connect your bank with Plaid, then a human reviewer will reply here.</p>
+            <div className={styles.loanHeader}>
+              <div>
+                <p className={styles.kicker}>Live review chat</p>
+                <h1>Continue your review</h1>
+                <p>Connect your bank with Plaid, then a human reviewer will reply here.</p>
+              </div>
+              <button className={styles.logoutBtn} onClick={() => {
+                localStorage.removeItem(applicationStorageKey);
+                localStorage.removeItem(userTokenStorageKey);
+                setApplication(null);
+                setMessages([]);
+                setView("landing");
+              }}>Log out</button>
+            </div>
           </header>
           <MessageList messages={messages} />
           {!application.plaid_connected && (
@@ -422,6 +447,14 @@ const CustomerApp = () => {
               <p><strong>Important:</strong> connect the account where your employer sends your direct deposit — not a savings or secondary account.</p>
               <button disabled={isBusy} onClick={createLinkToken}>
                 Connect bank with Plaid
+              </button>
+            </div>
+          )}
+          {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && !application.stripe_card_saved && (
+            <div className={styles.chatAction}>
+              <p><strong>You're approved!</strong> The last step is to save a card so we can collect repayment automatically on your due date.</p>
+              <button onClick={() => window.location.href = "/loan"}>
+                Continue — save repayment card →
               </button>
             </div>
           )}
@@ -449,7 +482,7 @@ const AdminApp = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [snapshot, setSnapshot] = useState<BankSnapshot | null>(null);
-  const [repaymentDate, setRepaymentDate] = useState(today);
+  const [repaymentDate, setRepaymentDate] = useState(thirtyDaysFromNow);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -555,6 +588,26 @@ const AdminApp = () => {
     setIsBusy(false);
   };
 
+  const chargeCard = async () => {
+    if (!selected) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/admin/applications/${selected.id}/charge`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...adminHeaders },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Charge failed");
+      await loadApplications();
+      await loadMessages(selected.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Charge failed");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   return (
     <main className={styles.page}>
       {!adminToken && (
@@ -635,7 +688,7 @@ const AdminApp = () => {
                 </div>
                 <div className={styles.repayment}>
                   <label>
-                    Repayment date
+                    Repayment due date (30 days from funding)
                     <input
                       type="date"
                       min={today}
@@ -644,6 +697,14 @@ const AdminApp = () => {
                     />
                   </label>
                   <button disabled={isBusy} onClick={scheduleRepayment}>Record repayment schedule</button>
+                  {selected.stripe_card_saved && (
+                    <button disabled={isBusy} onClick={chargeCard} style={{ marginTop: "0.6rem" }}>
+                      {isBusy ? "Charging…" : "Charge card now"}
+                    </button>
+                  )}
+                  {!selected.stripe_card_saved && (
+                    <p className={styles.muted} style={{ marginTop: "0.6rem" }}>No card on file — customer must save one via their loan dashboard.</p>
+                  )}
                 </div>
                 {error && <p className={styles.error}>{error}</p>}
               </section>
@@ -893,24 +954,32 @@ const LoanApp = () => {
 
             <section className={styles.panel}>
               <h3>Repayment</h3>
-              {!rep ? (
-                <p className={styles.muted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
-              ) : (
+              {application.status === "repaid" ? (
+                <p className={styles.paidNote}>Repayment collected — thank you!</p>
+              ) : !application.stripe_card_saved && (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
                 <>
-                  <dl>
-                    <dt>Amount due</dt><dd>{formatMoney(rep.amount)}</dd>
-                    <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
-                    <dt>Status</dt>
-                    <dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
-                  </dl>
-                  <p className={styles.muted}>Repayment must be completed within <strong>30 days</strong> of funding.</p>
-                  {canPayoff && !payoffDone && (
-                    <button disabled={isBusy} onClick={payoff}>{isBusy ? "Processing…" : "Mark as repaid"}</button>
-                  )}
-                  {(payoffDone || rep.status === "paid") && (
-                    <p className={styles.paidNote}>Repayment recorded — thank you! The reviewer will confirm shortly.</p>
-                  )}
+                  <p><strong>One last step.</strong> Save a card and we'll automatically collect your ${application.requested_amount} repayment on the due date — no action needed from you on the day.</p>
+                  <Elements stripe={stripePromise}>
+                    <SaveCardForm
+                      applicationId={application.id}
+                      authToken={token}
+                      onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
+                    />
+                  </Elements>
                 </>
+              ) : application.stripe_card_saved ? (
+                <>
+                  {rep && (
+                    <dl>
+                      <dt>Amount due</dt><dd>{formatMoney(rep.amount)}</dd>
+                      <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
+                      <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
+                    </dl>
+                  )}
+                  <p className={styles.paidNote}>Card saved — we'll charge it automatically on the due date.</p>
+                </>
+              ) : (
+                <p className={styles.muted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
               )}
               {error && <p className={styles.error}>{error}</p>}
             </section>
@@ -923,6 +992,75 @@ const LoanApp = () => {
         </section>
       </section>
     </main>
+  );
+};
+
+const SaveCardForm = ({
+  applicationId,
+  authToken,
+  onSaved,
+}: {
+  applicationId: string;
+  authToken: string;
+  onSaved: () => void;
+}) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${applicationId}/stripe/setup-intent`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not start card setup");
+
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) throw new Error("Card element not found");
+
+      const result = await stripe.confirmCardSetup(data.client_secret, {
+        payment_method: { card: cardElement },
+      });
+
+      if (result.error) throw new Error(result.error.message);
+
+      const paymentMethodId = result.setupIntent.payment_method as string;
+      const saveRes = await fetch(
+        apiUrl(`/api/advance/applications/${applicationId}/stripe/save-payment-method`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ payment_method_id: paymentMethodId }),
+        },
+      );
+      if (!saveRes.ok) throw new Error("Could not save card");
+      setDone(true);
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  if (done) return <p className={styles.paidNote}>Card saved — we'll charge it automatically on the due date.</p>;
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className={styles.cardElementWrap}>
+        <CardElement options={{ hidePostalCode: true }} />
+      </div>
+      {error && <p className={styles.error}>{error}</p>}
+      <button disabled={isBusy || !stripe}>{isBusy ? "Saving…" : "Save card"}</button>
+    </form>
   );
 };
 

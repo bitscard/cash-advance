@@ -504,3 +504,11 @@ dd {
     grid-template-columns: 1fr;
   }
 }
+
+.cardElementWrap {
+  border: 1px solid #d0d5c8;
+  border-radius: 0.6rem;
+  padding: 1.2rem 1.4rem;
+  background: #fff;
+  margin-bottom: 1.2rem;
+}

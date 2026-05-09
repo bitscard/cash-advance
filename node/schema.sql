@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS applications (
   repayment_due_date   DATE,
   repayment_note       TEXT,
   repayment_status     TEXT,
+  stripe_customer_id       TEXT,
+  stripe_payment_method_id TEXT,
+  stripe_charge_id         TEXT,
+  stripe_charge_status     TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
