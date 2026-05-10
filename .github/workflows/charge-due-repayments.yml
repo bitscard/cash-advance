@@ -1,0 +1,22 @@
+name: Charge due repayments
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # 9am UTC every day
+  workflow_dispatch:       # allows manual trigger from GitHub Actions tab
+
+jobs:
+  charge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger repayment collection
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${{ secrets.BACKEND_URL }}/api/advance/admin/run-due-repayments" \
+            -H "x-admin-token: ${{ secrets.ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json")
+          cat /tmp/response.json
+          if [ "$response" != "200" ]; then
+            echo "Failed with status $response"
+            exit 1
+          fi

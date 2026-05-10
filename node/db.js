@@ -117,6 +117,17 @@ async function getMessages(application_id) {
   return rows;
 }
 
+async function getDueApplications() {
+  const { rows } = await pool.query(
+    `SELECT * FROM applications
+     WHERE repayment_due_date <= CURRENT_DATE
+       AND repayment_status = 'pending'
+       AND stripe_payment_method_id IS NOT NULL
+       AND stripe_customer_id IS NOT NULL`
+  );
+  return rows;
+}
+
 async function saveStripeCustomer(id, stripe_customer_id) {
   const { rows } = await pool.query(
     'UPDATE applications SET stripe_customer_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
@@ -156,4 +167,5 @@ module.exports = {
   saveStripeCustomer,
   saveStripePaymentMethod,
   saveStripeCharge,
+  getDueApplications,
 };

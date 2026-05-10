@@ -581,6 +581,47 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
   }
 });
 
+app.post('/api/advance/admin/run-due-repayments', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const due = await db.getDueApplications();
+    const results = [];
+
+    for (const row of due) {
+      const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount,
+          currency: 'usd',
+          customer: row.stripe_customer_id,
+          payment_method: row.stripe_payment_method_id,
+          off_session: true,
+          confirm: true,
+          description: `Cash advance repayment — ${row.name}`,
+          metadata: { application_id: row.id },
+        });
+
+        await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
+
+        if (paymentIntent.status === 'succeeded') {
+          await db.markRepaymentPaid(row.id);
+          await db.addMessage(row.id, 'system', `Card payment of $${(amount / 100).toFixed(2)} collected successfully.`);
+        }
+
+        results.push({ id: row.id, name: row.name, status: paymentIntent.status });
+      } catch (err) {
+        const msg = err.message || 'Unknown error';
+        await db.saveStripeCharge(row.id, err.payment_intent?.id || null, 'failed');
+        await db.updateApplicationStatus(row.id, 'repayment_failed');
+        await db.addMessage(row.id, 'system', `Card payment failed: ${msg}`);
+        results.push({ id: row.id, name: row.name, status: 'failed', error: msg });
+      }
+    }
+
+    response.json({ processed: results.length, results });
+  } catch (err) { next(err); }
+});
+
 // Create a link token with configs which we can then use to initialize Plaid Link client-side.
 // See https://plaid.com/docs/#create-link-token
 app.post('/api/create_link_token', function (request, response, next) {
