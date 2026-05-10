@@ -724,7 +724,7 @@ const MessageList = ({ messages }: { messages: Message[] }) => (
   <div className={styles.messages}>
     {messages.map((message) => (
       <div key={message.id} className={`${styles.message} ${styles[message.sender]}`}>
-        <span>{message.sender}</span>
+        <span>{message.sender === "customer" ? "you" : "admin"}</span>
         <p>{message.text}</p>
       </div>
     ))}
