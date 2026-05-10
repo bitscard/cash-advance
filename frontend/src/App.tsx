@@ -6,7 +6,8 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
+const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
 
 type Status =
   | "intake"
@@ -302,27 +303,6 @@ const CustomerApp = () => {
       );
     }
 
-    const starterMessages: Message[] = [
-      {
-        id: "welcome",
-        sender: "admin",
-        text: "Hi, welcome. I can help you request a $50 earned wage advance.",
-        created_at: "",
-      },
-      {
-        id: "how-it-works",
-        sender: "admin",
-        text: "First I need a few details, then you will connect your bank with Plaid so a human reviewer can check income, balance, and recent activity.",
-        created_at: "",
-      },
-      {
-        id: "security",
-        sender: "system",
-        text: "Never send your bank login password. If approved, the reviewer may ask for routing and account details here for manual payout.",
-        created_at: "",
-      },
-    ];
-
     return (
       <main className={styles.page}>
         <section className={styles.chatOnly}>
@@ -331,7 +311,6 @@ const CustomerApp = () => {
               <p className={styles.kicker}>New application</p>
               <h1>$50 cash advance</h1>
             </header>
-            <MessageList messages={starterMessages} />
             <form className={styles.intakeComposer} onSubmit={createApplication}>
               <div className={styles.intakeGrid}>
                 <label>
@@ -959,13 +938,17 @@ const LoanApp = () => {
               ) : !application.stripe_card_saved && (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
                 <>
                   <p><strong>One last step.</strong> Save a card and we'll automatically collect your ${application.requested_amount} repayment on the due date — no action needed from you on the day.</p>
-                  <Elements stripe={stripePromise}>
-                    <SaveCardForm
-                      applicationId={application.id}
-                      authToken={token}
-                      onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
-                    />
-                  </Elements>
+                  {!stripeKey ? (
+                    <p className={styles.error}>Card payments are not configured yet. Please contact support.</p>
+                  ) : (
+                    <Elements stripe={stripePromise}>
+                      <SaveCardForm
+                        applicationId={application.id}
+                        authToken={token}
+                        onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
+                      />
+                    </Elements>
+                  )}
                 </>
               ) : application.stripe_card_saved ? (
                 <>
