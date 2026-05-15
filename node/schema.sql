@@ -33,3 +33,7 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS messages_application_id_idx ON messages(application_id, created_at);
+
+-- Payout preference columns (migration-safe)
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;

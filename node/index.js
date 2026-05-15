@@ -227,6 +227,23 @@ app.get('/api/advance/auth/me', async function (request, response, next) {
   } catch (err) { next(err); }
 });
 
+app.patch('/api/advance/applications/:id/payout-preference', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { methods, contact } = request.body;
+    if (!methods || !contact || !contact.trim()) {
+      return response.status(400).json({ error: { error_message: 'methods and contact are required' } });
+    }
+    const updated = await db.savePayoutPreference(request.params.id, methods, contact.trim());
+    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
 app.post('/api/advance/applications/:id/payoff', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;

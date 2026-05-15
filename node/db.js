@@ -7,6 +7,12 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// Run any additive migrations on startup
+pool.query(`
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
+`).catch(() => {}); // ignore if table doesn't exist yet (fresh setup uses schema.sql)
+
 const fmtDate = (v) => {
   if (!v) return null;
   if (typeof v === 'string') return v.slice(0, 10);
@@ -34,6 +40,8 @@ const publicApp = (row) => ({
     note: row.repayment_note || '',
     created_at: row.updated_at,
   } : null,
+  payout_methods: row.payout_methods || null,
+  payout_contact: row.payout_contact || null,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -128,6 +136,14 @@ async function getDueApplications() {
   return rows;
 }
 
+async function savePayoutPreference(id, methods, contact) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET payout_methods=$1, payout_contact=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
+    [methods, contact, id],
+  );
+  return rows[0] || null;
+}
+
 async function saveStripeCustomer(id, stripe_customer_id) {
   const { rows } = await pool.query(
     'UPDATE applications SET stripe_customer_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
@@ -155,6 +171,7 @@ async function saveStripeCharge(id, charge_id, charge_status) {
 module.exports = {
   publicApp,
   createApplication,
+  savePayoutPreference,
   getApplicationById,
   getApplicationByEmail,
   getAllApplications,

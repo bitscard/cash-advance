@@ -34,6 +34,8 @@ interface Application {
   plaid_connected: boolean;
   stripe_card_saved: boolean;
   stripe_charge_status: string | null;
+  payout_methods: string | null;
+  payout_contact: string | null;
   repayment: null | {
     amount: number;
     due_date: string;
@@ -927,6 +929,21 @@ const AdminApp = () => {
                     <button disabled={isBusy} onClick={() => setStatus("denied", "We are unable to approve this advance right now.")}>Deny</button>
                     <button disabled={isBusy} onClick={() => setStatus("funded", "Your advance has been sent.")}>Mark funded</button>
                   </div>
+                  {(selected.payout_methods || selected.payout_contact) && (
+                    <div className={styles.repayment}>
+                      <h4 style={{ margin: "0 0 0.8rem", fontSize: "1.4rem" }}>Payout preference</h4>
+                      {selected.payout_methods && (
+                        <p style={{ margin: "0 0 0.4rem", fontSize: "1.4rem" }}>
+                          <strong>Method:</strong> {selected.payout_methods}
+                        </p>
+                      )}
+                      {selected.payout_contact && (
+                        <p style={{ margin: 0, fontSize: "1.4rem" }}>
+                          <strong>Contact:</strong> {selected.payout_contact}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className={styles.repayment}>
                     <label>
                       Repayment due date (30 days from funding)
@@ -1068,6 +1085,11 @@ const LoanApp = () => {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payoffDone, setPayoffDone] = useState(false);
+  const [payoutMethods, setPayoutMethods] = useState<string[]>([]);
+  const [payoutContact, setPayoutContact] = useState("");
+  const [payoutSaved, setPayoutSaved] = useState(false);
+  const [payoutBusy, setPayoutBusy] = useState(false);
+  const [payoutError, setPayoutError] = useState<string | null>(null);
 
   const authHeaders = useMemo<Record<string, string>>(
     (): Record<string, string> => (token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1091,6 +1113,39 @@ const LoanApp = () => {
     const interval = window.setInterval(() => loadMe(authHeaders), 6000);
     return () => window.clearInterval(interval);
   }, [token, application, authHeaders, loadMe]);
+
+  useEffect(() => {
+    if (application?.payout_methods) setPayoutMethods(application.payout_methods.split(','));
+    if (application?.payout_contact) setPayoutContact(application.payout_contact);
+    if (application?.payout_methods && application?.payout_contact) setPayoutSaved(true);
+  }, [application?.payout_methods, application?.payout_contact]);
+
+  const togglePayoutMethod = (method: string) => {
+    setPayoutMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+    setPayoutSaved(false);
+  };
+
+  const submitPayoutPreference = async () => {
+    if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
+    if (!payoutContact.trim()) { setPayoutError("Please enter your username, email, or phone number"); return; }
+    setPayoutBusy(true);
+    setPayoutError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${application!.id}/payout-preference`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ methods: payoutMethods.join(','), contact: payoutContact.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Unable to save preference");
+      setApplication(data.application);
+      setPayoutSaved(true);
+    } catch (e) {
+      setPayoutError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setPayoutBusy(false);
+    }
+  };
 
   const login = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1193,6 +1248,9 @@ const LoanApp = () => {
               <p className={styles.kicker}>Your loan</p>
               <h2>{application.customer.name}</h2>
               <p>{application.customer.email}</p>
+              <p style={{ marginTop: "0.4rem", fontSize: "1.4rem", color: "var(--muted)" }}>
+                Approved for a <strong style={{ color: "var(--brand)" }}>$25 cash advance</strong>
+              </p>
             </div>
             <div className={styles.loanHeaderRight}>
               <div className={styles.status}>{statusLabel[application.status]}</div>
@@ -1242,13 +1300,51 @@ const LoanApp = () => {
                 <p className={styles.muted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
               )}
               {error && <p className={styles.error}>{error}</p>}
+
+              {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled" || application.status === "repaid") && (
+                <div style={{ marginTop: "2rem", borderTop: "1px solid var(--border)", paddingTop: "1.6rem" }}>
+                  <p style={{ fontWeight: 700, marginBottom: "0.8rem", color: "var(--ink)" }}>How should we send you the money?</p>
+                  <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1.2rem" }}>Select one or more and enter your contact info.</p>
+                  <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap" }}>
+                    {["PayPal", "CashApp", "Zelle"].map(method => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => togglePayoutMethod(method)}
+                        style={{
+                          padding: "0.8rem 1.6rem",
+                          borderRadius: "var(--pill)",
+                          border: `2px solid ${payoutMethods.includes(method) ? "var(--brand)" : "var(--border)"}`,
+                          background: payoutMethods.includes(method) ? "var(--brand-tint2)" : "var(--white)",
+                          color: payoutMethods.includes(method) ? "var(--brand)" : "var(--ink-2)",
+                          fontWeight: 600,
+                          fontSize: "1.4rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {method}
+                      </button>
+                    ))}
+                  </div>
+                  <label style={{ display: "block", marginTop: "1.2rem" }}>
+                    <span style={{ fontSize: "1.35rem", fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: "0.4rem" }}>
+                      {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
+                    </span>
+                    <input
+                      value={payoutContact}
+                      placeholder="e.g. @username or email@example.com"
+                      onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
+                    />
+                  </label>
+                  {payoutError && <p className={styles.error}>{payoutError}</p>}
+                  {payoutSaved && <p className={styles.paidNote}>✓ Payout preference saved!</p>}
+                  <button disabled={payoutBusy} onClick={submitPayoutPreference} style={{ marginTop: "1.2rem" }}>
+                    {payoutBusy ? "Saving…" : "Submit"}
+                  </button>
+                </div>
+              )}
             </section>
           </div>
-
-          <section className={styles.chat} style={{ marginTop: "2.4rem" }}>
-            <header><h3>Conversation history</h3></header>
-            <MessageList messages={messages} />
-          </section>
         </section>
       </section>
     </main>
