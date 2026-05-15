@@ -134,19 +134,19 @@ function amountMatch(query: string, amount: number): boolean {
 const NavBar = ({ onLogout }: { onLogout?: () => void }) => (
   <nav className={styles.nav}>
     <div className={styles.navBrand}>
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-        <rect width="28" height="28" rx="8" fill="#1a4d3a" />
-        <path d="M14 7L19.5 10.5V17.5L14 21L8.5 17.5V10.5L14 7Z" fill="white" fillOpacity="0.9" />
-        <circle cx="14" cy="14" r="2.8" fill="#1a4d3a" />
+      <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
+        <rect width="30" height="30" rx="9" fill="#1a4d3a" />
+        <path d="M15 7L21 11V19L15 23L9 19V11L15 7Z" fill="white" fillOpacity="0.92" />
+        <circle cx="15" cy="15" r="3" fill="#1a4d3a" />
       </svg>
       Advance
     </div>
     <div className={styles.navRight}>
       <span className={styles.navSecure}>
-        <svg width="13" height="15" viewBox="0 0 13 15" fill="none" aria-hidden="true">
-          <path d="M6.5 1.5L11.5 3.8V8.5C11.5 11.5 9.3 14.1 6.5 14.8C3.7 14.1 1.5 11.5 1.5 8.5V3.8L6.5 1.5Z" fill="#4a9470" />
+        <svg width="13" height="14" viewBox="0 0 13 14" fill="none" aria-hidden="true">
+          <path d="M6.5 1L11.5 3.5V8C11.5 11 9.3 13.5 6.5 14.2C3.7 13.5 1.5 11 1.5 8V3.5L6.5 1Z" fill="#607870" />
         </svg>
-        256-bit secure
+        Bank-level security
       </span>
       {onLogout && (
         <button className={styles.logoutBtn} onClick={onLogout}>Sign out</button>
@@ -156,43 +156,42 @@ const NavBar = ({ onLogout }: { onLogout?: () => void }) => (
 );
 
 const TrustPillars = () => (
-  <div className={styles.trustRow}>
-    <div className={styles.trustPillar}>
-      <div className={styles.trustPillarIcon}>
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 2L12.5 7.5H18.5L13.5 11L15.5 17L10 13.5L4.5 17L6.5 11L1.5 7.5H7.5L10 2Z" fill="#1a4d3a" />
-        </svg>
-      </div>
-      <div className={styles.trustPillarText}>
-        <strong>Same-day decision</strong>
-        <span>Apply in minutes, hear back fast</span>
+  <section className={`${styles.section} ${styles.sectionTint}`}>
+    <div className={styles.sectionInner}>
+      <p className={styles.sectionLabel}>Why people trust us</p>
+      <div className={styles.trustGrid}>
+        <div className={styles.trustCard}>
+          <div className={styles.trustIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 3L15 9.5H22L16.5 13.5L18.5 20.5L12 16.5L5.5 20.5L7.5 13.5L2 9.5H9L12 3Z" fill="#1a4d3a" />
+            </svg>
+          </div>
+          <strong>Same-day decision</strong>
+          <span>Apply in minutes. A real human reviews and responds the same day.</span>
+        </div>
+        <div className={styles.trustCard}>
+          <div className={styles.trustIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2L20 6V12C20 16.8 16.5 21 12 22.2C7.5 21 4 16.8 4 12V6L12 2Z" fill="#1a4d3a" />
+              <path d="M9 12L11.5 14.5L15.5 9.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <strong>256-bit encryption</strong>
+          <span>Your data is protected by the same technology banks use. Powered by Plaid and Stripe.</span>
+        </div>
+        <div className={styles.trustCard}>
+          <div className={styles.trustIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="#1a4d3a" strokeWidth="2.2" />
+              <path d="M8.5 12L11 14.5L15.5 9" stroke="#1a4d3a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <strong>No credit check — ever</strong>
+          <span>We verify your income, not your credit score. Your credit is never pulled.</span>
+        </div>
       </div>
     </div>
-    <div className={styles.trustPillar}>
-      <div className={styles.trustPillarIcon}>
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <path d="M10 2L17 5.5V11C17 15 14 18.5 10 19.5C6 18.5 3 15 3 11V5.5L10 2Z" fill="#1a4d3a" />
-          <path d="M7 10L9 12.5L13 7.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <div className={styles.trustPillarText}>
-        <strong>Bank-level encryption</strong>
-        <span>Secured by Plaid &amp; Stripe</span>
-      </div>
-    </div>
-    <div className={styles.trustPillar}>
-      <div className={styles.trustPillarIcon}>
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-          <circle cx="10" cy="10" r="7.5" stroke="#1a4d3a" strokeWidth="2" />
-          <path d="M7 10L9 12.5L13.5 7" stroke="#1a4d3a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <div className={styles.trustPillarText}>
-        <strong>No credit check</strong>
-        <span>We look at income, not scores</span>
-      </div>
-    </div>
-  </div>
+  </section>
 );
 
 // ── App router ────────────────────────────────────────────────────────────────
@@ -364,58 +363,66 @@ const CustomerApp = () => {
       return (
         <main className={styles.page}>
           <NavBar />
-          <section className={styles.chatOnly}>
-            <div className={styles.landingWrap}>
-              <div className={styles.heroCard}>
-                <p className={styles.kicker}>Earned wage advance</p>
-                <div className={styles.heroAmount}>
-                  <span className={styles.heroAmountDollar}>$</span>
-                  <span className={styles.heroAmountNum}>25</span>
-                </div>
-                <p className={styles.heroTitle}>Cash advance — before your next payday</p>
-                <p className={styles.heroSub}>
-                  No credit check. No hidden fees. Connect your bank, get a decision today, and repay within 30 days.
-                </p>
-                <div className={styles.landingActions}>
-                  <button onClick={() => setView("signup")}>Apply now — it's free</button>
-                  <button className={styles.secondaryBtn} onClick={() => window.location.href = "/loan"}>
-                    Sign in
-                  </button>
-                </div>
 
-                <div className={styles.howItWorks}>
-                  <div className={styles.howStep}>
-                    <div className={styles.howStepNum}>1</div>
-                    <strong>Apply in minutes</strong>
-                    <span>Fill out your info — name, employer, and next payday</span>
-                  </div>
-                  <div className={styles.howStep}>
-                    <div className={styles.howStepNum}>2</div>
-                    <strong>Connect your bank</strong>
-                    <span>We verify income securely via Plaid — no passwords shared</span>
-                  </div>
-                  <div className={styles.howStep}>
-                    <div className={styles.howStepNum}>3</div>
-                    <strong>Get funded</strong>
-                    <span>A reviewer approves and sends your advance manually</span>
-                  </div>
-                </div>
-
-                <div className={styles.partnerBadges}>
-                  <span>Secured by</span>
-                  <div className={styles.partnerBadge}>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#000"/><path d="M4 7l2.5 2.5L10 5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    Plaid
-                  </div>
-                  <div className={styles.partnerBadge}>
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect width="14" height="14" rx="3" fill="#635bff"/><path d="M5.8 5.2c0-.5.4-.8 1-.8.8 0 1.6.3 2.2.6V3.4C8.4 3.1 7.7 3 7 3 5.3 3 4.2 3.9 4.2 5.3c0 2.2 3 1.8 3 2.9 0 .6-.5.9-1.1.9-.9 0-1.8-.4-2.5-.9v1.7c.7.3 1.4.5 2.2.5 1.7 0 2.9-.9 2.9-2.3C10.7 5.9 5.8 6.3 5.8 5.2z" fill="#fff"/></svg>
-                    Stripe
-                  </div>
-                </div>
+          {/* Hero */}
+          <section className={styles.hero}>
+            <div className={styles.heroInner}>
+              <span className={styles.heroBadge}>No credit check &nbsp;·&nbsp; No hidden fees</span>
+              <h1 className={styles.heroHeading}>Get $25<br />before payday.</h1>
+              <p className={styles.heroSub}>
+                Connect your bank, get a decision today, and pay it back within 30 days. Simple as that.
+              </p>
+              <div className={styles.heroActions}>
+                <button className={styles.btnWhite} onClick={() => setView("signup")}>
+                  Get started — it's free
+                </button>
+                <button className={styles.btnGhost} onClick={() => window.location.href = "/loan"}>
+                  Sign in
+                </button>
               </div>
-              <TrustPillars />
             </div>
           </section>
+
+          {/* How it works */}
+          <section className={styles.section}>
+            <div className={styles.sectionInner}>
+              <p className={styles.sectionLabel}>How it works</p>
+              <h2 className={styles.sectionHeading}>Three steps to your money.</h2>
+              <div className={styles.stepsGrid}>
+                <div className={styles.stepCard}>
+                  <div className={styles.stepNum}>1</div>
+                  <strong>Apply in 2 minutes</strong>
+                  <span>Name, employer, next payday. No SSN required, no credit pull.</span>
+                </div>
+                <div className={styles.stepCard}>
+                  <div className={styles.stepNum}>2</div>
+                  <strong>Connect your bank</strong>
+                  <span>We verify your income via Plaid. Secure, read-only — we never see your password.</span>
+                </div>
+                <div className={styles.stepCard}>
+                  <div className={styles.stepNum}>3</div>
+                  <strong>Get your money</strong>
+                  <span>A real human reviews your application and sends your $25 the same day.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Trust pillars */}
+          <TrustPillars />
+
+          {/* Partner strip */}
+          <div className={styles.partnerStrip}>
+            <span>Secured by</span>
+            <div className={styles.partnerBadge}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#000"/><path d="M4 7l2.5 2.5L10 5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Plaid
+            </div>
+            <div className={styles.partnerBadge}>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect width="14" height="14" rx="3" fill="#635bff"/><path d="M5.8 5.2c0-.5.4-.8 1-.8.8 0 1.6.3 2.2.6V3.4C8.4 3.1 7.7 3 7 3 5.3 3 4.2 3.9 4.2 5.3c0 2.2 3 1.8 3 2.9 0 .6-.5.9-1.1.9-.9 0-1.8-.4-2.5-.9v1.7c.7.3 1.4.5 2.2.5 1.7 0 2.9-.9 2.9-2.3C10.7 5.9 5.8 6.3 5.8 5.2z" fill="#fff"/></svg>
+              Stripe
+            </div>
+          </div>
         </main>
       );
     }
@@ -1041,12 +1048,12 @@ const LoanApp = () => {
     return (
       <main className={styles.page}>
         <NavBar />
-        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
-          <div className={styles.signupCard} style={{ maxWidth: "44rem", margin: "0 auto" }}>
+        <section className={styles.chatOnly} style={{ paddingTop: "4rem" }}>
+          <div className={styles.signupCard} style={{ maxWidth: "46rem", margin: "0 auto" }}>
             <div className={styles.signupCardHeader}>
               <p className={styles.kicker}>Returning borrower</p>
-              <h1 style={{ fontSize: "2.8rem" }}>Sign in to your account</h1>
-              <p>Use the email and password you created when applying.</p>
+              <h1>Welcome back.</h1>
+              <p>Sign in to manage your advance and repayment.</p>
             </div>
             <div className={styles.signupCardBody}>
               <form className={styles.intakeComposer} onSubmit={login}>
@@ -1061,10 +1068,10 @@ const LoanApp = () => {
                     onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} />
                 </label>
                 {error && <p className={styles.error}>{error}</p>}
-                <button disabled={isBusy}>{isBusy ? "Signing in…" : "Sign in →"}</button>
-                <p style={{ textAlign: "center", margin: 0, fontSize: "1.35rem", color: "var(--neutral-400)" }}>
+                <button disabled={isBusy} style={{ width: "100%" }}>{isBusy ? "Signing in…" : "Sign in"}</button>
+                <p style={{ textAlign: "center", margin: 0, fontSize: "1.35rem", color: "var(--muted)" }}>
                   Don't have an account?{" "}
-                  <a href="/" style={{ color: "var(--green-900)", fontWeight: 700 }}>Apply now</a>
+                  <a href="/" style={{ color: "var(--brand)", fontWeight: 700 }}>Apply now — it's free</a>
                 </p>
               </form>
             </div>

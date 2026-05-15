@@ -1,41 +1,41 @@
 /* ── Design tokens ────────────────────────────────────────────────────────── */
 :root {
-  --green-950: #0b2318;
-  --green-900: #1a4d3a;
-  --green-700: #236649;
-  --green-500: #4a9470;
-  --green-200: #c1e4d1;
-  --green-100: #e8f5ee;
-  --green-50:  #f4fbf7;
-  --neutral-950: #09110e;
-  --neutral-800: #1c2b24;
-  --neutral-600: #3d5248;
-  --neutral-400: #6b8277;
-  --neutral-200: #ccd9d3;
-  --neutral-100: #eaf0ed;
-  --neutral-50:  #f7faf8;
-  --white: #ffffff;
-  --red-bg: #fff5f5;
-  --red-border: #fca5a5;
-  --red-text: #7f1d1d;
-  --shadow-sm: 0 1px 3px rgba(9,17,14,.07), 0 1px 2px rgba(9,17,14,.04);
-  --shadow-md: 0 4px 16px rgba(9,17,14,.08), 0 1px 4px rgba(9,17,14,.04);
-  --shadow-lg: 0 8px 32px rgba(9,17,14,.10), 0 2px 8px rgba(9,17,14,.05);
-  --radius-sm: 0.8rem;
-  --radius-md: 1.2rem;
-  --radius-lg: 1.6rem;
-  --radius-xl: 2.4rem;
+  --brand:       #1a4d3a;
+  --brand-700:   #236649;
+  --brand-dark:  #0f2e22;
+  --brand-tint:  #f0faf5;
+  --brand-tint2: #dceee4;
+  --white:       #ffffff;
+  --ink:         #060d09;
+  --ink-2:       #253028;
+  --muted:       #607870;
+  --border:      #dce8e2;
+  --border-lt:   #eef4f1;
+  --err-bg:      #fff5f5;
+  --err-border:  #fca5a5;
+  --err-text:    #7f1d1d;
+  --amber-bg:    #fffbeb;
+  --amber-border:#fde68a;
+  --amber-text:  #78350f;
+  --sh-sm: 0 1px 3px rgba(6,13,9,.06), 0 1px 2px rgba(6,13,9,.04);
+  --sh-md: 0 4px 20px rgba(6,13,9,.08), 0 2px 6px rgba(6,13,9,.04);
+  --sh-lg: 0 16px 48px rgba(6,13,9,.10), 0 4px 12px rgba(6,13,9,.05);
+  --pill:  999px;
+  --r-xl:  2.4rem;
+  --r-lg:  1.8rem;
+  --r-md:  1.2rem;
+  --r-sm:  0.8rem;
 }
 
 /* ── Page shell ───────────────────────────────────────────────────────────── */
 .page {
   min-height: 100vh;
   background: var(--white);
-  color: var(--neutral-950);
+  color: var(--ink);
   font-family: 'Inter', system-ui, sans-serif;
 }
 
-/* ── Sticky nav ───────────────────────────────────────────────────────────── */
+/* ── Nav ──────────────────────────────────────────────────────────────────── */
 .nav {
   position: sticky;
   top: 0;
@@ -45,18 +45,18 @@
   justify-content: space-between;
   padding: 0 3.2rem;
   height: 6.4rem;
-  background: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.95);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--neutral-100);
+  border-bottom: 1px solid var(--border-lt);
 }
 
 .navBrand {
   display: flex;
   align-items: center;
   gap: 0.9rem;
-  font-size: 1.8rem;
+  font-size: 1.9rem;
   font-weight: 800;
-  color: var(--green-900);
+  color: var(--brand);
   letter-spacing: -0.04em;
 }
 
@@ -70,13 +70,311 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 600;
-  color: var(--green-500);
-  letter-spacing: -0.01em;
+  color: var(--muted);
 }
 
-/* ── Layout containers ────────────────────────────────────────────────────── */
+/* ── Hero section ─────────────────────────────────────────────────────────── */
+.hero {
+  background: var(--brand);
+  padding: 9.6rem 3.2rem 10.4rem;
+  text-align: center;
+}
+
+.heroInner {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1.4rem;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: var(--pill);
+  color: rgba(255,255,255,0.88);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 3.2rem;
+}
+
+.heroHeading {
+  margin: 0 0 2rem;
+  font-size: 8rem;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  color: var(--white);
+}
+
+.heroSub {
+  margin: 0 auto 4.8rem;
+  max-width: 48rem;
+  font-size: 1.9rem;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.72);
+  font-weight: 400;
+}
+
+.heroActions {
+  display: flex;
+  gap: 1.2rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Primary CTA on dark bg — white pill */
+.btnWhite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5.6rem;
+  padding: 0 3.2rem;
+  background: var(--white);
+  color: var(--brand);
+  border: none;
+  border-radius: var(--pill);
+  font: inherit;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+}
+
+.btnWhite:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+}
+
+.btnWhite:active {
+  transform: translateY(0);
+  box-shadow: var(--sh-sm);
+}
+
+/* Ghost CTA on dark bg */
+.btnGhost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5.6rem;
+  padding: 0 2.8rem;
+  background: transparent;
+  color: rgba(255,255,255,0.88);
+  border: 2px solid rgba(255,255,255,0.35);
+  border-radius: var(--pill);
+  font: inherit;
+  font-size: 1.6rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.btnGhost:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.6);
+}
+
+/* Standard green button (light bg) */
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5.2rem;
+  padding: 0 2.4rem;
+  background: var(--brand);
+  color: var(--white);
+  border: none;
+  border-radius: var(--pill);
+  font: inherit;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--brand-700);
+  box-shadow: 0 4px 16px rgba(26,77,58,0.22);
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Section wrapper ──────────────────────────────────────────────────────── */
+.section {
+  padding: 9.6rem 3.2rem;
+}
+
+.sectionInner {
+  max-width: 110rem;
+  margin: 0 auto;
+}
+
+.sectionTint {
+  background: var(--brand-tint);
+}
+
+.sectionLabel {
+  display: inline-flex;
+  margin: 0 0 1.2rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.sectionHeading {
+  margin: 0 0 5.6rem;
+  font-size: 4.8rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: var(--ink);
+  max-width: 52rem;
+}
+
+/* ── How-it-works steps ───────────────────────────────────────────────────── */
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2.4rem;
+}
+
+.stepCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  padding: 3.2rem;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-sm);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.stepCard:hover {
+  box-shadow: var(--sh-md);
+  transform: translateY(-3px);
+}
+
+.stepNum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.4rem;
+  height: 4.4rem;
+  background: var(--brand);
+  color: var(--white);
+  border-radius: var(--pill);
+  font-size: 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+
+.stepCard strong {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.stepCard span {
+  font-size: 1.55rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* ── Trust pillars ────────────────────────────────────────────────────────── */
+.trustGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+
+.trustCard {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  padding: 2.8rem;
+  background: var(--white);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-sm);
+}
+
+.trustIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.8rem;
+  height: 4.8rem;
+  background: var(--brand-tint2);
+  border-radius: var(--r-md);
+}
+
+.trustCard strong {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.trustCard span {
+  font-size: 1.45rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* ── Partner strip ────────────────────────────────────────────────────────── */
+.partnerStrip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 3.2rem;
+  border-top: 1px solid var(--border-lt);
+}
+
+.partnerStrip span {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.partnerBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--pill);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  background: var(--white);
+}
+
+/* ── Layout containers (shared) ───────────────────────────────────────────── */
 .shell,
 .workspace,
 .adminLayout,
@@ -97,375 +395,126 @@
   align-items: start;
 }
 
-/* ── Kicker pill ──────────────────────────────────────────────────────────── */
+/* ── Kicker pill (used inside cards) ─────────────────────────────────────── */
 .kicker {
   display: inline-flex;
   align-items: center;
-  margin: 0 0 1.4rem;
+  margin: 0 0 1.2rem;
   padding: 0.45rem 1.1rem;
-  background: var(--green-100);
-  border: 1px solid var(--green-200);
-  border-radius: 999px;
-  color: var(--green-900);
-  font-size: 1.15rem;
-  font-weight: 700;
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-tint2);
+  border-radius: var(--pill);
+  color: var(--brand);
+  font-size: 1.1rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-/* ── Landing hero ─────────────────────────────────────────────────────────── */
-.landingWrap {
-  padding: 5.6rem 0 6.4rem;
-}
-
-.heroCard {
-  border-radius: var(--radius-xl);
-  background: linear-gradient(160deg, var(--green-50) 0%, var(--white) 55%);
-  border: 1px solid var(--green-200);
-  box-shadow: var(--shadow-lg);
-  padding: 6.4rem 5.6rem 5.6rem;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.heroCard::before {
-  content: '';
-  position: absolute;
-  top: -6rem;
-  right: -6rem;
-  width: 28rem;
-  height: 28rem;
-  background: radial-gradient(circle, var(--green-200) 0%, transparent 70%);
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.heroAmount {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  margin: 0.4rem 0 1.6rem;
-}
-
-.heroAmountDollar {
-  font-size: 4rem;
-  font-weight: 800;
-  color: var(--green-900);
-  letter-spacing: -0.03em;
-  line-height: 1;
-  align-self: flex-start;
-  margin-top: 1rem;
-}
-
-.heroAmountNum {
-  font-size: 10rem;
-  font-weight: 900;
-  color: var(--green-900);
-  letter-spacing: -0.06em;
-  line-height: 0.9;
-}
-
-.heroTitle {
-  margin: 0 0 0.8rem;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--neutral-600);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.heroSub {
-  margin: 0 auto 4rem;
-  max-width: 46rem;
-  font-size: 1.7rem;
-  line-height: 1.65;
-  color: var(--neutral-600);
-  font-weight: 400;
-}
-
-/* ── How it works ─────────────────────────────────────────────────────────── */
-.howItWorks {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  margin-top: 4.8rem;
-  border-top: 1px solid var(--green-200);
-  padding-top: 3.6rem;
-  text-align: left;
-  position: relative;
-}
-
-.howStep {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-  padding: 0 2.4rem 0 0;
-}
-
-.howStep:not(:first-child) {
-  padding-left: 2.4rem;
-  border-left: 1px solid var(--green-200);
-}
-
-.howStepNum {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.2rem;
-  height: 3.2rem;
-  background: var(--green-900);
-  border-radius: 50%;
-  color: var(--white);
-  font-size: 1.3rem;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
-.howStep strong {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--neutral-950);
-}
-
-.howStep span {
-  font-size: 1.35rem;
-  color: var(--neutral-400);
-  line-height: 1.5;
-}
-
-/* ── Trust pillars ────────────────────────────────────────────────────────── */
-.trustRow {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.2rem;
-  margin-top: 2rem;
-}
-
-.trustPillar {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.2rem;
-  padding: 1.6rem;
-  background: var(--white);
-  border: 1px solid var(--neutral-100);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-}
-
-.trustPillarIcon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 3.6rem;
-  height: 3.6rem;
-  background: var(--green-100);
-  border-radius: 0.9rem;
-  flex-shrink: 0;
-}
-
-.trustPillarText {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.trustPillar strong {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--neutral-950);
-  line-height: 1.3;
-}
-
-.trustPillar span {
-  font-size: 1.25rem;
-  color: var(--neutral-400);
-  line-height: 1.4;
-}
-
-/* ── Landing CTA buttons ──────────────────────────────────────────────────── */
-.landingActions {
-  display: flex;
-  gap: 1.2rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.landingActions button {
-  min-width: 20rem;
-  font-size: 1.6rem;
-}
-
-/* ── Cards / panels ───────────────────────────────────────────────────────── */
-.panel,
-.summary,
-.chat,
-.inbox,
-.review,
-.empty {
-  border: 1px solid var(--neutral-100);
-  border-radius: var(--radius-lg);
-  background: var(--white);
-  box-shadow: var(--shadow-sm);
-}
-
-.panel,
-.summary,
-.chat,
-.review,
-.empty {
-  padding: 2.8rem;
-}
-
-.panel {
-  display: grid;
-  gap: 1.8rem;
-}
-
-/* ── Intake form ──────────────────────────────────────────────────────────── */
+/* ── Signup card ──────────────────────────────────────────────────────────── */
 .signupCard {
-  border: 1px solid var(--neutral-100);
-  border-radius: var(--radius-xl);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl);
   background: var(--white);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--sh-lg);
   overflow: hidden;
 }
 
 .signupCardHeader {
-  padding: 3.2rem 3.6rem 2.4rem;
-  border-bottom: 1px solid var(--neutral-100);
-  background: var(--neutral-50);
-}
-
-.signupCardBody {
-  padding: 3.2rem 3.6rem;
+  padding: 3.6rem 4rem 2.8rem;
+  border-bottom: 1px solid var(--border-lt);
+  background: var(--brand-tint);
 }
 
 .signupCardHeader h1 {
-  margin: 0.6rem 0 0.4rem;
-  font-size: 3.2rem;
+  margin: 0.6rem 0 0.6rem;
+  font-size: 3.4rem;
+  font-weight: 900;
   letter-spacing: -0.04em;
-  color: var(--neutral-950);
+  color: var(--ink);
+  line-height: 1.1;
 }
 
 .signupCardHeader p {
   margin: 0;
   font-size: 1.5rem;
-  color: var(--neutral-400);
+  color: var(--muted);
+}
+
+.signupCardBody {
+  padding: 3.2rem 4rem;
 }
 
 /* ── Progress steps ───────────────────────────────────────────────────────── */
 .progressSteps {
   display: flex;
   align-items: center;
-  gap: 0;
-  margin-bottom: 2.8rem;
+  margin-bottom: 2.4rem;
 }
 
 .progressStep {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.7rem;
   flex: 1;
 }
 
 .progressStep:not(:last-child)::after {
   content: '';
   flex: 1;
-  height: 1.5px;
-  background: var(--neutral-200);
-  margin: 0 0.8rem;
+  height: 2px;
+  background: var(--border);
+  border-radius: 999px;
+  margin: 0 0.4rem;
 }
 
 .progressStep.done::after {
-  background: var(--green-500);
+  background: var(--brand);
 }
 
 .progressStepDot {
-  width: 2.8rem;
-  height: 2.8rem;
+  width: 3rem;
+  height: 3rem;
   border-radius: 50%;
-  border: 2px solid var(--neutral-200);
+  border: 2px solid var(--border);
   background: var(--white);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--neutral-400);
+  font-weight: 800;
+  color: var(--muted);
   flex-shrink: 0;
   transition: all 0.2s ease;
 }
 
 .progressStep.active .progressStepDot {
-  border-color: var(--green-900);
-  background: var(--green-900);
+  border-color: var(--brand);
+  background: var(--brand);
   color: var(--white);
 }
 
 .progressStep.done .progressStepDot {
-  border-color: var(--green-500);
-  background: var(--green-500);
+  border-color: var(--brand-700);
+  background: var(--brand-700);
   color: var(--white);
 }
 
 .progressStepLabel {
   font-size: 1.2rem;
   font-weight: 600;
-  color: var(--neutral-400);
+  color: var(--muted);
   white-space: nowrap;
 }
 
-.progressStep.active .progressStepLabel {
-  color: var(--green-900);
-}
+.progressStep.active .progressStepLabel { color: var(--brand); }
+.progressStep.done .progressStepLabel   { color: var(--brand-700); }
 
-.progressStep.done .progressStepLabel {
-  color: var(--green-500);
-}
-
-/* ── Intro section ────────────────────────────────────────────────────────── */
-.intro {
-  padding-top: 4rem;
-}
-
-.intro h1,
-.inbox h1 {
-  margin: 0 0 1.6rem;
-  font-size: 4.8rem;
-  line-height: 1.08;
-  letter-spacing: -0.03em;
-}
-
-.chat h1 {
-  margin: 0 0 1.6rem;
-  font-size: 3.6rem;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
-  max-width: 52rem;
-}
-
-.intro p,
-.chat header p {
-  color: var(--neutral-400);
-  font-size: 1.6rem;
-}
-
-.muted {
-  color: var(--neutral-400);
-  font-size: 1.4rem;
-}
-
-.notice {
-  color: var(--neutral-600);
-  font-size: 1.4rem;
-}
-
-/* ── Typography ───────────────────────────────────────────────────────────── */
+/* ── Form elements ────────────────────────────────────────────────────────── */
 label {
   display: grid;
-  gap: 0.55rem;
-  color: var(--neutral-800);
+  gap: 0.6rem;
+  color: var(--ink-2);
   font-size: 1.35rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -473,11 +522,11 @@ label {
 
 input {
   width: 100%;
-  min-height: 4.8rem;
-  border: 1.5px solid var(--neutral-200);
-  border-radius: var(--radius-sm);
-  padding: 0 1.4rem;
-  color: var(--neutral-950);
+  min-height: 5rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0 1.6rem;
+  color: var(--ink);
   font: inherit;
   font-size: 1.5rem;
   background: var(--white);
@@ -486,65 +535,116 @@ input {
 
 input:focus {
   outline: none;
-  border-color: var(--green-900);
-  box-shadow: 0 0 0 3px rgba(26, 77, 58, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(26,77,58,0.1);
 }
 
-input::placeholder {
-  color: var(--neutral-200);
+input::placeholder { color: var(--border); }
+
+.intakeComposer {
+  display: grid;
+  gap: 2rem;
 }
 
-/* ── Buttons ──────────────────────────────────────────────────────────────── */
-button {
-  min-height: 4.8rem;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 0 2.2rem;
-  color: var(--white);
-  background: var(--green-900);
-  font: inherit;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.08s ease;
+.intakeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.8rem;
 }
 
-button:hover:not(:disabled) {
-  background: var(--green-700);
-  box-shadow: 0 4px 16px rgba(26, 77, 58, 0.22);
+.securityNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.4rem 1.8rem;
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-tint2);
+  border-radius: var(--r-md);
+  font-size: 1.3rem;
+  color: var(--brand-700);
+  font-weight: 500;
+  line-height: 1.6;
 }
 
-button:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: none;
+.securityNote svg { flex-shrink: 0; margin-top: 0.15rem; }
+
+.intakeFooter {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
 }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-/* ── Workspace ────────────────────────────────────────────────────────────── */
+/* ── Chat / workspace ─────────────────────────────────────────────────────── */
 .workspace {
   display: grid;
   grid-template-columns: 30rem minmax(0, 1fr);
   gap: 2.4rem;
 }
 
-/* ── Summary sidebar ──────────────────────────────────────────────────────── */
+.summary,
+.chat,
+.panel,
+.inbox,
+.review,
+.empty {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl);
+  background: var(--white);
+  box-shadow: var(--sh-sm);
+}
+
+.summary,
+.chat,
+.panel,
+.review,
+.empty {
+  padding: 2.8rem;
+}
+
+.panel { display: grid; gap: 1.8rem; }
+
 .summary {
   align-self: start;
   display: grid;
   gap: 1.6rem;
 }
 
-.summary h2,
-.reviewHeader h2 {
+.summary h2 {
   margin: 0 0 0.4rem;
-  font-size: 3rem;
+  font-size: 3.2rem;
+  font-weight: 900;
   letter-spacing: -0.04em;
-  color: var(--neutral-950);
+  color: var(--ink);
+}
+
+.chat {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1.8rem;
+}
+
+.workspace .chat { min-height: 68rem; }
+
+.chat h1 {
+  margin: 0 0 0.6rem;
+  font-size: 3.2rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+}
+
+.chat header p {
+  margin: 0;
+  font-size: 1.55rem;
+  color: var(--muted);
+}
+
+.chat h3,
+.panel h3 {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 /* ── Status badge ─────────────────────────────────────────────────────────── */
@@ -552,22 +652,20 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  padding: 0.5rem 1.2rem;
-  background: var(--green-100);
-  border: 1px solid var(--green-200);
-  border-radius: 999px;
-  color: var(--green-900);
+  padding: 0.55rem 1.3rem;
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-tint2);
+  border-radius: var(--pill);
+  color: var(--brand);
   font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
 }
 
 .status::before {
   content: '';
-  display: inline-block;
   width: 0.6rem;
   height: 0.6rem;
-  background: var(--green-500);
+  background: var(--brand);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -581,8 +679,8 @@ dl {
 }
 
 dt {
-  color: var(--neutral-400);
-  font-size: 1.2rem;
+  color: var(--muted);
+  font-size: 1.15rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -595,29 +693,10 @@ dd {
   overflow-wrap: anywhere;
   font-weight: 600;
   font-size: 1.5rem;
-  color: var(--neutral-950);
+  color: var(--ink);
 }
 
-/* ── Chat panel ───────────────────────────────────────────────────────────── */
-.chat {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: 1.8rem;
-}
-
-.workspace .chat {
-  min-height: 68rem;
-}
-
-.chat h3,
-.panel h3 {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-/* ── Messages list ────────────────────────────────────────────────────────── */
+/* ── Messages ─────────────────────────────────────────────────────────────── */
 .messages {
   display: flex;
   flex-direction: column;
@@ -626,9 +705,9 @@ dd {
   min-height: 24rem;
   max-height: 52rem;
   padding: 2rem;
-  border: 1.5px solid var(--neutral-100);
-  border-radius: var(--radius-md);
-  background: var(--neutral-50);
+  border: 1.5px solid var(--border-lt);
+  border-radius: var(--r-lg);
+  background: var(--brand-tint);
 }
 
 .message {
@@ -643,13 +722,13 @@ dd {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--neutral-400);
-  padding: 0 0.6rem;
+  color: var(--muted);
+  padding: 0 0.4rem;
 }
 
 .messageBubble {
-  border-radius: 1.4rem;
-  padding: 1.1rem 1.5rem;
+  border-radius: 1.6rem;
+  padding: 1.2rem 1.6rem;
 }
 
 .messageBubble p {
@@ -663,19 +742,14 @@ dd {
   align-items: flex-end;
 }
 
-.customer > span {
-  color: var(--green-700);
-}
+.customer > span { color: var(--brand-700); }
 
 .customer .messageBubble {
-  background: var(--green-900);
-  color: var(--white);
+  background: var(--brand);
   border-bottom-right-radius: 0.4rem;
 }
 
-.customer .messageBubble p {
-  color: var(--white);
-}
+.customer .messageBubble p { color: var(--white); }
 
 .admin {
   align-self: flex-start;
@@ -683,10 +757,10 @@ dd {
 
 .admin .messageBubble {
   background: var(--white);
-  border: 1.5px solid var(--neutral-100);
-  color: var(--neutral-950);
+  border: 1.5px solid var(--border);
+  color: var(--ink);
   border-bottom-left-radius: 0.4rem;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--sh-sm);
 }
 
 .system {
@@ -696,199 +770,109 @@ dd {
 }
 
 .system .messageBubble {
-  background: #fffbeb;
-  border: 1px solid #e9d46a;
-  border-radius: var(--radius-sm);
-  color: #5c4a10;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  border-radius: var(--r-md);
   text-align: center;
 }
 
 .system .messageBubble p {
   font-size: 1.35rem;
-  color: #5c4a10;
+  color: var(--amber-text);
 }
 
-/* ── Message composer ─────────────────────────────────────────────────────── */
+/* ── Composer ─────────────────────────────────────────────────────────────── */
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.8rem;
 }
 
-/* ── Intake form ──────────────────────────────────────────────────────────── */
-.intakeComposer {
-  display: grid;
-  gap: 2rem;
-}
-
-.intakeGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.6rem;
-}
-
-/* ── Security note ────────────────────────────────────────────────────────── */
-.securityNote {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1.4rem 1.6rem;
-  background: var(--green-50);
-  border: 1px solid var(--green-200);
-  border-radius: var(--radius-sm);
-  font-size: 1.3rem;
-  color: var(--green-700);
-  font-weight: 500;
-  line-height: 1.55;
-}
-
-.securityNote svg {
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-}
-
 /* ── Chat action box ──────────────────────────────────────────────────────── */
 .chatAction {
   display: grid;
   gap: 1.2rem;
-  border: 1.5px solid var(--green-200);
-  border-radius: var(--radius-md);
-  padding: 2rem;
-  background: var(--green-50);
+  border: 1.5px solid var(--brand-tint2);
+  border-radius: var(--r-lg);
+  padding: 2.2rem;
+  background: var(--brand-tint);
 }
 
 .chatAction p {
   margin: 0;
-  color: var(--green-900);
+  color: var(--brand);
   font-size: 1.5rem;
   line-height: 1.55;
 }
 
-/* ── Admin layout ─────────────────────────────────────────────────────────── */
-.adminLayout {
-  display: grid;
-  grid-template-columns: 31rem minmax(0, 1fr);
-  gap: 2.4rem;
-}
-
-/* ── Inbox ────────────────────────────────────────────────────────────────── */
-.inbox {
-  align-self: start;
-  padding: 2rem;
-  overflow: hidden;
-}
-
-.inbox h1 {
-  font-size: 2.4rem;
-  margin: 0 0 1.6rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-}
-
-/* ── Inbox rows ───────────────────────────────────────────────────────────── */
-.row,
-.activeRow {
-  display: grid;
-  width: 100%;
-  height: auto;
-  min-height: 6.4rem;
-  margin-bottom: 0.8rem;
-  border: 1.5px solid var(--neutral-100);
-  border-radius: var(--radius-sm);
-  padding: 1.2rem 1.6rem;
-  color: var(--neutral-950);
-  text-align: left;
-  background: var(--white);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.row:hover {
-  border-color: var(--green-900);
-  background: var(--green-50);
-}
-
-.activeRow {
-  border-color: var(--green-900);
-  background: var(--green-100);
-}
-
-.row span,
-.activeRow span {
-  font-weight: 700;
-}
-
-.row small,
-.activeRow small {
-  color: var(--neutral-400);
-  font-size: 1.25rem;
-}
-
-/* ── Review panel ─────────────────────────────────────────────────────────── */
-.review {
-  display: grid;
-  gap: 2.4rem;
-}
-
-.reviewHeader {
+/* ── Status timeline ──────────────────────────────────────────────────────── */
+.appStatusBar {
   display: flex;
-  gap: 1.6rem;
-  align-items: start;
-  justify-content: space-between;
+  align-items: center;
+  padding: 1.6rem 2rem;
+  background: var(--brand-tint);
+  border: 1.5px solid var(--brand-tint2);
+  border-radius: var(--r-lg);
 }
 
-.reviewGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 1.6rem;
+.appStatusStep {
+  display: flex;
+  align-items: center;
+  flex: 1;
 }
 
-/* ── Admin action buttons ─────────────────────────────────────────────────── */
-.actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+.appStatusStep:not(:last-child)::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  border-radius: 999px;
 }
 
-.repayment {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  align-items: end;
-  margin-top: 1.6rem;
+.appStatusStep.done:not(:last-child)::after { background: var(--brand); }
+
+.appStatusDot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--white);
+  flex-shrink: 0;
 }
 
-/* ── Bank snapshot ────────────────────────────────────────────────────────── */
-.snapshot {
-  display: grid;
-  gap: 1.2rem;
+.appStatusStep.active .appStatusDot {
+  border-color: var(--brand);
+  background: var(--brand);
 }
 
-.snapshot h4 {
-  margin: 0.8rem 0 0;
+.appStatusStep.done .appStatusDot {
+  border-color: var(--brand-700);
+  background: var(--brand-700);
 }
 
-.account,
-.transaction {
-  display: grid;
-  gap: 0.4rem;
-  border: 1px solid var(--neutral-100);
-  border-radius: var(--radius-sm);
-  padding: 1.2rem;
-  background: var(--neutral-50);
+.appStatusDotInner {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--border);
 }
 
-.transaction {
-  grid-template-columns: 9rem minmax(0, 1fr) auto;
+.appStatusStep.active .appStatusDotInner,
+.appStatusStep.done .appStatusDotInner {
+  background: var(--white);
 }
 
-/* ── Error / success states ───────────────────────────────────────────────── */
+/* ── Error / success ──────────────────────────────────────────────────────── */
 .error {
   margin: 0;
-  border: 1.5px solid var(--red-border);
-  border-radius: var(--radius-sm);
-  padding: 1.2rem 1.4rem;
-  color: var(--red-text);
-  background: var(--red-bg);
+  border: 1.5px solid var(--err-border);
+  border-radius: var(--r-md);
+  padding: 1.2rem 1.6rem;
+  color: var(--err-text);
+  background: var(--err-bg);
   font-size: 1.4rem;
   line-height: 1.5;
 }
@@ -898,101 +882,69 @@ dd {
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  border: 1px solid var(--green-200);
-  border-radius: var(--radius-sm);
-  padding: 1.2rem 1.6rem;
-  color: var(--green-900);
-  background: var(--green-100);
-  font-weight: 600;
-  font-size: 1.4rem;
-  line-height: 1.5;
-}
-
-/* ── Empty state ──────────────────────────────────────────────────────────── */
-.empty {
-  min-height: 30rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--neutral-400);
+  border: 1px solid var(--brand-tint2);
+  border-radius: var(--r-md);
+  padding: 1.4rem 1.8rem;
+  color: var(--brand);
+  background: var(--brand-tint);
+  font-weight: 700;
   font-size: 1.5rem;
 }
 
-/* ── Search row ───────────────────────────────────────────────────────────── */
-.searchRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1rem;
+.muted {
+  color: var(--muted);
+  font-size: 1.4rem;
 }
 
-/* ── Incoming transactions ────────────────────────────────────────────────── */
-.incomingTransaction {
-  display: grid;
-  grid-template-columns: 9rem minmax(0, 1fr) auto;
-  gap: 0.3rem;
-  align-items: center;
-  border: 1px solid var(--green-200);
-  border-radius: var(--radius-sm);
-  padding: 1.2rem;
-  background: var(--green-50);
+.notice {
+  color: var(--muted);
+  font-size: 1.4rem;
 }
 
-.incomingAmount {
-  font-weight: 700;
-  color: var(--green-900);
-}
-
-/* ── Secondary / outline buttons ──────────────────────────────────────────── */
+/* ── Secondary / back buttons ─────────────────────────────────────────────── */
 .secondaryBtn {
   background: transparent;
-  border: 2px solid var(--green-900);
-  color: var(--green-900);
+  border: 2px solid var(--brand);
+  color: var(--brand);
 }
 
 .secondaryBtn:hover:not(:disabled) {
-  background: var(--green-100);
+  background: var(--brand-tint);
   box-shadow: none;
+  transform: none;
 }
 
 .backBtn {
   background: transparent;
-  border: 1.5px solid var(--neutral-200);
-  color: var(--neutral-600);
+  border: 1.5px solid var(--border);
+  color: var(--muted);
   font-weight: 600;
 }
 
 .backBtn:hover:not(:disabled) {
-  background: var(--neutral-50);
+  background: var(--brand-tint);
   box-shadow: none;
+  transform: none;
 }
 
 .logoutBtn {
   background: transparent;
-  border: 1.5px solid var(--neutral-200);
-  color: var(--neutral-600);
+  border: 1.5px solid var(--border);
+  color: var(--muted);
   font-size: 1.3rem;
-  min-height: 3.6rem;
-  padding: 0 1.4rem;
+  min-height: 3.8rem;
+  padding: 0 1.6rem;
   font-weight: 600;
 }
 
 .logoutBtn:hover:not(:disabled) {
-  background: var(--neutral-50);
+  background: var(--brand-tint);
   box-shadow: none;
-}
-
-/* ── Intake footer ────────────────────────────────────────────────────────── */
-.intakeFooter {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 1rem;
+  transform: none;
 }
 
 /* ── Loan dashboard ───────────────────────────────────────────────────────── */
-.loanDashboard {
-  display: grid;
-  gap: 2.4rem;
-}
+.loanDashboard { display: grid; gap: 2.4rem; }
 
 .loanHeader {
   display: flex;
@@ -1000,24 +952,21 @@ dd {
   align-items: start;
   justify-content: space-between;
   padding: 2.8rem;
-  border: 1px solid var(--neutral-100);
-  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl);
   background: var(--white);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--sh-sm);
 }
 
 .loanHeader h2 {
   margin: 0 0 0.3rem;
-  font-size: 2.6rem;
-  letter-spacing: -0.03em;
-  color: var(--neutral-950);
+  font-size: 2.8rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--ink);
 }
 
-.loanHeader p {
-  margin: 0;
-  color: var(--neutral-400);
-  font-size: 1.45rem;
-}
+.loanHeader p { margin: 0; color: var(--muted); font-size: 1.45rem; }
 
 .loanHeaderRight {
   display: flex;
@@ -1032,186 +981,107 @@ dd {
   gap: 1.6rem;
 }
 
-/* ── Due date ─────────────────────────────────────────────────────────────── */
-.dueDate {
-  font-weight: 700;
-  color: #b45309;
-}
+.dueDate { font-weight: 800; color: #b45309; }
 
 /* ── Stripe card element ──────────────────────────────────────────────────── */
 .cardElementWrap {
-  border: 1.5px solid var(--neutral-200);
-  border-radius: var(--radius-sm);
-  padding: 1.5rem 1.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.6rem;
   background: var(--white);
-  margin-bottom: 1.4rem;
+  margin-bottom: 1.6rem;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .cardElementWrap:focus-within {
-  border-color: var(--green-900);
-  box-shadow: 0 0 0 3px rgba(26, 77, 58, 0.1);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(26,77,58,0.1);
 }
 
-/* ── Partner badges ───────────────────────────────────────────────────────── */
-.partnerBadges {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2rem;
-  margin-top: 3.2rem;
-  padding-top: 3.2rem;
-  border-top: 1px solid var(--neutral-100);
+/* ── Admin (unchanged structure) ──────────────────────────────────────────── */
+.adminLayout {
+  display: grid;
+  grid-template-columns: 31rem minmax(0, 1fr);
+  gap: 2.4rem;
 }
 
-.partnerBadges span {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--neutral-400);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.inbox {
+  align-self: start;
+  padding: 2rem;
+  overflow: hidden;
 }
 
-.partnerBadge {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 1.4rem;
-  border: 1px solid var(--neutral-200);
-  border-radius: 999px;
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--neutral-800);
+.inbox h1 {
+  font-size: 2.4rem;
+  margin: 0 0 1.6rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.row,
+.activeRow {
+  display: grid;
+  width: 100%;
+  height: auto;
+  min-height: 6.4rem;
+  margin-bottom: 0.8rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 1.2rem 1.6rem;
+  color: var(--ink);
+  text-align: left;
   background: var(--white);
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-/* ── Application status timeline ─────────────────────────────────────────── */
-.appStatusBar {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  padding: 1.6rem 2rem;
-  background: var(--neutral-50);
-  border: 1px solid var(--neutral-100);
-  border-radius: var(--radius-md);
-}
+.row:hover           { border-color: var(--brand); background: var(--brand-tint); }
+.activeRow           { border-color: var(--brand); background: var(--brand-tint); }
+.row span,
+.activeRow span      { font-weight: 700; }
+.row small,
+.activeRow small     { color: var(--muted); font-size: 1.25rem; }
 
-.appStatusStep {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  gap: 0;
-}
+.review              { display: grid; gap: 2.4rem; }
+.reviewHeader        { display: flex; gap: 1.6rem; align-items: start; justify-content: space-between; }
+.reviewHeader h2     { margin: 0 0 0.4rem; font-size: 3rem; letter-spacing: -0.04em; }
+.reviewGrid          { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.1fr); gap: 1.6rem; }
+.actions             { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; }
+.repayment           { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: end; margin-top: 1.6rem; }
+.intro               { padding-top: 4rem; }
+.intro h1            { margin: 0 0 1.6rem; font-size: 4.8rem; font-weight: 900; letter-spacing: -0.04em; }
+.intro p             { color: var(--muted); font-size: 1.6rem; }
 
-.appStatusStep:not(:last-child)::after {
-  content: '';
-  flex: 1;
-  height: 1.5px;
-  background: var(--neutral-200);
-}
-
-.appStatusStep.done:not(:last-child)::after {
-  background: var(--green-500);
-}
-
-.appStatusDot {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
-  border: 2px solid var(--neutral-200);
-  background: var(--white);
-  flex-shrink: 0;
-}
-
-.appStatusStep.active .appStatusDot {
-  border-color: var(--green-900);
-  background: var(--green-900);
-}
-
-.appStatusStep.done .appStatusDot {
-  border-color: var(--green-500);
-  background: var(--green-500);
-}
-
-.appStatusDotInner {
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 50%;
-  background: var(--neutral-200);
-}
-
-.appStatusStep.active .appStatusDotInner {
-  background: var(--white);
-}
-
-.appStatusStep.done .appStatusDotInner {
-  background: var(--white);
-}
+.snapshot            { display: grid; gap: 1.2rem; }
+.snapshot h4         { margin: 0.8rem 0 0; }
+.account             { display: grid; gap: 0.4rem; border: 1px solid var(--border); border-radius: var(--r-sm); padding: 1.2rem; background: var(--brand-tint); }
+.searchRow           { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.incomingTransaction { display: grid; grid-template-columns: 9rem minmax(0,1fr) auto; gap: 0.3rem; align-items: center; border: 1px solid var(--brand-tint2); border-radius: var(--r-sm); padding: 1.2rem; background: var(--brand-tint); }
+.incomingAmount      { font-weight: 700; color: var(--brand); }
+.empty               { min-height: 30rem; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.5rem; }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
-@media (max-width: 860px) {
+@media (max-width: 900px) {
+  .heroHeading { font-size: 5.6rem; }
+  .sectionHeading { font-size: 3.6rem; }
+  .stepsGrid,
+  .trustGrid,
   .searchRow,
-  .loanGrid,
-  .howItWorks,
-  .trustRow {
-    grid-template-columns: 1fr;
-  }
-
-  .howStep:not(:first-child) {
-    padding-left: 0;
-    border-left: none;
-    border-top: 1px solid var(--green-200);
-    padding-top: 2rem;
-  }
-
+  .loanGrid { grid-template-columns: 1fr; }
   .shell,
   .workspace,
   .adminLayout,
-  .reviewGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .intro {
-    padding-top: 0;
-  }
-
-  .chat h1 {
-    font-size: 2.8rem;
-  }
-
-  .heroAmountNum {
-    font-size: 7rem;
-  }
-
-  .heroCard {
-    padding: 4rem 2.8rem 3.6rem;
-  }
-
-  .signupCardHeader,
-  .signupCardBody {
-    padding: 2.4rem 2.4rem;
-  }
-
+  .reviewGrid { grid-template-columns: 1fr; }
+  .intakeGrid,
   .repayment,
   .composer,
-  .actions,
-  .intakeGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .nav {
-    padding: 0 1.6rem;
-  }
-
-  .landingActions button {
-    min-width: unset;
-    width: 100%;
-  }
-
-  .progressSteps {
-    display: none;
-  }
+  .actions { grid-template-columns: 1fr; }
+  .nav { padding: 0 1.6rem; }
+  .hero { padding: 6.4rem 2rem 7.2rem; }
+  .section { padding: 6.4rem 2rem; }
+  .signupCardHeader,
+  .signupCardBody { padding: 2.4rem 2.4rem; }
+  .progressSteps { display: none; }
+  .heroActions { flex-direction: column; }
+  .btnWhite,
+  .btnGhost { width: 100%; justify-content: center; }
 }
