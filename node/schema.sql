@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS applications (
   phone           TEXT        NOT NULL,
   employer        TEXT        NOT NULL,
   payday          DATE        NOT NULL,
-  requested_amount DECIMAL(10,2) NOT NULL DEFAULT 50,
+  requested_amount DECIMAL(10,2) NOT NULL DEFAULT 25,
   status          TEXT        NOT NULL DEFAULT 'intake',
   access_token    TEXT,
   item_id         TEXT,

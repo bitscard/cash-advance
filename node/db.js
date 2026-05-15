@@ -42,7 +42,7 @@ async function createApplication({ name, email, phone, employer, payday, request
   const { rows } = await pool.query(
     `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash)
      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 50, password_hash],
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash],
   );
   return rows[0];
 }

@@ -129,12 +129,82 @@ function amountMatch(query: string, amount: number): boolean {
   return abs >= target * 0.75 && abs <= target * 1.25;
 }
 
+// ── Shared components ─────────────────────────────────────────────────────────
+
+const NavBar = ({ onLogout }: { onLogout?: () => void }) => (
+  <nav className={styles.nav}>
+    <div className={styles.navBrand}>
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <rect width="28" height="28" rx="8" fill="#1a4d3a" />
+        <path d="M14 7L19.5 10.5V17.5L14 21L8.5 17.5V10.5L14 7Z" fill="white" fillOpacity="0.9" />
+        <circle cx="14" cy="14" r="2.8" fill="#1a4d3a" />
+      </svg>
+      Advance
+    </div>
+    <div className={styles.navRight}>
+      <span className={styles.navSecure}>
+        <svg width="13" height="15" viewBox="0 0 13 15" fill="none" aria-hidden="true">
+          <path d="M6.5 1.5L11.5 3.8V8.5C11.5 11.5 9.3 14.1 6.5 14.8C3.7 14.1 1.5 11.5 1.5 8.5V3.8L6.5 1.5Z" fill="#4a9470" />
+        </svg>
+        256-bit secure
+      </span>
+      {onLogout && (
+        <button className={styles.logoutBtn} onClick={onLogout}>Sign out</button>
+      )}
+    </div>
+  </nav>
+);
+
+const TrustPillars = () => (
+  <div className={styles.trustRow}>
+    <div className={styles.trustPillar}>
+      <div className={styles.trustPillarIcon}>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M10 2L12.5 7.5H18.5L13.5 11L15.5 17L10 13.5L4.5 17L6.5 11L1.5 7.5H7.5L10 2Z" fill="#1a4d3a" />
+        </svg>
+      </div>
+      <div className={styles.trustPillarText}>
+        <strong>Same-day decision</strong>
+        <span>Apply in minutes, hear back fast</span>
+      </div>
+    </div>
+    <div className={styles.trustPillar}>
+      <div className={styles.trustPillarIcon}>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M10 2L17 5.5V11C17 15 14 18.5 10 19.5C6 18.5 3 15 3 11V5.5L10 2Z" fill="#1a4d3a" />
+          <path d="M7 10L9 12.5L13 7.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <div className={styles.trustPillarText}>
+        <strong>Bank-level encryption</strong>
+        <span>Secured by Plaid &amp; Stripe</span>
+      </div>
+    </div>
+    <div className={styles.trustPillar}>
+      <div className={styles.trustPillarIcon}>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="7.5" stroke="#1a4d3a" strokeWidth="2" />
+          <path d="M7 10L9 12.5L13.5 7" stroke="#1a4d3a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <div className={styles.trustPillarText}>
+        <strong>No credit check</strong>
+        <span>We look at income, not scores</span>
+      </div>
+    </div>
+  </div>
+);
+
+// ── App router ────────────────────────────────────────────────────────────────
+
 const App = () => {
   const path = window.location.pathname;
   if (path === "/admin") return <AdminApp />;
   if (path === "/loan") return <LoanApp />;
   return <CustomerApp />;
 };
+
+// ── Customer app ──────────────────────────────────────────────────────────────
 
 const CustomerApp = () => {
   const [application, setApplication] = useState<Application | null>(null);
@@ -188,6 +258,14 @@ const CustomerApp = () => {
     return () => window.clearInterval(interval);
   }, [application?.id, loadApplication, loadMessages]);
 
+  const handleLogout = () => {
+    localStorage.removeItem(applicationStorageKey);
+    localStorage.removeItem(userTokenStorageKey);
+    setApplication(null);
+    setMessages([]);
+    setView("landing");
+  };
+
   const createApplication = async (event: React.FormEvent) => {
     event.preventDefault();
     if (form.password !== form.confirmPassword) {
@@ -201,7 +279,7 @@ const CustomerApp = () => {
       const response = await fetch(apiUrl("/api/advance/applications"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, requested_amount: 50 }),
+        body: JSON.stringify({ ...body, requested_amount: 25 }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.error_message || "Unable to start application");
@@ -280,108 +358,179 @@ const CustomerApp = () => {
     await loadMessages(application.id);
   };
 
+  // ── Landing ──────────────────────────────────────────────────────────────────
   if (!application) {
     if (view === "landing") {
       return (
         <main className={styles.page}>
+          <NavBar />
           <section className={styles.chatOnly}>
-            <section className={styles.chat}>
-              <header>
+            <div className={styles.landingWrap}>
+              <div className={styles.heroCard}>
                 <p className={styles.kicker}>Earned wage advance</p>
-                <h1>$50 cash advance</h1>
-                <p>Get up to $50 before your next payday. Repayment is due within 30 days of funding.</p>
-              </header>
-              <div className={styles.landingActions}>
-                <button onClick={() => window.location.href = "/loan"}>Sign in</button>
-                <button className={styles.secondaryBtn} onClick={() => setView("signup")}>
-                  First time? Apply here
-                </button>
+                <div className={styles.heroAmount}>
+                  <span className={styles.heroAmountDollar}>$</span>
+                  <span className={styles.heroAmountNum}>25</span>
+                </div>
+                <p className={styles.heroTitle}>Cash advance — before your next payday</p>
+                <p className={styles.heroSub}>
+                  No credit check. No hidden fees. Connect your bank, get a decision today, and repay within 30 days.
+                </p>
+                <div className={styles.landingActions}>
+                  <button onClick={() => setView("signup")}>Apply now — it's free</button>
+                  <button className={styles.secondaryBtn} onClick={() => window.location.href = "/loan"}>
+                    Sign in
+                  </button>
+                </div>
+
+                <div className={styles.howItWorks}>
+                  <div className={styles.howStep}>
+                    <div className={styles.howStepNum}>1</div>
+                    <strong>Apply in minutes</strong>
+                    <span>Fill out your info — name, employer, and next payday</span>
+                  </div>
+                  <div className={styles.howStep}>
+                    <div className={styles.howStepNum}>2</div>
+                    <strong>Connect your bank</strong>
+                    <span>We verify income securely via Plaid — no passwords shared</span>
+                  </div>
+                  <div className={styles.howStep}>
+                    <div className={styles.howStepNum}>3</div>
+                    <strong>Get funded</strong>
+                    <span>A reviewer approves and sends your advance manually</span>
+                  </div>
+                </div>
+
+                <div className={styles.partnerBadges}>
+                  <span>Secured by</span>
+                  <div className={styles.partnerBadge}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#000"/><path d="M4 7l2.5 2.5L10 5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Plaid
+                  </div>
+                  <div className={styles.partnerBadge}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect width="14" height="14" rx="3" fill="#635bff"/><path d="M5.8 5.2c0-.5.4-.8 1-.8.8 0 1.6.3 2.2.6V3.4C8.4 3.1 7.7 3 7 3 5.3 3 4.2 3.9 4.2 5.3c0 2.2 3 1.8 3 2.9 0 .6-.5.9-1.1.9-.9 0-1.8-.4-2.5-.9v1.7c.7.3 1.4.5 2.2.5 1.7 0 2.9-.9 2.9-2.3C10.7 5.9 5.8 6.3 5.8 5.2z" fill="#fff"/></svg>
+                    Stripe
+                  </div>
+                </div>
               </div>
-            </section>
+              <TrustPillars />
+            </div>
           </section>
         </main>
       );
     }
 
+    // ── Signup ────────────────────────────────────────────────────────────────
     return (
       <main className={styles.page}>
-        <section className={styles.chatOnly}>
-          <section className={styles.chat}>
-            <header>
-              <p className={styles.kicker}>New application</p>
-              <h1>$50 cash advance</h1>
-            </header>
-            <form className={styles.intakeComposer} onSubmit={createApplication}>
-              <div className={styles.intakeGrid}>
-                <label>
-                  Full name
-                  <input required value={form.name}
-                    onChange={(event) => setForm({ ...form, name: event.target.value })} />
-                </label>
-                <label>
-                  Email
-                  <input required type="email" value={form.email}
-                    onChange={(event) => setForm({ ...form, email: event.target.value })} />
-                </label>
-                <label>
-                  Phone
-                  <input required value={form.phone}
-                    onChange={(event) => setForm({ ...form, phone: event.target.value })} />
-                </label>
-                <label>
-                  Employer
-                  <input required value={form.employer}
-                    onChange={(event) => setForm({ ...form, employer: event.target.value })} />
-                </label>
-                <label>
-                  Next payday
-                  <input required min={today} type="date" value={form.payday}
-                    onChange={(event) => setForm({ ...form, payday: event.target.value })} />
-                </label>
-                <label>
-                  Password
-                  <input required type="password" minLength={6} placeholder="Min. 6 characters"
-                    autoComplete="new-password"
-                    value={form.password}
-                    onChange={(event) => setForm({ ...form, password: event.target.value })} />
-                </label>
-                <label>
-                  Confirm password
-                  <input required type="password" autoComplete="new-password"
-                    value={form.confirmPassword}
-                    onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
-                </label>
+        <NavBar />
+        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
+          <div className={styles.signupCard}>
+            <div className={styles.signupCardHeader}>
+              <div className={styles.progressSteps}>
+                <div className={`${styles.progressStep} ${styles.active}`}>
+                  <div className={styles.progressStepDot}>1</div>
+                  <span className={styles.progressStepLabel}>Your info</span>
+                </div>
+                <div className={styles.progressStep}>
+                  <div className={styles.progressStepDot}>2</div>
+                  <span className={styles.progressStepLabel}>Connect bank</span>
+                </div>
+                <div className={styles.progressStep}>
+                  <div className={styles.progressStepDot}>3</div>
+                  <span className={styles.progressStepLabel}>Review</span>
+                </div>
+                <div className={styles.progressStep}>
+                  <div className={styles.progressStepDot}>4</div>
+                  <span className={styles.progressStepLabel}>Funded</span>
+                </div>
               </div>
-              <div className={styles.chatAction}>
-                <p>In the next step you will connect your bank account. Please connect the account where your employer deposits your paycheck — this is required to verify income.</p>
-                <p>Repayment of $50 is due within <strong>30 days</strong> of funding.</p>
-              </div>
-              {error && <p className={styles.error}>{error}</p>}
-              <div className={styles.intakeFooter}>
-                <button type="button" className={styles.backBtn} onClick={() => setView("landing")}>Back</button>
-                <button disabled={isBusy}>{isBusy ? "Starting..." : "Continue to bank connection"}</button>
-              </div>
-            </form>
-          </section>
+              <p className={styles.kicker}>Step 1 of 4</p>
+              <h1>Tell us about yourself</h1>
+              <p>Takes about 2 minutes. Your info is never sold or shared.</p>
+            </div>
+            <div className={styles.signupCardBody}>
+              <form className={styles.intakeComposer} onSubmit={createApplication}>
+                <div className={styles.intakeGrid}>
+                  <label>
+                    Full name
+                    <input required value={form.name} placeholder="Jane Smith"
+                      onChange={(event) => setForm({ ...form, name: event.target.value })} />
+                  </label>
+                  <label>
+                    Email address
+                    <input required type="email" value={form.email} placeholder="jane@example.com"
+                      onChange={(event) => setForm({ ...form, email: event.target.value })} />
+                  </label>
+                  <label>
+                    Phone number
+                    <input required value={form.phone} placeholder="(555) 000-0000"
+                      onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                  </label>
+                  <label>
+                    Employer
+                    <input required value={form.employer} placeholder="Acme Corp"
+                      onChange={(event) => setForm({ ...form, employer: event.target.value })} />
+                  </label>
+                  <label>
+                    Next payday
+                    <input required min={today} type="date" value={form.payday}
+                      onChange={(event) => setForm({ ...form, payday: event.target.value })} />
+                  </label>
+                  <label>
+                    Create a password
+                    <input required type="password" minLength={6} placeholder="Min. 6 characters"
+                      autoComplete="new-password"
+                      value={form.password}
+                      onChange={(event) => setForm({ ...form, password: event.target.value })} />
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    Confirm password
+                    <input required type="password" autoComplete="new-password"
+                      value={form.confirmPassword}
+                      onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
+                  </label>
+                </div>
+                <div className={styles.securityNote}>
+                  <svg width="15" height="16" viewBox="0 0 15 16" fill="none" aria-hidden="true">
+                    <path d="M7.5 1.5L13 4.2V9C13 12.2 10.5 15 7.5 15.8C4.5 15 2 12.2 2 9V4.2L7.5 1.5Z" fill="#4a9470" />
+                  </svg>
+                  Your information is encrypted and never sold or shared. Next, you'll connect your bank via Plaid to verify income. Repayment of <strong>$25</strong> is due within <strong>30 days</strong> of funding.
+                </div>
+                {error && <p className={styles.error}>{error}</p>}
+                <div className={styles.intakeFooter}>
+                  <button type="button" className={styles.backBtn} onClick={() => setView("landing")}>← Back</button>
+                  <button disabled={isBusy}>{isBusy ? "Starting…" : "Continue to bank connection →"}</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </section>
       </main>
     );
   }
 
+  // ── Authenticated application view ────────────────────────────────────────
+  const appSteps: Array<{ key: Status | "__bank__"; label: string }> = [
+    { key: "intake", label: "Applied" },
+    { key: "__bank__", label: "Bank connected" },
+    { key: "reviewing", label: "Under review" },
+    { key: "approved", label: "Approved" },
+    { key: "funded", label: "Funded" },
+  ];
+  const stepOrder = ["intake", "__bank__", "reviewing", "approved", "funded", "repayment_scheduled", "repaid"];
+  const currentStepIdx = stepOrder.indexOf(
+    application.plaid_connected && application.status === "intake" ? "__bank__" : application.status
+  );
+
   return (
     <main className={styles.page}>
+      <NavBar onLogout={handleLogout} />
       <section className={styles.workspace}>
         <aside className={styles.summary}>
-          <p className={styles.kicker}>Application</p>
+          <p className={styles.kicker}>Your advance</p>
           <h2>{formatMoney(application.requested_amount)}</h2>
           <div className={styles.status}>{statusLabel[application.status]}</div>
-          <button className={styles.logoutBtn} onClick={() => {
-            localStorage.removeItem(applicationStorageKey);
-            localStorage.removeItem(userTokenStorageKey);
-            setApplication(null);
-            setMessages([]);
-            setView("landing");
-          }}>Log out</button>
           <dl>
             <dt>Name</dt>
             <dd>{application.customer.name}</dd>
@@ -390,56 +539,62 @@ const CustomerApp = () => {
             <dt>Payday</dt>
             <dd>{application.payday}</dd>
             <dt>Bank</dt>
-            <dd>{application.plaid_connected ? "Connected" : "Not connected"}</dd>
+            <dd>{application.plaid_connected ? "✓ Connected" : "Not connected"}</dd>
           </dl>
-          <button disabled={isBusy || application.plaid_connected} onClick={createLinkToken}>
-            {application.plaid_connected ? "Bank connected" : "Connect bank"}
-          </button>
+          {!application.plaid_connected && (
+            <button disabled={isBusy} onClick={createLinkToken}>
+              Connect bank with Plaid
+            </button>
+          )}
           {application.repayment && (
             <p className={styles.notice}>
-              Repayment recorded for {application.repayment.due_date}.
+              Repayment due {application.repayment.due_date}.
             </p>
           )}
           {error && <p className={styles.error}>{error}</p>}
         </aside>
         <section className={styles.chat}>
           <header>
-            <div className={styles.loanHeader}>
-              <div>
-                <p className={styles.kicker}>Live review chat</p>
-                <h1>Continue your review</h1>
-                <p>Connect your bank with Plaid, then a human reviewer will reply here.</p>
-              </div>
-              <button className={styles.logoutBtn} onClick={() => {
-                localStorage.removeItem(applicationStorageKey);
-                localStorage.removeItem(userTokenStorageKey);
-                setApplication(null);
-                setMessages([]);
-                setView("landing");
-              }}>Log out</button>
+            <div className={styles.appStatusBar}>
+              {appSteps.map((step, i) => {
+                const idx = stepOrder.indexOf(step.key);
+                const isCurrent = idx === currentStepIdx;
+                const isDone = idx < currentStepIdx;
+                return (
+                  <div key={step.key} className={`${styles.appStatusStep} ${isCurrent ? styles.active : ""} ${isDone ? styles.done : ""}`}>
+                    <div className={styles.appStatusDot}>
+                      <div className={styles.appStatusDotInner} />
+                    </div>
+                    {i < appSteps.length - 1 && null}
+                  </div>
+                );
+              })}
             </div>
+            <p className={styles.kicker} style={{ marginTop: "1.6rem" }}>Live review</p>
+            <h1>Your application</h1>
+            <p>A human reviewer will reply here once your bank is connected.</p>
           </header>
           <MessageList messages={messages} />
           {!application.plaid_connected && (
             <div className={styles.chatAction}>
-              <p>Next step: connect your bank securely with Plaid so the reviewer can make a decision.</p>
-              <p><strong>Important:</strong> connect the account where your employer sends your direct deposit — not a savings or secondary account.</p>
+              <p><strong>Next step:</strong> connect your bank securely with Plaid so a reviewer can make a decision.</p>
+              <p>Connect the account where your employer sends your direct deposit.</p>
               <button disabled={isBusy} onClick={createLinkToken}>
-                Connect bank with Plaid
+                Connect bank with Plaid →
               </button>
             </div>
           )}
           {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && !application.stripe_card_saved && (
             <div className={styles.chatAction}>
-              <p><strong>You're approved!</strong> The last step is to save a card so we can collect repayment automatically on your due date.</p>
+              <p><strong>You're approved!</strong> Save a card so we can collect your repayment automatically on the due date.</p>
               <button onClick={() => window.location.href = "/loan"}>
-                Continue — save repayment card →
+                Save repayment card →
               </button>
             </div>
           )}
           <form className={styles.composer} onSubmit={sendMessage}>
             <input
-              placeholder="Type a message..."
+              placeholder="Type a message…"
               value={messageText}
               onChange={(event) => setMessageText(event.target.value)}
             />
@@ -450,6 +605,8 @@ const CustomerApp = () => {
     </main>
   );
 };
+
+// ── Admin app ─────────────────────────────────────────────────────────────────
 
 const AdminApp = () => {
   const [adminToken, setAdminToken] = useState(
@@ -560,7 +717,7 @@ const AdminApp = () => {
     await fetch(apiUrl(`/api/advance/admin/applications/${selected.id}/repayment`), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...adminHeaders },
-      body: JSON.stringify({ amount: 50, due_date: repaymentDate }),
+      body: JSON.stringify({ amount: 25, due_date: repaymentDate }),
     });
     await loadApplications();
     await loadMessages(selected.id);
@@ -610,126 +767,134 @@ const AdminApp = () => {
         </section>
       )}
       {adminToken && (
-      <section className={styles.adminLayout}>
-        <aside className={styles.inbox}>
-          <h1>Reviews</h1>
-          {applications.map((application) => (
-            <button
-              key={application.id}
-              className={application.id === selectedId ? styles.activeRow : styles.row}
-              onClick={() => setSelectedId(application.id)}
-            >
-              <span>{application.customer.name || "Unnamed applicant"}</span>
-              <small>{statusLabel[application.status]}</small>
-            </button>
-          ))}
-        </aside>
-        {selected ? (
-          <section className={styles.review}>
-            <div className={styles.reviewHeader}>
-              <div>
-                <p className={styles.kicker}>Manual decision</p>
-                <h2>{selected.customer.name}</h2>
-                <p>
-                  {selected.customer.email} · {selected.customer.phone}
-                </p>
+        <section className={styles.adminLayout}>
+          <aside className={styles.inbox}>
+            <h1>Reviews</h1>
+            {applications.map((application) => (
+              <button
+                key={application.id}
+                className={application.id === selectedId ? styles.activeRow : styles.row}
+                onClick={() => setSelectedId(application.id)}
+              >
+                <span>{application.customer.name || "Unnamed applicant"}</span>
+                <small>{statusLabel[application.status]}</small>
+              </button>
+            ))}
+          </aside>
+          {selected ? (
+            <section className={styles.review}>
+              <div className={styles.reviewHeader}>
+                <div>
+                  <p className={styles.kicker}>Manual decision</p>
+                  <h2>{selected.customer.name}</h2>
+                  <p>
+                    {selected.customer.email} · {selected.customer.phone}
+                  </p>
+                </div>
+                <div className={styles.status}>{statusLabel[selected.status]}</div>
               </div>
-              <div className={styles.status}>{statusLabel[selected.status]}</div>
-            </div>
-            <div className={styles.reviewGrid}>
-              <section className={styles.panel}>
-                <h3>Applicant</h3>
-                <dl>
-                  <dt>Requested</dt>
-                  <dd>{formatMoney(selected.requested_amount)}</dd>
-                  <dt>Employer</dt>
-                  <dd>{selected.customer.employer}</dd>
-                  <dt>Payday</dt>
-                  <dd>{selected.payday}</dd>
-                  <dt>Plaid</dt>
-                  <dd>{selected.plaid_connected ? "Connected" : "Waiting"}</dd>
-                </dl>
-                <div className={styles.actions}>
-                  <button disabled={isBusy} onClick={loadBankSnapshot}>Load bank details</button>
-                  <button
-                    disabled={isBusy}
-                    onClick={() =>
-                      setStatus(
-                        "approved",
-                        "Congrats, you are approved for a $50 advance. To send the funds manually, please reply with: routing number, account number, checking or savings, and the legal name on the account. Do not send your online banking password.",
-                      )
-                    }
-                  >
-                    Approve
-                  </button>
-                  <button disabled={isBusy} onClick={() => setStatus("denied", "We are unable to approve this advance right now.")}>Deny</button>
-                  <button disabled={isBusy} onClick={() => setStatus("funded", "Your $50 advance has been sent manually.")}>Mark funded</button>
-                </div>
-                <div className={styles.repayment}>
-                  <label>
-                    Repayment due date (30 days from funding)
-                    <input
-                      type="date"
-                      min={today}
-                      value={repaymentDate}
-                      onChange={(event) => setRepaymentDate(event.target.value)}
-                    />
-                  </label>
-                  <button disabled={isBusy} onClick={scheduleRepayment}>Record repayment schedule</button>
-                  {selected.stripe_card_saved && (
-                    <button disabled={isBusy} onClick={chargeCard} style={{ marginTop: "0.6rem" }}>
-                      {isBusy ? "Charging…" : "Charge card now"}
+              <div className={styles.reviewGrid}>
+                <section className={styles.panel}>
+                  <h3>Applicant</h3>
+                  <dl>
+                    <dt>Requested</dt>
+                    <dd>{formatMoney(selected.requested_amount)}</dd>
+                    <dt>Employer</dt>
+                    <dd>{selected.customer.employer}</dd>
+                    <dt>Payday</dt>
+                    <dd>{selected.payday}</dd>
+                    <dt>Plaid</dt>
+                    <dd>{selected.plaid_connected ? "Connected" : "Waiting"}</dd>
+                  </dl>
+                  <div className={styles.actions}>
+                    <button disabled={isBusy} onClick={loadBankSnapshot}>Load bank details</button>
+                    <button
+                      disabled={isBusy}
+                      onClick={() =>
+                        setStatus(
+                          "approved",
+                          "Congrats, you are approved for a $25 advance. To send the funds manually, please reply with: routing number, account number, checking or savings, and the legal name on the account. Do not send your online banking password.",
+                        )
+                      }
+                    >
+                      Approve
                     </button>
+                    <button disabled={isBusy} onClick={() => setStatus("denied", "We are unable to approve this advance right now.")}>Deny</button>
+                    <button disabled={isBusy} onClick={() => setStatus("funded", "Your $25 advance has been sent manually.")}>Mark funded</button>
+                  </div>
+                  <div className={styles.repayment}>
+                    <label>
+                      Repayment due date (30 days from funding)
+                      <input
+                        type="date"
+                        min={today}
+                        value={repaymentDate}
+                        onChange={(event) => setRepaymentDate(event.target.value)}
+                      />
+                    </label>
+                    <button disabled={isBusy} onClick={scheduleRepayment}>Record repayment schedule</button>
+                    {selected.stripe_card_saved && (
+                      <button disabled={isBusy} onClick={chargeCard} style={{ marginTop: "0.6rem" }}>
+                        {isBusy ? "Charging…" : "Charge card now"}
+                      </button>
+                    )}
+                    {!selected.stripe_card_saved && (
+                      <p className={styles.muted} style={{ marginTop: "0.6rem" }}>No card on file — customer must save one via their loan dashboard.</p>
+                    )}
+                  </div>
+                  {error && <p className={styles.error}>{error}</p>}
+                </section>
+                <section className={styles.panel}>
+                  <h3>Bank snapshot</h3>
+                  {!snapshot ? (
+                    <p className={styles.muted}>Load bank details after the applicant connects Plaid.</p>
+                  ) : (
+                    <BankSnapshotView snapshot={snapshot} />
                   )}
-                  {!selected.stripe_card_saved && (
-                    <p className={styles.muted} style={{ marginTop: "0.6rem" }}>No card on file — customer must save one via their loan dashboard.</p>
-                  )}
-                </div>
-                {error && <p className={styles.error}>{error}</p>}
+                </section>
+              </div>
+              <section className={styles.chat}>
+                <header>
+                  <h3>Chat</h3>
+                </header>
+                <MessageList messages={messages} />
+                <form className={styles.composer} onSubmit={sendAdminMessage}>
+                  <input
+                    placeholder="Reply to applicant…"
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                  />
+                  <button>Send</button>
+                </form>
               </section>
-              <section className={styles.panel}>
-                <h3>Bank snapshot</h3>
-                {!snapshot ? (
-                  <p className={styles.muted}>Load bank details after the applicant connects Plaid.</p>
-                ) : (
-                  <BankSnapshotView snapshot={snapshot} />
-                )}
-              </section>
-            </div>
-            <section className={styles.chat}>
-              <header>
-                <h3>Chat</h3>
-              </header>
-              <MessageList messages={messages} />
-              <form className={styles.composer} onSubmit={sendAdminMessage}>
-                <input
-                  placeholder="Reply to applicant..."
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                />
-                <button>Send</button>
-              </form>
             </section>
-          </section>
-        ) : (
-          <section className={styles.empty}>No applications yet.</section>
-        )}
-      </section>
+          ) : (
+            <section className={styles.empty}>No applications yet.</section>
+          )}
+        </section>
       )}
     </main>
   );
 };
 
+// ── Message list ──────────────────────────────────────────────────────────────
+
 const MessageList = ({ messages }: { messages: Message[] }) => (
   <div className={styles.messages}>
     {messages.map((message) => (
       <div key={message.id} className={`${styles.message} ${styles[message.sender]}`}>
-        <span>{message.sender === "customer" ? "you" : "admin"}</span>
-        <p>{message.text}</p>
+        <span>
+          {message.sender === "customer" ? "You" : message.sender === "admin" ? "Support" : "Notice"}
+        </span>
+        <div className={styles.messageBubble}>
+          <p>{message.text}</p>
+        </div>
       </div>
     ))}
   </div>
 );
+
+// ── Bank snapshot view ────────────────────────────────────────────────────────
 
 const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
   const [nameQuery, setNameQuery] = useState("");
@@ -787,6 +952,8 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
     </div>
   );
 };
+
+// ── Loan (returning borrower) app ─────────────────────────────────────────────
 
 const LoanApp = () => {
   const [token, setToken] = useState(() => localStorage.getItem(userTokenStorageKey) || "");
@@ -873,28 +1040,35 @@ const LoanApp = () => {
   if (!token || !application) {
     return (
       <main className={styles.page}>
-        <section className={styles.chatOnly}>
-          <section className={styles.chat}>
-            <header>
+        <NavBar />
+        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
+          <div className={styles.signupCard} style={{ maxWidth: "44rem", margin: "0 auto" }}>
+            <div className={styles.signupCardHeader}>
               <p className={styles.kicker}>Returning borrower</p>
-              <h1>Manage your loan</h1>
-              <p>Log in with the email and password you used when applying.</p>
-            </header>
-            <form className={styles.intakeComposer} onSubmit={login}>
-              <label>
-                Email
-                <input required type="email" value={loginForm.email}
-                  onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} />
-              </label>
-              <label>
-                Password
-                <input required type="password" value={loginForm.password}
-                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} />
-              </label>
-              {error && <p className={styles.error}>{error}</p>}
-              <button disabled={isBusy}>{isBusy ? "Logging in…" : "Log in"}</button>
-            </form>
-          </section>
+              <h1 style={{ fontSize: "2.8rem" }}>Sign in to your account</h1>
+              <p>Use the email and password you created when applying.</p>
+            </div>
+            <div className={styles.signupCardBody}>
+              <form className={styles.intakeComposer} onSubmit={login}>
+                <label>
+                  Email address
+                  <input required type="email" value={loginForm.email} placeholder="jane@example.com"
+                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} />
+                </label>
+                <label>
+                  Password
+                  <input required type="password" value={loginForm.password} placeholder="Your password"
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} />
+                </label>
+                {error && <p className={styles.error}>{error}</p>}
+                <button disabled={isBusy}>{isBusy ? "Signing in…" : "Sign in →"}</button>
+                <p style={{ textAlign: "center", margin: 0, fontSize: "1.35rem", color: "var(--neutral-400)" }}>
+                  Don't have an account?{" "}
+                  <a href="/" style={{ color: "var(--green-900)", fontWeight: 700 }}>Apply now</a>
+                </p>
+              </form>
+            </div>
+          </div>
         </section>
       </main>
     );
@@ -906,6 +1080,7 @@ const LoanApp = () => {
 
   return (
     <main className={styles.page}>
+      <NavBar onLogout={logout} />
       <section className={styles.chatOnly}>
         <section className={styles.loanDashboard}>
           <div className={styles.loanHeader}>
@@ -916,7 +1091,6 @@ const LoanApp = () => {
             </div>
             <div className={styles.loanHeaderRight}>
               <div className={styles.status}>{statusLabel[application.status]}</div>
-              <button className={styles.logoutBtn} onClick={logout}>Log out</button>
             </div>
           </div>
 
@@ -977,6 +1151,8 @@ const LoanApp = () => {
     </main>
   );
 };
+
+// ── Save card form ────────────────────────────────────────────────────────────
 
 const SaveCardForm = ({
   applicationId,

@@ -134,7 +134,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
     }
     const password_hash = await bcrypt.hash(password, 10);
     const row = await db.createApplication({ name: name || '', email: email || '', phone: phone || '', employer: employer || '', payday, requested_amount, password_hash });
-    await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $50 request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
+    await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $25 request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
     response.json({ application: db.publicApp(row), token });
@@ -479,7 +479,7 @@ app.post('/api/advance/admin/applications/:id/repayment', async function (reques
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    const amount = Number(request.body.amount || row.requested_amount || 50);
+    const amount = Number(request.body.amount || row.requested_amount || 25);
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);
     const due_date = request.body.due_date || dueDate.toISOString().slice(0, 10);
