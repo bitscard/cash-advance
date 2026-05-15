@@ -194,53 +194,91 @@ const TrustPillars = () => (
   </section>
 );
 
-const AlienMascot = ({ flag = "usa", size = 220 }: { flag?: "usa" | "mexico"; size?: number }) => {
-  const stripes = [0,1,2,3,4,5,6].map(i => ({ y: 40 + i * 5, fill: i % 2 === 0 ? "#ef4444" : "#ffffff" }));
-  return (
-    <svg width={size} height={size * 1.1} viewBox="0 0 170 190" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Antenna */}
-      <line x1="65" y1="14" x2="65" y2="34" stroke="#6ee7b7" strokeWidth="3.5" strokeLinecap="round"/>
-      <circle cx="65" cy="9" r="7" fill="#34d399"/>
-      {/* Head */}
-      <ellipse cx="65" cy="72" rx="40" ry="44" fill="#6ee7b7"/>
-      {/* Eyes */}
-      <ellipse cx="50" cy="62" rx="12" ry="14" fill="#065f46"/>
-      <ellipse cx="80" cy="62" rx="12" ry="14" fill="#065f46"/>
-      <circle cx="46" cy="57" r="4.5" fill="white"/>
-      <circle cx="76" cy="57" r="4.5" fill="white"/>
-      {/* Smile */}
-      <path d="M51 87 Q65 98 79 87" stroke="#065f46" strokeWidth="3.2" strokeLinecap="round" fill="none"/>
-      {/* Body */}
-      <ellipse cx="65" cy="136" rx="27" ry="22" fill="#6ee7b7"/>
-      {/* Legs */}
-      <ellipse cx="50" cy="166" rx="11" ry="15" fill="#6ee7b7"/>
-      <ellipse cx="80" cy="166" rx="11" ry="15" fill="#6ee7b7"/>
-      {/* Left arm (down) */}
-      <path d="M38 132 Q20 148 22 162" stroke="#6ee7b7" strokeWidth="12" strokeLinecap="round" fill="none"/>
-      {/* Right arm (up, holding flag) */}
-      <path d="M92 122 Q113 106 119 82" stroke="#6ee7b7" strokeWidth="12" strokeLinecap="round" fill="none"/>
-      {/* Flag pole */}
-      <line x1="120" y1="36" x2="120" y2="88" stroke="#a16207" strokeWidth="4" strokeLinecap="round"/>
-      {flag === "usa" ? (
-        <g>
-          {stripes.map((s, i) => <rect key={i} x="120" y={s.y} width="44" height="5" fill={s.fill}/>)}
-          <rect x="120" y="40" width="20" height="21" fill="#1e40af"/>
-          {[43,48,53].flatMap(cy => [123,127,131,135].map(cx =>
-            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.4" fill="white"/>
-          ))}
-        </g>
-      ) : (
-        <g>
-          <rect x="120" y="40" width="15" height="35" fill="#006847"/>
-          <rect x="135" y="40" width="14" height="35" fill="white"/>
-          <rect x="149" y="40" width="15" height="35" fill="#ce1126"/>
-          <circle cx="142" cy="57" r="6" fill="#8b4513"/>
-          <circle cx="142" cy="57" r="3.5" fill="#d97706"/>
-        </g>
-      )}
-    </svg>
-  );
-};
+const AlienMascot = ({ flag = "usa", size = 220 }: { flag?: "usa" | "mexico"; size?: number }) => (
+  <svg width={size} height={Math.round(size * 1.25)} viewBox="0 0 200 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Ground shadow */}
+    <ellipse cx="95" cy="245" rx="50" ry="7" fill="rgba(0,0,0,0.10)"/>
+
+    {/* Body */}
+    <rect x="68" y="132" width="56" height="76" rx="28" fill="#a78bfa"/>
+    {/* Body highlight */}
+    <ellipse cx="82" cy="148" rx="10" ry="14" fill="rgba(255,255,255,0.15)"/>
+
+    {/* Head */}
+    <circle cx="96" cy="82" r="54" fill="#a78bfa"/>
+    {/* Head highlight */}
+    <ellipse cx="78" cy="60" rx="18" ry="14" fill="rgba(255,255,255,0.13)"/>
+
+    {/* Eyes — white sclera */}
+    <ellipse cx="78" cy="76" rx="17" ry="20" fill="white"/>
+    <ellipse cx="114" cy="76" rx="17" ry="20" fill="white"/>
+    {/* Irises */}
+    <circle cx="81" cy="79" rx="11" ry="11" r="11" fill="#4c1d95"/>
+    <circle cx="117" cy="79" r="11" fill="#4c1d95"/>
+    {/* Pupils */}
+    <circle cx="83" cy="81" r="5.5" fill="#0f0a1e"/>
+    <circle cx="119" cy="81" r="5.5" fill="#0f0a1e"/>
+    {/* Eye shine */}
+    <circle cx="77" cy="73" r="4" fill="white"/>
+    <circle cx="113" cy="73" r="4" fill="white"/>
+
+    {/* Smile */}
+    <path d="M80 103 Q96 118 112 103" stroke="#4c1d95" strokeWidth="4" strokeLinecap="round" fill="none"/>
+
+    {/* Antenna stem */}
+    <line x1="96" y1="28" x2="96" y2="50" stroke="#c4b5fd" strokeWidth="5" strokeLinecap="round"/>
+    {/* Antenna ball */}
+    <circle cx="96" cy="21" r="12" fill="#7c3aed"/>
+    <circle cx="91" cy="17" r="4.5" fill="rgba(255,255,255,0.35)"/>
+
+    {/* Left arm (relaxed, down) */}
+    <path d="M69 155 Q44 172 40 194" stroke="#a78bfa" strokeWidth="19" strokeLinecap="round" fill="none"/>
+    <circle cx="39" cy="197" r="12" fill="#8b5cf6"/>
+
+    {/* Right arm (raised, holding flag) */}
+    <path d="M123 150 Q152 133 158 106" stroke="#a78bfa" strokeWidth="19" strokeLinecap="round" fill="none"/>
+    <circle cx="159" cy="103" r="12" fill="#8b5cf6"/>
+
+    {/* Legs */}
+    <rect x="74" y="200" width="20" height="38" rx="10" fill="#8b5cf6"/>
+    <rect x="98" y="200" width="20" height="38" rx="10" fill="#8b5cf6"/>
+    {/* Feet */}
+    <ellipse cx="84" cy="239" rx="16" ry="9" fill="#7c3aed"/>
+    <ellipse cx="108" cy="239" rx="16" ry="9" fill="#7c3aed"/>
+
+    {/* Flag pole */}
+    <line x1="159" y1="46" x2="159" y2="106" stroke="#92400e" strokeWidth="5" strokeLinecap="round"/>
+    <circle cx="159" cy="44" r="5" fill="#d97706"/>
+
+    {flag === "usa" ? (
+      <g>
+        <rect x="159" y="47" width="38" height="30" rx="2" fill="#ef4444"/>
+        <rect x="159" y="51" width="38" height="4.5" fill="white"/>
+        <rect x="159" y="60" width="38" height="4.5" fill="white"/>
+        <rect x="159" y="69" width="38" height="4.5" fill="white"/>
+        <rect x="159" y="47" width="17" height="19" rx="1" fill="#1d4ed8"/>
+        <circle cx="163" cy="51" r="1.5" fill="white"/>
+        <circle cx="168" cy="51" r="1.5" fill="white"/>
+        <circle cx="173" cy="51" r="1.5" fill="white"/>
+        <circle cx="165" cy="56" r="1.5" fill="white"/>
+        <circle cx="170" cy="56" r="1.5" fill="white"/>
+        <circle cx="175" cy="56" r="1.5" fill="white"/>
+        <circle cx="163" cy="61" r="1.5" fill="white"/>
+        <circle cx="168" cy="61" r="1.5" fill="white"/>
+        <circle cx="173" cy="61" r="1.5" fill="white"/>
+      </g>
+    ) : (
+      <g>
+        <rect x="159" y="47" width="13" height="30" rx="2" fill="#006847"/>
+        <rect x="172" y="47" width="13" height="30" fill="white"/>
+        <rect x="185" y="47" width="12" height="30" rx="2" fill="#ce1126"/>
+        <circle cx="178" cy="62" r="7" fill="#8b4513"/>
+        <circle cx="178" cy="62" r="4" fill="#d97706"/>
+        <circle cx="176" cy="60" r="1.5" fill="rgba(255,255,255,0.4)"/>
+      </g>
+    )}
+  </svg>
+);
 
 // ── App router ────────────────────────────────────────────────────────────────
 

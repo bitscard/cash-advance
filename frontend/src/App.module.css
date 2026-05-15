@@ -3,8 +3,8 @@
   --brand:       #1a4d3a;
   --brand-700:   #236649;
   --brand-dark:  #0f2e22;
-  --brand-tint:  #f0faf5;
-  --brand-tint2: #dceee4;
+  --brand-tint:  #f4f9f6;
+  --brand-tint2: #ddeee5;
   --white:       #ffffff;
   --ink:         #060d09;
   --ink-2:       #253028;
@@ -228,7 +228,7 @@ button:disabled {
 }
 
 .sectionTint {
-  background: var(--brand-tint);
+  background: #f9fafb;
 }
 
 .sectionLabel {
@@ -708,7 +708,7 @@ dd {
   padding: 2rem;
   border: 1.5px solid var(--border-lt);
   border-radius: var(--r-lg);
-  background: var(--brand-tint);
+  background: #f9fafb;
 }
 
 .message {
@@ -793,15 +793,15 @@ dd {
 .chatAction {
   display: grid;
   gap: 1.2rem;
-  border: 1.5px solid var(--brand-tint2);
+  border: 1.5px solid var(--border);
   border-radius: var(--r-lg);
   padding: 2.2rem;
-  background: var(--brand-tint);
+  background: var(--white);
 }
 
 .chatAction p {
   margin: 0;
-  color: var(--brand);
+  color: var(--ink-2);
   font-size: 1.5rem;
   line-height: 1.55;
 }
@@ -1160,8 +1160,9 @@ dd {
 
 /* ── Raffle banner ────────────────────────────────────────────────────────── */
 .raffleBanner {
-  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  background: var(--brand-dark);
   padding: 8rem 3.2rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
 
 .raffleBannerInner {
@@ -1246,8 +1247,8 @@ dd {
   flex-direction: column;
   gap: 1rem;
   padding: 2rem 2.2rem;
-  background: var(--brand-tint);
-  border: 1px solid var(--brand-tint2);
+  background: var(--white);
+  border: 1.5px solid var(--border);
   border-radius: var(--r-md);
   margin-bottom: 2.8rem;
 }
@@ -1407,15 +1408,15 @@ dd {
   display: grid;
   gap: 1.2rem;
   padding: 2.2rem;
-  background: var(--brand-tint);
-  border: 1.5px solid var(--brand-tint2);
+  background: var(--white);
+  border: 1.5px solid var(--border);
   border-radius: var(--r-lg);
 }
 
 .appCardAction p {
   margin: 0;
   font-size: 1.55rem;
-  color: var(--brand);
+  color: var(--ink-2);
   line-height: 1.55;
 }
 
