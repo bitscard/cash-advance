@@ -655,7 +655,6 @@ const CustomerApp = () => {
         <div className={styles.appCardPanel}>
           <div className={styles.appCardHeader}>
             <p className={styles.appCardKicker}>Your advance</p>
-            <p className={styles.appCardAmount}>{formatMoney(application.requested_amount)}</p>
             <span className={styles.appCardStatusBadge}>{statusLabel[application.status]}</span>
           </div>
           <div className={styles.appCardBody}>
@@ -687,7 +686,7 @@ const CustomerApp = () => {
 
             {needsCard && (
               <div className={styles.appCardAction}>
-                <p><strong>You're approved!</strong> Save a card so we can collect your ${application.requested_amount} repayment automatically on the due date.</p>
+                <p><strong>You're approved!</strong> Save a card so we can collect your repayment automatically on the due date.</p>
                 <button onClick={() => window.location.href = "/loan"}>
                   Save repayment card →
                 </button>
@@ -1204,7 +1203,6 @@ const LoanApp = () => {
             <section className={styles.panel}>
               <h3>Loan details</h3>
               <dl>
-                <dt>Amount</dt><dd>{formatMoney(application.requested_amount)}</dd>
                 <dt>Employer</dt><dd>{application.customer.employer}</dd>
                 <dt>Payday</dt><dd>{application.payday}</dd>
                 <dt>Bank</dt><dd>{application.plaid_connected ? "Connected" : "Not connected"}</dd>
@@ -1217,7 +1215,7 @@ const LoanApp = () => {
                 <p className={styles.paidNote}>Repayment collected — thank you!</p>
               ) : !application.stripe_card_saved && (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
                 <>
-                  <p><strong>One last step.</strong> Save a card and we'll automatically collect your ${application.requested_amount} repayment on the due date — no action needed from you on the day.</p>
+                  <p><strong>One last step.</strong> Save a card and we'll automatically collect your repayment on the due date — no action needed from you on the day.</p>
                   {!stripeKey ? (
                     <p className={styles.error}>Card payments are not configured yet. Please contact support.</p>
                   ) : (
@@ -1234,7 +1232,6 @@ const LoanApp = () => {
                 <>
                   {rep && (
                     <dl>
-                      <dt>Amount due</dt><dd>{formatMoney(rep.amount)}</dd>
                       <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
                       <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
                     </dl>
