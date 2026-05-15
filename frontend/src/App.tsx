@@ -306,8 +306,7 @@ const CustomerApp = () => {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "signup" | "survey">("landing");
-  const [surveyAnswer, setSurveyAnswer] = useState<string>("");
+  const [view, setView] = useState<"landing" | "signup">("landing");
   const [isDateFocused, setIsDateFocused] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
@@ -352,14 +351,14 @@ const CustomerApp = () => {
     setView("landing");
   };
 
-  const advanceToSurvey = (event: React.FormEvent) => {
+  const handleSignupSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
     setError(null);
-    setView("survey");
+    await createApplication();
   };
 
   const createApplication = async () => {
@@ -575,23 +574,19 @@ const CustomerApp = () => {
                 </div>
                 <div className={styles.progressStep}>
                   <div className={styles.progressStepDot}>2</div>
-                  <span className={styles.progressStepLabel}>Quick survey</span>
-                </div>
-                <div className={styles.progressStep}>
-                  <div className={styles.progressStepDot}>3</div>
                   <span className={styles.progressStepLabel}>Connect bank</span>
                 </div>
                 <div className={styles.progressStep}>
-                  <div className={styles.progressStepDot}>4</div>
+                  <div className={styles.progressStepDot}>3</div>
                   <span className={styles.progressStepLabel}>Get funded</span>
                 </div>
               </div>
-              <p className={styles.kicker}>Step 1 of 4</p>
+              <p className={styles.kicker}>Step 1 of 3</p>
               <h1>Tell us about yourself</h1>
               <p>Takes 2 minutes. Trusted by 700,000+ people. Never sold or shared.</p>
             </div>
             <div className={styles.signupCardBody}>
-              <form className={styles.intakeComposer} onSubmit={advanceToSurvey}>
+              <form className={styles.intakeComposer} onSubmit={handleSignupSubmit}>
                 <div className={styles.intakeGrid}>
                   <label>
                     Full name
@@ -637,7 +632,7 @@ const CustomerApp = () => {
                 {error && <p className={styles.error}>{error}</p>}
                 <div className={styles.intakeFooter}>
                   <button type="button" className={styles.backBtn} onClick={() => setView("landing")}>← Back</button>
-                  <button disabled={isBusy}>Continue →</button>
+                  <button disabled={isBusy}>{isBusy ? "Creating account…" : "Continue →"}</button>
                 </div>
               </form>
             </div>
@@ -646,85 +641,6 @@ const CustomerApp = () => {
       </main>
     );
 
-    // ── Survey ────────────────────────────────────────────────────────────────
-  }
-  if (!application && view === "survey") {
-    const surveyOptions = [
-      { id: "need", emoji: "💸", label: "I need money before payday", sub: "Cover rent, groceries, or an unexpected bill" },
-      { id: "raffle", emoji: "✈️", label: "I want to enter the Cancún raffle", sub: "Every applicant gets a free entry to win an all-inclusive trip" },
-      { id: "credit", emoji: "📈", label: "To build my financial health", sub: "Establish a track record of on-time repayment" },
-      { id: "try", emoji: "🔍", label: "Just trying it out", sub: "Exploring a new way to manage cash flow" },
-      { id: "other", emoji: "💬", label: "Other reason", sub: "Something else is on my mind" },
-    ];
-    return (
-      <main className={styles.page}>
-        <NavBar />
-        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
-          <div className={styles.signupCard}>
-            <div className={styles.signupCardHeader}>
-              <div className={styles.progressSteps}>
-                <div className={`${styles.progressStep} ${styles.done}`}>
-                  <div className={styles.progressStepDot}>✓</div>
-                  <span className={styles.progressStepLabel}>Your info</span>
-                </div>
-                <div className={`${styles.progressStep} ${styles.active}`}>
-                  <div className={styles.progressStepDot}>2</div>
-                  <span className={styles.progressStepLabel}>Quick survey</span>
-                </div>
-                <div className={styles.progressStep}>
-                  <div className={styles.progressStepDot}>3</div>
-                  <span className={styles.progressStepLabel}>Connect bank</span>
-                </div>
-                <div className={styles.progressStep}>
-                  <div className={styles.progressStepDot}>4</div>
-                  <span className={styles.progressStepLabel}>Get funded</span>
-                </div>
-              </div>
-              <p className={styles.kicker}>Step 2 of 4</p>
-              <h1>One quick question</h1>
-              <p>Your answer helps us improve — and here's what you unlock by connecting your bank:</p>
-            </div>
-            <div className={styles.signupCardBody}>
-              <div className={styles.whatYouGet}>
-                <p className={styles.whatYouGetTitle}>What you get</p>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>$25 deposited to your account</div>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Automatic entry into the Cancún raffle</div>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>No credit impact — ever</div>
-              </div>
-              <p style={{ margin: "0 0 1.6rem", fontSize: "1.6rem", fontWeight: 700, color: "var(--ink)" }}>
-                Why are you getting this advance?
-              </p>
-              <div className={styles.surveyGrid}>
-                {surveyOptions.map(opt => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className={`${styles.surveyOption} ${surveyAnswer === opt.id ? styles.surveyOptionSelected : ""}`}
-                    onClick={() => setSurveyAnswer(opt.id)}
-                  >
-                    <span className={styles.surveyOptionEmoji}>{opt.emoji}</span>
-                    <span className={styles.surveyOptionText}>
-                      <strong>{opt.label}</strong>
-                      <span>{opt.sub}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {error && <p className={styles.error} style={{ marginTop: "1.6rem" }}>{error}</p>}
-              <div className={styles.intakeFooter} style={{ marginTop: "2.4rem" }}>
-                <button type="button" className={styles.backBtn} onClick={() => setView("signup")}>← Back</button>
-                <button
-                  disabled={!surveyAnswer || isBusy}
-                  onClick={createApplication}
-                >
-                  {isBusy ? "Creating account…" : "Connect bank & get funded →"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
   }
 
   // ── Authenticated application view ────────────────────────────────────────
