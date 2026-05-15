@@ -450,7 +450,7 @@ const CustomerApp = () => {
                   <span className={styles.heroBadge}>No credit check · No hidden fees</span>
                   <span className={styles.heroTrustBadge}>👥 Trusted by 700,000+ people</span>
                 </div>
-                <h1 className={styles.heroHeading}>Get $25<br />before payday.</h1>
+                <h1 className={styles.heroHeading}>Get cash<br />before payday.</h1>
                 <p className={styles.heroSub}>
                   Connect your bank, get a decision today, and pay it back within 30 days. That's it.
                 </p>
@@ -476,7 +476,7 @@ const CustomerApp = () => {
                 <p className={styles.raffleBadge}>🎰 Limited-time raffle</p>
                 <h2 className={styles.raffleHeading}>Win a free trip<br />to <em>Cancún.</em></h2>
                 <p className={styles.raffleSub}>
-                  Everyone who applies for a $25 cash advance is automatically entered into our raffle to win an all-inclusive trip to Cancún, Mexico. No extra steps — just apply.
+                  Everyone who applies for a cash advance is automatically entered into our raffle to win an all-inclusive trip to Cancún, Mexico. No extra steps — just apply.
                 </p>
                 <div className={styles.rafflePerks}>
                   <div className={styles.rafflePerk}>
@@ -534,7 +534,7 @@ const CustomerApp = () => {
                 <div className={styles.stepCard}>
                   <div className={styles.stepNum}>3</div>
                   <strong>Get your money</strong>
-                  <span>A real human reviews your application and sends your $25 the same day.</span>
+                  <span>A real human reviews your application and sends your money the same day.</span>
                 </div>
               </div>
             </div>
@@ -919,14 +919,14 @@ const AdminApp = () => {
                       onClick={() =>
                         setStatus(
                           "approved",
-                          "Congrats, you are approved for a $25 advance. To send the funds manually, please reply with: routing number, account number, checking or savings, and the legal name on the account. Do not send your online banking password.",
+                          "Congrats, you are approved for a cash advance. To send the funds manually, please reply with: routing number, account number, checking or savings, and the legal name on the account. Do not send your online banking password.",
                         )
                       }
                     >
                       Approve
                     </button>
                     <button disabled={isBusy} onClick={() => setStatus("denied", "We are unable to approve this advance right now.")}>Deny</button>
-                    <button disabled={isBusy} onClick={() => setStatus("funded", "Your $25 advance has been sent manually.")}>Mark funded</button>
+                    <button disabled={isBusy} onClick={() => setStatus("funded", "Your advance has been sent.")}>Mark funded</button>
                   </div>
                   <div className={styles.repayment}>
                     <label>
