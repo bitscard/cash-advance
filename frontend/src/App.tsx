@@ -194,6 +194,54 @@ const TrustPillars = () => (
   </section>
 );
 
+const AlienMascot = ({ flag = "usa", size = 220 }: { flag?: "usa" | "mexico"; size?: number }) => {
+  const stripes = [0,1,2,3,4,5,6].map(i => ({ y: 40 + i * 5, fill: i % 2 === 0 ? "#ef4444" : "#ffffff" }));
+  return (
+    <svg width={size} height={size * 1.1} viewBox="0 0 170 190" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Antenna */}
+      <line x1="65" y1="14" x2="65" y2="34" stroke="#6ee7b7" strokeWidth="3.5" strokeLinecap="round"/>
+      <circle cx="65" cy="9" r="7" fill="#34d399"/>
+      {/* Head */}
+      <ellipse cx="65" cy="72" rx="40" ry="44" fill="#6ee7b7"/>
+      {/* Eyes */}
+      <ellipse cx="50" cy="62" rx="12" ry="14" fill="#065f46"/>
+      <ellipse cx="80" cy="62" rx="12" ry="14" fill="#065f46"/>
+      <circle cx="46" cy="57" r="4.5" fill="white"/>
+      <circle cx="76" cy="57" r="4.5" fill="white"/>
+      {/* Smile */}
+      <path d="M51 87 Q65 98 79 87" stroke="#065f46" strokeWidth="3.2" strokeLinecap="round" fill="none"/>
+      {/* Body */}
+      <ellipse cx="65" cy="136" rx="27" ry="22" fill="#6ee7b7"/>
+      {/* Legs */}
+      <ellipse cx="50" cy="166" rx="11" ry="15" fill="#6ee7b7"/>
+      <ellipse cx="80" cy="166" rx="11" ry="15" fill="#6ee7b7"/>
+      {/* Left arm (down) */}
+      <path d="M38 132 Q20 148 22 162" stroke="#6ee7b7" strokeWidth="12" strokeLinecap="round" fill="none"/>
+      {/* Right arm (up, holding flag) */}
+      <path d="M92 122 Q113 106 119 82" stroke="#6ee7b7" strokeWidth="12" strokeLinecap="round" fill="none"/>
+      {/* Flag pole */}
+      <line x1="120" y1="36" x2="120" y2="88" stroke="#a16207" strokeWidth="4" strokeLinecap="round"/>
+      {flag === "usa" ? (
+        <g>
+          {stripes.map((s, i) => <rect key={i} x="120" y={s.y} width="44" height="5" fill={s.fill}/>)}
+          <rect x="120" y="40" width="20" height="21" fill="#1e40af"/>
+          {[43,48,53].flatMap(cy => [123,127,131,135].map(cx =>
+            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.4" fill="white"/>
+          ))}
+        </g>
+      ) : (
+        <g>
+          <rect x="120" y="40" width="15" height="35" fill="#006847"/>
+          <rect x="135" y="40" width="14" height="35" fill="white"/>
+          <rect x="149" y="40" width="15" height="35" fill="#ce1126"/>
+          <circle cx="142" cy="57" r="6" fill="#8b4513"/>
+          <circle cx="142" cy="57" r="3.5" fill="#d97706"/>
+        </g>
+      )}
+    </svg>
+  );
+};
+
 // ── App router ────────────────────────────────────────────────────────────────
 
 const App = () => {
@@ -217,11 +265,12 @@ const CustomerApp = () => {
     password: "",
     confirmPassword: "",
   });
-  const [messageText, setMessageText] = useState("");
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "signup">("landing");
+  const [view, setView] = useState<"landing" | "signup" | "survey">("landing");
+  const [surveyAnswer, setSurveyAnswer] = useState<string>("");
+  const [isDateFocused, setIsDateFocused] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
@@ -265,12 +314,17 @@ const CustomerApp = () => {
     setView("landing");
   };
 
-  const createApplication = async (event: React.FormEvent) => {
+  const advanceToSurvey = (event: React.FormEvent) => {
     event.preventDefault();
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
+    setError(null);
+    setView("survey");
+  };
+
+  const createApplication = async () => {
     setIsBusy(true);
     setError(null);
     try {
@@ -285,7 +339,6 @@ const CustomerApp = () => {
       localStorage.setItem(applicationStorageKey, data.application.id);
       if (data.token) localStorage.setItem(userTokenStorageKey, data.token);
       setApplication(data.application);
-      await loadMessages(data.application.id);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Something went wrong");
     } finally {
@@ -344,18 +397,6 @@ const CustomerApp = () => {
     if (linkToken && ready) open();
   }, [linkToken, open, ready]);
 
-  const sendMessage = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!application || !messageText.trim()) return;
-    const text = messageText.trim();
-    setMessageText("");
-    await fetch(apiUrl(`/api/advance/applications/${application.id}/messages`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sender: "customer", text }),
-    });
-    await loadMessages(application.id);
-  };
 
   // ── Landing ──────────────────────────────────────────────────────────────────
   if (!application) {
@@ -364,24 +405,78 @@ const CustomerApp = () => {
         <main className={styles.page}>
           <NavBar />
 
-          {/* Hero */}
+          {/* Hero — two-column with mascot */}
           <section className={styles.hero}>
-            <div className={styles.heroInner}>
-              <span className={styles.heroBadge}>No credit check &nbsp;·&nbsp; No hidden fees</span>
-              <h1 className={styles.heroHeading}>Get $25<br />before payday.</h1>
-              <p className={styles.heroSub}>
-                Connect your bank, get a decision today, and pay it back within 30 days. Simple as that.
-              </p>
-              <div className={styles.heroActions}>
-                <button className={styles.btnWhite} onClick={() => setView("signup")}>
-                  Get started — it's free
-                </button>
-                <button className={styles.btnGhost} onClick={() => window.location.href = "/loan"}>
-                  Sign in
-                </button>
+            <div className={styles.heroContent}>
+              <div className={styles.heroTextBlock}>
+                <div className={styles.heroTrustRow}>
+                  <span className={styles.heroBadge}>No credit check · No hidden fees</span>
+                  <span className={styles.heroTrustBadge}>👥 Trusted by 700,000+ people</span>
+                </div>
+                <h1 className={styles.heroHeading}>Get $25<br />before payday.</h1>
+                <p className={styles.heroSub}>
+                  Connect your bank, get a decision today, and pay it back within 30 days. That's it.
+                </p>
+                <div className={styles.heroActions}>
+                  <button className={styles.btnWhite} onClick={() => setView("signup")}>
+                    Get started — it's free
+                  </button>
+                  <button className={styles.btnGhost} onClick={() => window.location.href = "/loan"}>
+                    Sign in
+                  </button>
+                </div>
+              </div>
+              <div className={styles.mascotWrap}>
+                <AlienMascot flag="usa" size={240} />
               </div>
             </div>
           </section>
+
+          {/* Raffle banner */}
+          <section className={styles.raffleBanner}>
+            <div className={styles.raffleBannerInner}>
+              <div>
+                <p className={styles.raffleBadge}>🎰 Limited-time raffle</p>
+                <h2 className={styles.raffleHeading}>Win a free trip<br />to <em>Cancún.</em></h2>
+                <p className={styles.raffleSub}>
+                  Everyone who applies for a $25 cash advance is automatically entered into our raffle to win an all-inclusive trip to Cancún, Mexico. No extra steps — just apply.
+                </p>
+                <div className={styles.rafflePerks}>
+                  <div className={styles.rafflePerk}>
+                    <div className={styles.rafflePerkDot} />
+                    One raffle entry per application — automatic
+                  </div>
+                  <div className={styles.rafflePerk}>
+                    <div className={styles.rafflePerkDot} />
+                    Open to all U.S. applicants
+                  </div>
+                  <div className={styles.rafflePerk}>
+                    <div className={styles.rafflePerkDot} />
+                    Winner announced monthly
+                  </div>
+                </div>
+              </div>
+              <div className={styles.raffleMascot}>
+                <AlienMascot flag="mexico" size={220} />
+              </div>
+            </div>
+          </section>
+
+          {/* Trust stats strip */}
+          <div className={styles.trustStatStrip}>
+            <div className={styles.trustStatItem}>
+              <span className={styles.trustStatNum}>700k+</span>
+              <span className={styles.trustStatLabel}>People trust us<br />with their data</span>
+            </div>
+            <div className={styles.trustStatItem}>
+              <span className={styles.trustStatNum}>$0</span>
+              <span className={styles.trustStatLabel}>Hidden fees,<br />ever</span>
+            </div>
+            <div className={styles.trustStatItem}>
+              <span className={styles.trustStatNum}>30</span>
+              <span className={styles.trustStatLabel}>Days to repay,<br />no pressure</span>
+            </div>
+          </div>
 
           {/* How it works */}
           <section className={styles.section}>
@@ -392,12 +487,12 @@ const CustomerApp = () => {
                 <div className={styles.stepCard}>
                   <div className={styles.stepNum}>1</div>
                   <strong>Apply in 2 minutes</strong>
-                  <span>Name, employer, next payday. No SSN required, no credit pull.</span>
+                  <span>Name, employer, next payday. No SSN, no credit pull — ever.</span>
                 </div>
                 <div className={styles.stepCard}>
                   <div className={styles.stepNum}>2</div>
                   <strong>Connect your bank</strong>
-                  <span>We verify your income via Plaid. Secure, read-only — we never see your password.</span>
+                  <span>We verify your income via Plaid. Secure and read-only — we never see your password.</span>
                 </div>
                 <div className={styles.stepCard}>
                   <div className={styles.stepNum}>3</div>
@@ -431,6 +526,7 @@ const CustomerApp = () => {
     return (
       <main className={styles.page}>
         <NavBar />
+        {isDateFocused && <div className={styles.backdrop} />}
         <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
           <div className={styles.signupCard}>
             <div className={styles.signupCardHeader}>
@@ -441,23 +537,23 @@ const CustomerApp = () => {
                 </div>
                 <div className={styles.progressStep}>
                   <div className={styles.progressStepDot}>2</div>
-                  <span className={styles.progressStepLabel}>Connect bank</span>
+                  <span className={styles.progressStepLabel}>Quick survey</span>
                 </div>
                 <div className={styles.progressStep}>
                   <div className={styles.progressStepDot}>3</div>
-                  <span className={styles.progressStepLabel}>Review</span>
+                  <span className={styles.progressStepLabel}>Connect bank</span>
                 </div>
                 <div className={styles.progressStep}>
                   <div className={styles.progressStepDot}>4</div>
-                  <span className={styles.progressStepLabel}>Funded</span>
+                  <span className={styles.progressStepLabel}>Get funded</span>
                 </div>
               </div>
               <p className={styles.kicker}>Step 1 of 4</p>
               <h1>Tell us about yourself</h1>
-              <p>Takes about 2 minutes. Your info is never sold or shared.</p>
+              <p>Takes 2 minutes. Trusted by 700,000+ people. Never sold or shared.</p>
             </div>
             <div className={styles.signupCardBody}>
-              <form className={styles.intakeComposer} onSubmit={createApplication}>
+              <form className={styles.intakeComposer} onSubmit={advanceToSurvey}>
                 <div className={styles.intakeGrid}>
                   <label>
                     Full name
@@ -480,8 +576,10 @@ const CustomerApp = () => {
                       onChange={(event) => setForm({ ...form, employer: event.target.value })} />
                   </label>
                   <label>
-                    Next payday
+                    Next payday <span style={{ color: "var(--muted)", fontWeight: 400 }}>(future dates only)</span>
                     <input required min={today} type="date" value={form.payday}
+                      onFocus={() => setIsDateFocused(true)}
+                      onBlur={() => setIsDateFocused(false)}
                       onChange={(event) => setForm({ ...form, payday: event.target.value })} />
                   </label>
                   <label>
@@ -498,18 +596,92 @@ const CustomerApp = () => {
                       onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
                   </label>
                 </div>
-                <div className={styles.securityNote}>
-                  <svg width="15" height="16" viewBox="0 0 15 16" fill="none" aria-hidden="true">
-                    <path d="M7.5 1.5L13 4.2V9C13 12.2 10.5 15 7.5 15.8C4.5 15 2 12.2 2 9V4.2L7.5 1.5Z" fill="#4a9470" />
-                  </svg>
-                  Your information is encrypted and never sold or shared. Next, you'll connect your bank via Plaid to verify income. Repayment of <strong>$25</strong> is due within <strong>30 days</strong> of funding.
-                </div>
                 {error && <p className={styles.error}>{error}</p>}
                 <div className={styles.intakeFooter}>
                   <button type="button" className={styles.backBtn} onClick={() => setView("landing")}>← Back</button>
-                  <button disabled={isBusy}>{isBusy ? "Starting…" : "Continue to bank connection →"}</button>
+                  <button disabled={isBusy}>Continue →</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+
+    // ── Survey ────────────────────────────────────────────────────────────────
+  }
+  if (!application && view === "survey") {
+    const surveyOptions = [
+      { id: "need", emoji: "💸", label: "I need money before payday", sub: "Cover rent, groceries, or an unexpected bill" },
+      { id: "raffle", emoji: "✈️", label: "I want to enter the Cancún raffle", sub: "Every applicant gets a free entry to win an all-inclusive trip" },
+      { id: "credit", emoji: "📈", label: "To build my financial health", sub: "Establish a track record of on-time repayment" },
+      { id: "try", emoji: "🔍", label: "Just trying it out", sub: "Exploring a new way to manage cash flow" },
+      { id: "other", emoji: "💬", label: "Other reason", sub: "Something else is on my mind" },
+    ];
+    return (
+      <main className={styles.page}>
+        <NavBar />
+        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
+          <div className={styles.signupCard}>
+            <div className={styles.signupCardHeader}>
+              <div className={styles.progressSteps}>
+                <div className={`${styles.progressStep} ${styles.done}`}>
+                  <div className={styles.progressStepDot}>✓</div>
+                  <span className={styles.progressStepLabel}>Your info</span>
+                </div>
+                <div className={`${styles.progressStep} ${styles.active}`}>
+                  <div className={styles.progressStepDot}>2</div>
+                  <span className={styles.progressStepLabel}>Quick survey</span>
+                </div>
+                <div className={styles.progressStep}>
+                  <div className={styles.progressStepDot}>3</div>
+                  <span className={styles.progressStepLabel}>Connect bank</span>
+                </div>
+                <div className={styles.progressStep}>
+                  <div className={styles.progressStepDot}>4</div>
+                  <span className={styles.progressStepLabel}>Get funded</span>
+                </div>
+              </div>
+              <p className={styles.kicker}>Step 2 of 4</p>
+              <h1>One quick question</h1>
+              <p>Your answer helps us improve — and here's what you unlock by connecting your bank:</p>
+            </div>
+            <div className={styles.signupCardBody}>
+              <div className={styles.whatYouGet}>
+                <p className={styles.whatYouGetTitle}>What you get</p>
+                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>$25 deposited to your account</div>
+                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Automatic entry into the Cancún raffle</div>
+                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>No credit impact — ever</div>
+              </div>
+              <p style={{ margin: "0 0 1.6rem", fontSize: "1.6rem", fontWeight: 700, color: "var(--ink)" }}>
+                Why are you getting this advance?
+              </p>
+              <div className={styles.surveyGrid}>
+                {surveyOptions.map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`${styles.surveyOption} ${surveyAnswer === opt.id ? styles.surveyOptionSelected : ""}`}
+                    onClick={() => setSurveyAnswer(opt.id)}
+                  >
+                    <span className={styles.surveyOptionEmoji}>{opt.emoji}</span>
+                    <span className={styles.surveyOptionText}>
+                      <strong>{opt.label}</strong>
+                      <span>{opt.sub}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {error && <p className={styles.error} style={{ marginTop: "1.6rem" }}>{error}</p>}
+              <div className={styles.intakeFooter} style={{ marginTop: "2.4rem" }}>
+                <button type="button" className={styles.backBtn} onClick={() => setView("signup")}>← Back</button>
+                <button
+                  disabled={!surveyAnswer || isBusy}
+                  onClick={createApplication}
+                >
+                  {isBusy ? "Creating account…" : "Connect bank & get funded →"}
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -518,97 +690,70 @@ const CustomerApp = () => {
   }
 
   // ── Authenticated application view ────────────────────────────────────────
-  const appSteps: Array<{ key: Status | "__bank__"; label: string }> = [
-    { key: "intake", label: "Applied" },
-    { key: "__bank__", label: "Bank connected" },
-    { key: "reviewing", label: "Under review" },
-    { key: "approved", label: "Approved" },
-    { key: "funded", label: "Funded" },
-  ];
-  const stepOrder = ["intake", "__bank__", "reviewing", "approved", "funded", "repayment_scheduled", "repaid"];
-  const currentStepIdx = stepOrder.indexOf(
-    application.plaid_connected && application.status === "intake" ? "__bank__" : application.status
-  );
+  const needsBank = !application.plaid_connected;
+  const needsCard = !application.stripe_card_saved &&
+    (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled");
 
   return (
     <main className={styles.page}>
       <NavBar onLogout={handleLogout} />
-      <section className={styles.workspace}>
-        <aside className={styles.summary}>
-          <p className={styles.kicker}>Your advance</p>
-          <h2>{formatMoney(application.requested_amount)}</h2>
-          <div className={styles.status}>{statusLabel[application.status]}</div>
-          <dl>
-            <dt>Name</dt>
-            <dd>{application.customer.name}</dd>
-            <dt>Employer</dt>
-            <dd>{application.customer.employer}</dd>
-            <dt>Payday</dt>
-            <dd>{application.payday}</dd>
-            <dt>Bank</dt>
-            <dd>{application.plaid_connected ? "✓ Connected" : "Not connected"}</dd>
-          </dl>
-          {!application.plaid_connected && (
-            <button disabled={isBusy} onClick={createLinkToken}>
-              Connect bank with Plaid
-            </button>
-          )}
-          {application.repayment && (
-            <p className={styles.notice}>
-              Repayment due {application.repayment.due_date}.
-            </p>
-          )}
-          {error && <p className={styles.error}>{error}</p>}
-        </aside>
-        <section className={styles.chat}>
-          <header>
-            <div className={styles.appStatusBar}>
-              {appSteps.map((step, i) => {
-                const idx = stepOrder.indexOf(step.key);
-                const isCurrent = idx === currentStepIdx;
-                const isDone = idx < currentStepIdx;
-                return (
-                  <div key={step.key} className={`${styles.appStatusStep} ${isCurrent ? styles.active : ""} ${isDone ? styles.done : ""}`}>
-                    <div className={styles.appStatusDot}>
-                      <div className={styles.appStatusDotInner} />
-                    </div>
-                    {i < appSteps.length - 1 && null}
-                  </div>
-                );
-              })}
-            </div>
-            <p className={styles.kicker} style={{ marginTop: "1.6rem" }}>Live review</p>
-            <h1>Your application</h1>
-            <p>A human reviewer will reply here once your bank is connected.</p>
-          </header>
-          <MessageList messages={messages} />
-          {!application.plaid_connected && (
-            <div className={styles.chatAction}>
-              <p><strong>Next step:</strong> connect your bank securely with Plaid so a reviewer can make a decision.</p>
-              <p>Connect the account where your employer sends your direct deposit.</p>
-              <button disabled={isBusy} onClick={createLinkToken}>
-                Connect bank with Plaid →
-              </button>
-            </div>
-          )}
-          {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && !application.stripe_card_saved && (
-            <div className={styles.chatAction}>
-              <p><strong>You're approved!</strong> Save a card so we can collect your repayment automatically on the due date.</p>
-              <button onClick={() => window.location.href = "/loan"}>
-                Save repayment card →
-              </button>
-            </div>
-          )}
-          <form className={styles.composer} onSubmit={sendMessage}>
-            <input
-              placeholder="Type a message…"
-              value={messageText}
-              onChange={(event) => setMessageText(event.target.value)}
-            />
-            <button>Send</button>
-          </form>
-        </section>
-      </section>
+      <div className={styles.appCard}>
+        <div className={styles.appCardPanel}>
+          <div className={styles.appCardHeader}>
+            <p className={styles.appCardKicker}>Your advance</p>
+            <p className={styles.appCardAmount}>{formatMoney(application.requested_amount)}</p>
+            <span className={styles.appCardStatusBadge}>{statusLabel[application.status]}</span>
+          </div>
+          <div className={styles.appCardBody}>
+            <dl>
+              <dt>Name</dt>
+              <dd>{application.customer.name}</dd>
+              <dt>Employer</dt>
+              <dd>{application.customer.employer}</dd>
+              <dt>Payday</dt>
+              <dd>{application.payday}</dd>
+              <dt>Bank</dt>
+              <dd>{application.plaid_connected ? "✓ Connected" : "Not connected"}</dd>
+              {application.repayment && (
+                <>
+                  <dt>Repay by</dt>
+                  <dd className={styles.dueDate}>{application.repayment.due_date}</dd>
+                </>
+              )}
+            </dl>
+
+            {needsBank && (
+              <div className={styles.appCardAction}>
+                <p><strong>Next step:</strong> connect your bank via Plaid so a reviewer can verify your income and approve your advance.</p>
+                <button disabled={isBusy} onClick={createLinkToken}>
+                  Connect bank with Plaid →
+                </button>
+              </div>
+            )}
+
+            {needsCard && (
+              <div className={styles.appCardAction}>
+                <p><strong>You're approved!</strong> Save a card so we can collect your ${application.requested_amount} repayment automatically on the due date.</p>
+                <button onClick={() => window.location.href = "/loan"}>
+                  Save repayment card →
+                </button>
+              </div>
+            )}
+
+            {application.status === "repaid" && (
+              <p className={styles.paidNote}>✓ Repayment collected — thank you!</p>
+            )}
+
+            {!needsBank && !needsCard && application.status !== "repaid" && (
+              <div className={styles.appCardAction}>
+                <p>Your application is being reviewed. We'll update this page as soon as there's news — no action needed from you right now.</p>
+              </div>
+            )}
+
+            {error && <p className={styles.error}>{error}</p>}
+          </div>
+        </div>
+      </div>
     </main>
   );
 };

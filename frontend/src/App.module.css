@@ -148,12 +148,13 @@
   box-shadow: 0 4px 20px rgba(0,0,0,0.18);
 }
 
-.btnWhite:hover {
+.btnWhite:hover:not(:disabled) {
+  background: rgba(255,255,255,0.93);
   transform: translateY(-2px);
   box-shadow: 0 8px 28px rgba(0,0,0,0.22);
 }
 
-.btnWhite:active {
+.btnWhite:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: var(--sh-sm);
 }
@@ -176,9 +177,9 @@
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 
-.btnGhost:hover {
-  background: rgba(255,255,255,0.1);
-  border-color: rgba(255,255,255,0.6);
+.btnGhost:hover:not(:disabled) {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.65);
 }
 
 /* Standard green button (light bg) */
@@ -1084,4 +1085,366 @@ dd {
   .heroActions { flex-direction: column; }
   .btnWhite,
   .btnGhost { width: 100%; justify-content: center; }
+  .heroContent { grid-template-columns: 1fr; }
+  .heroHeading { font-size: 5.2rem; }
+  .mascotWrap { display: none; }
+  .raffleBannerInner { grid-template-columns: 1fr; }
+  .raffleMascot { display: none; }
+  .raffleHeading { font-size: 3.6rem; }
+  .appCard { padding: 2rem 1.6rem; }
+}
+
+/* ── Hero two-column layout with mascot ───────────────────────────────────── */
+.heroContent {
+  display: grid;
+  grid-template-columns: 1fr 26rem;
+  gap: 4.8rem;
+  align-items: center;
+  max-width: 110rem;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.heroTextBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.heroActions {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-top: 4rem;
+}
+
+.heroTrustRow {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.8rem;
+}
+
+.heroTrustBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.3rem;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: var(--pill);
+  color: rgba(255,255,255,0.88);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.mascotWrap {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* ── Date focus backdrop ──────────────────────────────────────────────────── */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6,13,9,0.5);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+.signupCard {
+  position: relative;
+  z-index: 20;
+}
+
+/* ── Raffle banner ────────────────────────────────────────────────────────── */
+.raffleBanner {
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  padding: 8rem 3.2rem;
+}
+
+.raffleBannerInner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4rem;
+  align-items: center;
+  max-width: 110rem;
+  margin: 0 auto;
+}
+
+.raffleBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1.4rem;
+  background: rgba(253,230,138,0.2);
+  border: 1px solid rgba(253,230,138,0.4);
+  border-radius: var(--pill);
+  color: #fde68a;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+}
+
+.raffleHeading {
+  margin: 0 0 1.6rem;
+  font-size: 5.2rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.0;
+  color: var(--white);
+}
+
+.raffleHeading em {
+  font-style: normal;
+  color: #fde68a;
+}
+
+.raffleSub {
+  margin: 0 0 2.8rem;
+  font-size: 1.8rem;
+  line-height: 1.65;
+  color: rgba(255,255,255,0.78);
+  max-width: 52rem;
+}
+
+.rafflePerks {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rafflePerk {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  font-size: 1.55rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+}
+
+.rafflePerkDot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: #6ee7b7;
+  flex-shrink: 0;
+}
+
+.raffleMascot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+/* ── Survey step ──────────────────────────────────────────────────────────── */
+.whatYouGet {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem 2.2rem;
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-tint2);
+  border-radius: var(--r-md);
+  margin-bottom: 2.8rem;
+}
+
+.whatYouGetTitle {
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--brand);
+  margin-bottom: 0.4rem;
+}
+
+.whatYouGetItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.whatYouGetDot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--brand);
+  flex-shrink: 0;
+}
+
+.surveyGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.surveyOption {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  padding: 1.8rem 2rem;
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  text-align: left;
+  width: 100%;
+  min-height: auto;
+  color: var(--ink);
+  box-shadow: var(--sh-sm);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.surveyOption:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  box-shadow: var(--sh-md);
+  transform: none;
+}
+
+.surveyOptionSelected {
+  border-color: var(--brand) !important;
+  background: var(--brand-tint) !important;
+  box-shadow: 0 0 0 3px rgba(26,77,58,0.12), var(--sh-sm) !important;
+}
+
+.surveyOptionEmoji {
+  font-size: 2.2rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.surveyOptionText strong {
+  display: block;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.2rem;
+}
+
+.surveyOptionText span {
+  font-size: 1.3rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* ── Simplified post-bank app card ───────────────────────────────────────── */
+.appCard {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: 4rem 3.2rem;
+}
+
+.appCardPanel {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl);
+  background: var(--white);
+  box-shadow: var(--sh-lg);
+  overflow: hidden;
+}
+
+.appCardHeader {
+  padding: 3.6rem;
+  background: var(--brand);
+}
+
+.appCardKicker {
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 1rem;
+}
+
+.appCardAmount {
+  font-size: 7.2rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  color: var(--white);
+  margin-bottom: 1.6rem;
+}
+
+.appCardStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 1.3rem;
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: var(--pill);
+  color: var(--white);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.appCardStatusBadge::before {
+  content: '';
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: #6ee7b7;
+  flex-shrink: 0;
+}
+
+.appCardBody {
+  padding: 3.2rem;
+  display: grid;
+  gap: 2.4rem;
+}
+
+.appCardAction {
+  display: grid;
+  gap: 1.2rem;
+  padding: 2.2rem;
+  background: var(--brand-tint);
+  border: 1.5px solid var(--brand-tint2);
+  border-radius: var(--r-lg);
+}
+
+.appCardAction p {
+  margin: 0;
+  font-size: 1.55rem;
+  color: var(--brand);
+  line-height: 1.55;
+}
+
+/* ── Trusted stat strip ───────────────────────────────────────────────────── */
+.trustStatStrip {
+  display: flex;
+  justify-content: center;
+  gap: 3.2rem;
+  padding: 4rem 3.2rem;
+  background: var(--ink);
+}
+
+.trustStatItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.trustStatNum {
+  font-size: 4rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--white);
+}
+
+.trustStatLabel {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
 }
