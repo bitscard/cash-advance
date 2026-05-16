@@ -1062,8 +1062,8 @@ dd {
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
-  .heroHeading { font-size: 5.6rem; }
-  .sectionHeading { font-size: 3.6rem; }
+  .heroHeading { font-size: 5.2rem; }
+  .sectionHeading { font-size: 3.2rem; }
   .stepsGrid,
   .trustGrid,
   .searchRow,
@@ -1080,18 +1080,106 @@ dd {
   .hero { padding: 6.4rem 2rem 7.2rem; }
   .section { padding: 6.4rem 2rem; }
   .signupCardHeader,
-  .signupCardBody { padding: 2.4rem 2.4rem; }
-  .progressSteps { display: none; }
+  .signupCardBody { padding: 2.4rem; }
+  .progressSteps { gap: 0.8rem; }
+  .progressStepLabel { font-size: 1.1rem; }
   .heroActions { flex-direction: column; }
   .btnWhite,
   .btnGhost { width: 100%; justify-content: center; }
   .heroContent { grid-template-columns: 1fr; }
-  .heroHeading { font-size: 5.2rem; }
   .mascotWrap { display: none; }
   .raffleBannerInner { grid-template-columns: 1fr; }
   .raffleMascot { display: none; }
-  .raffleHeading { font-size: 3.6rem; }
-  .appCard { padding: 2rem 1.6rem; }
+  .raffleHeading { font-size: 3.2rem; }
+  .appCard { padding: 1.6rem; }
+  .benefitsBody { padding: 2.4rem 1.6rem 3.2rem; }
+  .benefitsGrid { grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  .trustStatStrip { gap: 2rem; padding: 3.2rem 1.6rem; }
+  .trustStatNum { font-size: 3.2rem; }
+  .partnerStrip { flex-wrap: wrap; gap: 1.2rem; }
+}
+
+@media (max-width: 640px) {
+  /* Nav */
+  .nav { height: 5.6rem; padding: 0 1.6rem; }
+  .navSecure span:first-child { display: none; }
+
+  /* Hero */
+  .hero { padding: 4.8rem 1.6rem 5.6rem; }
+  .heroHeading { font-size: 4rem; }
+  .heroSub { font-size: 1.55rem; }
+  .heroBadge, .heroTrustBadge { font-size: 1.2rem; padding: 0.5rem 1rem; }
+  .heroTrustRow { flex-wrap: wrap; gap: 0.8rem; }
+
+  /* Sections */
+  .section { padding: 4.8rem 1.6rem; }
+  .sectionHeading { font-size: 2.8rem; }
+  .sectionLabel { font-size: 1.2rem; }
+  .stepsGrid { gap: 1.2rem; }
+  .stepCard { padding: 2rem; }
+  .stepNum { width: 3.6rem; height: 3.6rem; font-size: 1.6rem; }
+
+  /* Raffle banner */
+  .raffleBanner { padding: 4rem 1.6rem; }
+  .raffleHeading { font-size: 3rem; }
+  .raffleSub { font-size: 1.45rem; }
+
+  /* Trust strip */
+  .trustStatStrip { flex-direction: column; gap: 2.4rem; padding: 3.2rem 1.6rem; }
+  .trustStatNum { font-size: 3.6rem; }
+
+  /* Signup card */
+  .chatOnly { padding: 0 1.2rem; }
+  .signupCard { border-radius: var(--r-lg); }
+  .signupCardHeader { padding: 2rem 1.6rem 1.6rem; }
+  .signupCardHeader h1 { font-size: 2.6rem; }
+  .signupCardBody { padding: 1.6rem; }
+  .intakeGrid { grid-template-columns: 1fr; gap: 1.2rem; }
+  .progressSteps { display: none; }
+  .kicker { font-size: 1.1rem; }
+  .intakeFooter { flex-direction: column-reverse; gap: 1rem; }
+  .backBtn { text-align: center; }
+
+  /* Benefits */
+  .benefitsHeader { padding: 4rem 1.6rem 3.2rem; }
+  .benefitsHeaderTitle { font-size: 3rem; }
+  .benefitsHeaderSub { font-size: 1.5rem; }
+  .benefitsGrid { grid-template-columns: 1fr; gap: 1rem; }
+  .benefitCard { flex-direction: row; align-items: flex-start; gap: 1.2rem; padding: 1.6rem; }
+  .benefitIcon { font-size: 2.2rem; flex-shrink: 0; margin-bottom: 0; }
+  .benefitsBody { padding: 2rem 1.2rem 3.2rem; }
+
+  /* Delivery */
+  .deliveryOptions { grid-template-columns: 1fr; gap: 1.2rem; }
+  .deliveryOption { padding: 1.8rem; }
+
+  /* App card */
+  .appCard { padding: 0; }
+  .appCardHeader { padding: 2.4rem 1.6rem 2rem; border-radius: var(--r-xl) var(--r-xl) 0 0; }
+  .appCardBody { padding: 1.6rem; gap: 1.6rem; }
+  .appCardAction { padding: 1.6rem; }
+
+  /* Loan dashboard */
+  .loanDashboard { padding: 1.6rem; }
+  .loanHeader { flex-direction: column; gap: 1.2rem; align-items: flex-start; }
+  .loanHeader h2 { font-size: 2.4rem; }
+  .loanGrid { gap: 1.2rem; }
+  .panel { padding: 1.6rem; }
+
+  /* Partner strip */
+  .partnerStrip { padding: 2rem 1.6rem; flex-wrap: wrap; gap: 1.2rem; }
+
+  /* States footer */
+  .statesFooter { padding: 1.6rem; font-size: 1.15rem; }
+
+  /* General buttons — bigger touch targets on mobile */
+  button:not(.surveyOption):not(.deliveryOption):not(.backBtn):not(.logoutBtn):not(.row):not(.activeRow) {
+    min-height: 4.8rem;
+    font-size: 1.6rem;
+  }
+
+  /* What you get box */
+  .whatYouGet { padding: 1.6rem; }
 }
 
 /* ── Hero two-column layout with mascot ───────────────────────────────────── */

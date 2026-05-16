@@ -667,7 +667,7 @@ const CustomerApp = () => {
           <div className={styles.benefitsGrid}>
             <div className={styles.benefitCard}>
               <span className={styles.benefitIcon}>💸</span>
-              <p className={styles.benefitCardTitle}>$10 cash advance</p>
+              <p className={styles.benefitCardTitle}>Cash advance</p>
               <p className={styles.benefitCardSub}>No interest. No fees on the advance itself. Just money when you need it.</p>
             </div>
             <div className={styles.benefitCard}>
@@ -723,12 +723,12 @@ const CustomerApp = () => {
             <div className={styles.signupCardHeader}>
               <p className={styles.kicker}>Step 2 of 3 — Membership</p>
               <h1>Activate your membership</h1>
-              <p>$1.99/month — cancel anytime. <strong>You are not paying for the advance.</strong> Your membership simply gives you the right to request one $10 advance each month.</p>
+              <p>$1.99/month — cancel anytime. <strong>You are not paying for the advance.</strong> Your membership simply gives you the right to request one advance each month.</p>
             </div>
             <div className={styles.signupCardBody}>
               <div className={styles.whatYouGet}>
                 <p className={styles.whatYouGetTitle}>Included in your membership</p>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Monthly $10 cash advance</div>
+                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Monthly cash advance</div>
                 <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Points &amp; surprise gift rewards</div>
                 <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Weekly $300 raffle entries</div>
                 <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>No credit check · No bureau reporting</div>
