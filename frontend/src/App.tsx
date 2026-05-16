@@ -311,9 +311,14 @@ const CustomerApp = () => {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "signup" | "subscribe">("landing");
+  const [view, setView] = useState<"landing" | "signup">("landing");
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
+  const [subBusy, setSubBusy] = useState(false);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliveryChoice, setDeliveryChoice] = useState<"instant" | "standard" | null>(null);
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   const loadApplication = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
@@ -356,6 +361,58 @@ const CustomerApp = () => {
     setMessages([]);
     setView("landing");
     setToken("");
+  };
+
+  useEffect(() => {
+    if (
+      application &&
+      !application.delivery_type &&
+      (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled")
+    ) {
+      setShowDeliveryModal(true);
+    } else {
+      setShowDeliveryModal(false);
+    }
+  }, [application?.delivery_type, application?.status]);
+
+  const activateSubscription = async () => {
+    if (!application) return;
+    setSubBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/subscription/activate`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not activate membership");
+      setApplication(data.application);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSubBusy(false);
+    }
+  };
+
+  const saveDelivery = async () => {
+    if (!application || !deliveryChoice) { setDeliveryError("Please choose a delivery option"); return; }
+    setDeliveryBusy(true);
+    setDeliveryError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/delivery`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ delivery_type: deliveryChoice }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not save delivery preference");
+      setApplication(data.application);
+      setShowDeliveryModal(false);
+    } catch (e) {
+      setDeliveryError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setDeliveryBusy(false);
+    }
   };
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
@@ -653,8 +710,8 @@ const CustomerApp = () => {
 
   }
 
-  // ── Benefits page (before subscription) ──────────────────────────────────
-  if (!application.subscription_status && view !== "subscribe") {
+  // ── Benefits page (activate membership) ──────────────────────────────────
+  if (!application.subscription_status) {
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
@@ -698,84 +755,17 @@ const CustomerApp = () => {
           </div>
 
           <div className={styles.usageBox}>
-            <p className={styles.usageBoxTitle}>Usage limits</p>
+            <p className={styles.usageBoxTitle}>Usage limits · $1.99/month</p>
             <p className={styles.usageBoxText}>
               Your membership includes <strong>1 advance per month</strong> (12 per year). Need more? You can upgrade for unlimited access anytime.
             </p>
           </div>
 
-          <button style={{ width: "100%" }} onClick={() => setView("subscribe")}>
-            Continue to membership →
+          {error && <p className={styles.error}>{error}</p>}
+          <button style={{ width: "100%" }} disabled={subBusy} onClick={activateSubscription}>
+            {subBusy ? "Activating…" : "Continue →"}
           </button>
         </div>
-        <StatesFooter />
-      </main>
-    );
-  }
-
-  // ── Subscribe page ────────────────────────────────────────────────────────
-  if (!application.subscription_status) {
-    return (
-      <main className={styles.page}>
-        <NavBar onLogout={handleLogout} />
-        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
-          <div className={styles.signupCard} style={{ maxWidth: "52rem", margin: "0 auto" }}>
-            <div className={styles.signupCardHeader}>
-              <p className={styles.kicker}>Step 2 of 3 — Membership</p>
-              <h1>Activate your membership</h1>
-              <p>$1.99/month — cancel anytime. <strong>You are not paying for the advance.</strong> Your membership simply gives you the right to request one advance each month.</p>
-            </div>
-            <div className={styles.signupCardBody}>
-              <div className={styles.whatYouGet}>
-                <p className={styles.whatYouGetTitle}>Included in your membership</p>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Monthly cash advance</div>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Points &amp; surprise gift rewards</div>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>Weekly $300 raffle entries</div>
-                <div className={styles.whatYouGetItem}><div className={styles.whatYouGetDot}/>No credit check · No bureau reporting</div>
-              </div>
-              {!stripeKey ? (
-                <p className={styles.error}>Card payments are not configured. Contact support.</p>
-              ) : (
-                <Elements stripe={stripePromise}>
-                  <SubscribeForm
-                    applicationId={application.id}
-                    authToken={token}
-                    onSubscribed={(updated) => setApplication(updated)}
-                  />
-                </Elements>
-              )}
-              <button type="button" className={styles.backBtn} style={{ marginTop: "1.2rem" }} onClick={() => setView("landing")}>
-                ← Back to benefits
-              </button>
-            </div>
-          </div>
-        </section>
-        <StatesFooter />
-      </main>
-    );
-  }
-
-  // ── Delivery choice page ──────────────────────────────────────────────────
-  if (!application.delivery_type) {
-    return (
-      <main className={styles.page}>
-        <NavBar onLogout={handleLogout} />
-        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
-          <div className={styles.signupCard} style={{ maxWidth: "52rem", margin: "0 auto" }}>
-            <div className={styles.signupCardHeader}>
-              <p className={styles.kicker}>Step 3 of 3 — Delivery</p>
-              <h1>How fast do you need it?</h1>
-              <p>Choose how you'd like to receive your advance once approved.</p>
-            </div>
-            <div className={styles.signupCardBody}>
-              <DeliveryChoice
-                applicationId={application.id}
-                authToken={token}
-                onChosen={(updated) => setApplication(updated)}
-              />
-            </div>
-          </div>
-        </section>
         <StatesFooter />
       </main>
     );
@@ -789,6 +779,50 @@ const CustomerApp = () => {
   return (
     <main className={styles.page}>
       <NavBar onLogout={handleLogout} />
+
+      {showDeliveryModal && (
+        <div className={styles.modalBackdrop}>
+          <div className={styles.modal}>
+            <p className={styles.modalKicker}>You're approved! 🎉</p>
+            <h2 className={styles.modalTitle}>
+              Approved for a{" "}
+              <span style={{ color: "var(--brand)" }}>${application.requested_amount} cash advance</span>
+            </h2>
+            <p style={{ color: "var(--muted)", marginBottom: "2.4rem" }}>
+              How fast do you need your money?
+            </p>
+            <div className={styles.deliveryOptions}>
+              <button
+                type="button"
+                className={`${styles.deliveryOption} ${deliveryChoice === "instant" ? styles.deliveryOptionSelected : ""}`}
+                onClick={() => setDeliveryChoice("instant")}
+              >
+                <p className={styles.deliveryOptionBadge}>+$1 fee</p>
+                <p className={styles.deliveryOptionTitle}>⚡ Instant</p>
+                <p className={styles.deliveryOptionSub}>Money sent within minutes to your PayPal, CashApp, or Zelle.</p>
+              </button>
+              <button
+                type="button"
+                className={`${styles.deliveryOption} ${deliveryChoice === "standard" ? styles.deliveryOptionSelected : ""}`}
+                onClick={() => setDeliveryChoice("standard")}
+              >
+                <p className={styles.deliveryOptionBadge}>Free</p>
+                <p className={styles.deliveryOptionTitle}>📬 Standard</p>
+                <p className={styles.deliveryOptionSub}>2–3 business days after approval. No extra charge.</p>
+              </button>
+            </div>
+            {deliveryError && <p className={styles.error}>{deliveryError}</p>}
+            <button
+              disabled={deliveryBusy || !deliveryChoice}
+              onClick={saveDelivery}
+              style={{ width: "100%", marginTop: "2rem" }}
+            >
+              {deliveryBusy ? "Saving…" : "Continue →"}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className={styles.appCard}>
         <div className={styles.appCardPanel}>
           <div className={styles.appCardHeader}>
@@ -1569,135 +1603,5 @@ const StatesFooter = () => (
   </div>
 );
 
-// ── Subscribe form ────────────────────────────────────────────────────────────
-
-const SubscribeForm = ({
-  applicationId,
-  authToken,
-  onSubscribed,
-}: {
-  applicationId: string;
-  authToken: string;
-  onSubscribed: (app: Application) => void;
-}) => {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setIsBusy(true);
-    setError(null);
-    try {
-      const setupRes = await fetch(apiUrl(`/api/advance/applications/${applicationId}/subscription/setup`), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      const setupData = await setupRes.json();
-      if (!setupRes.ok) throw new Error(setupData.error?.error_message || "Could not start setup");
-
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) throw new Error("Card element not found");
-
-      const { error: stripeError, setupIntent } = await stripe.confirmCardSetup(setupData.client_secret, {
-        payment_method: { card: cardElement },
-      });
-      if (stripeError) throw new Error(stripeError.message);
-
-      const confirmRes = await fetch(apiUrl(`/api/advance/applications/${applicationId}/subscription/confirm`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ payment_method_id: setupIntent!.payment_method }),
-      });
-      const confirmData = await confirmRes.json();
-      if (!confirmRes.ok) throw new Error(confirmData.error?.error_message || "Subscription failed");
-
-      onSubscribed(confirmData.application);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={{ display: "grid", gap: "1.2rem" }}>
-      <div className={styles.cardElementWrap}>
-        <CardElement options={{ hidePostalCode: true }} />
-      </div>
-      {error && <p className={styles.error}>{error}</p>}
-      <button disabled={isBusy || !stripe} style={{ width: "100%" }}>
-        {isBusy ? "Activating…" : "Subscribe $1.99/mo & continue →"}
-      </button>
-    </form>
-  );
-};
-
-// ── Delivery choice ───────────────────────────────────────────────────────────
-
-const DeliveryChoice = ({
-  applicationId,
-  authToken,
-  onChosen,
-}: {
-  applicationId: string;
-  authToken: string;
-  onChosen: (app: Application) => void;
-}) => {
-  const [selected, setSelected] = useState<"instant" | "standard" | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = async () => {
-    if (!selected) { setError("Please choose a delivery option"); return; }
-    setIsBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(apiUrl(`/api/advance/applications/${applicationId}/delivery`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ delivery_type: selected }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.error_message || "Could not save delivery preference");
-      onChosen(data.application);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  return (
-    <div style={{ display: "grid", gap: "1.6rem" }}>
-      <div className={styles.deliveryOptions}>
-        <button
-          type="button"
-          className={`${styles.deliveryOption} ${selected === "instant" ? styles.deliveryOptionSelected : ""}`}
-          onClick={() => setSelected("instant")}
-        >
-          <p className={styles.deliveryOptionBadge}>+$1 fee</p>
-          <p className={styles.deliveryOptionTitle}>⚡ Instant</p>
-          <p className={styles.deliveryOptionSub}>Money sent within minutes of approval to your PayPal, CashApp, or Zelle.</p>
-        </button>
-        <button
-          type="button"
-          className={`${styles.deliveryOption} ${selected === "standard" ? styles.deliveryOptionSelected : ""}`}
-          onClick={() => setSelected("standard")}
-        >
-          <p className={styles.deliveryOptionBadge}>Free</p>
-          <p className={styles.deliveryOptionTitle}>📬 Standard</p>
-          <p className={styles.deliveryOptionSub}>2–3 business days after approval. No extra charge beyond your membership.</p>
-        </button>
-      </div>
-      {error && <p className={styles.error}>{error}</p>}
-      <button disabled={isBusy || !selected} onClick={handleSubmit} style={{ width: "100%" }}>
-        {isBusy ? "Saving…" : "Continue →"}
-      </button>
-    </div>
-  );
-};
 
 export default App;

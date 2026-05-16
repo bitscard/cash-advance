@@ -229,6 +229,22 @@ app.get('/api/advance/auth/me', async function (request, response, next) {
 
 // ── Subscription endpoints ─────────────────────────────────────────────────────
 
+// Free activation — no Stripe required
+app.post('/api/advance/applications/:id/subscription/activate', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    const updated = await db.saveSubscription(row.id, null, 'active', null);
+    await db.addMessage(row.id, 'system', 'Membership activated. You can now request a cash advance.');
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
 app.post('/api/advance/applications/:id/subscription/setup', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;

@@ -1538,6 +1538,44 @@ dd {
   text-align: center;
 }
 
+/* ── Delivery modal ───────────────────────────────────────────────────────── */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6,13,9,0.6);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.modal {
+  background: var(--white);
+  border-radius: var(--r-xl);
+  padding: 3.6rem;
+  max-width: 54rem;
+  width: 100%;
+  box-shadow: 0 32px 80px rgba(6,13,9,0.22);
+}
+
+.modalKicker {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand);
+  margin-bottom: 0.6rem;
+}
+
+.modalTitle {
+  font-size: 2.8rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.8rem;
+  color: var(--ink);
+}
+
 /* ── Benefits page ────────────────────────────────────────────────────────── */
 .benefitsHeader {
   background: var(--brand);
