@@ -11,7 +11,11 @@ const pool = new Pool({
 pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
-`).catch(() => {}); // ignore if table doesn't exist yet (fresh setup uses schema.sql)
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_status TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
+`).catch(() => {});
 
 const fmtDate = (v) => {
   if (!v) return null;
@@ -42,6 +46,9 @@ const publicApp = (row) => ({
   } : null,
   payout_methods: row.payout_methods || null,
   payout_contact: row.payout_contact || null,
+  subscription_status: row.subscription_status || null,
+  delivery_type: row.delivery_type || null,
+  instant_fee_paid: row.instant_fee_paid || false,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -136,6 +143,22 @@ async function getDueApplications() {
   return rows;
 }
 
+async function saveSubscription(id, subscription_id, subscription_status) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET subscription_id=$1, subscription_status=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
+    [subscription_id, subscription_status, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveDeliveryType(id, delivery_type, instant_fee_paid) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET delivery_type=$1, instant_fee_paid=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
+    [delivery_type, instant_fee_paid, id],
+  );
+  return rows[0] || null;
+}
+
 async function savePayoutPreference(id, methods, contact) {
   const { rows } = await pool.query(
     'UPDATE applications SET payout_methods=$1, payout_contact=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
@@ -171,6 +194,8 @@ async function saveStripeCharge(id, charge_id, charge_status) {
 module.exports = {
   publicApp,
   createApplication,
+  saveSubscription,
+  saveDeliveryType,
   savePayoutPreference,
   getApplicationById,
   getApplicationByEmail,

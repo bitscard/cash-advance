@@ -37,3 +37,9 @@ CREATE INDEX IF NOT EXISTS messages_application_id_idx ON messages(application_i
 -- Payout preference columns (migration-safe)
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
+
+-- Subscription + delivery columns
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_id TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_status TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;

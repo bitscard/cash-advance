@@ -1449,3 +1449,174 @@ dd {
   color: rgba(255,255,255,0.5);
   text-align: center;
 }
+
+/* ── Benefits page ────────────────────────────────────────────────────────── */
+.benefitsHeader {
+  background: var(--brand);
+  color: var(--white);
+  padding: 5.6rem 3.2rem 4rem;
+  text-align: center;
+}
+
+.benefitsHeaderKicker {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  margin-bottom: 1.2rem;
+}
+
+.benefitsHeaderTitle {
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.2rem;
+}
+
+.benefitsHeaderSub {
+  font-size: 1.7rem;
+  opacity: 0.82;
+  max-width: 46rem;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.benefitsBody {
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 3.6rem 2.4rem 4rem;
+}
+
+.benefitsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 1.6rem;
+  margin-bottom: 2.8rem;
+}
+
+.benefitCard {
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 2.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.benefitIcon {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+
+.benefitCardTitle {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.benefitCardSub {
+  font-size: 1.35rem;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.usageBox {
+  background: var(--amber-bg);
+  border: 1.5px solid var(--amber-border);
+  border-radius: var(--r-md);
+  padding: 1.8rem 2.2rem;
+  margin-bottom: 2.4rem;
+}
+
+.usageBoxTitle {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--amber-text);
+  margin: 0 0 0.4rem;
+}
+
+.usageBoxText {
+  font-size: 1.35rem;
+  color: var(--amber-text);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── States footer ────────────────────────────────────────────────────────── */
+.statesFooter {
+  background: #f1f5f9;
+  border-top: 1px solid var(--border);
+  padding: 2rem 3.2rem;
+  text-align: center;
+  font-size: 1.25rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.statesFooterTitle {
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  color: var(--ink-2);
+  font-size: 1.3rem;
+}
+
+.statesFooter p {
+  margin: 0;
+}
+
+/* ── Delivery choice ──────────────────────────────────────────────────────── */
+.deliveryOptions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.6rem;
+}
+
+.deliveryOption {
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 2.2rem 1.8rem;
+  cursor: pointer;
+  background: var(--white);
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.deliveryOption:hover:not(:disabled) {
+  border-color: var(--brand-700);
+}
+
+.deliveryOptionSelected {
+  border-color: var(--brand) !important;
+  background: var(--brand-tint);
+}
+
+.deliveryOptionBadge {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+
+.deliveryOptionTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.deliveryOptionSub {
+  font-size: 1.35rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}

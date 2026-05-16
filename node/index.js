@@ -134,7 +134,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
     }
     const password_hash = await bcrypt.hash(password, 10);
     const row = await db.createApplication({ name: name || '', email: email || '', phone: phone || '', employer: employer || '', payday, requested_amount, password_hash });
-    await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $25 request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
+    await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $10 cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
     response.json({ application: db.publicApp(row), token });
@@ -224,6 +224,120 @@ app.get('/api/advance/auth/me', async function (request, response, next) {
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
     const messages = await db.getMessages(row.id);
     response.json({ application: db.publicApp(row), messages });
+  } catch (err) { next(err); }
+});
+
+// ── Subscription endpoints ─────────────────────────────────────────────────────
+
+app.post('/api/advance/applications/:id/subscription/setup', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      usage: 'off_session',
+    });
+    response.json({ client_secret: setupIntent.client_secret });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/applications/:id/subscription/confirm', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { payment_method_id } = request.body;
+    if (!payment_method_id) {
+      return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
+    }
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    const customerId = row.stripe_customer_id;
+
+    await stripe.paymentMethods.attach(payment_method_id, { customer: customerId });
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: payment_method_id },
+    });
+
+    const subscription = await stripe.subscriptions.create({
+      customer: customerId,
+      items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: 'Advance Monthly Membership' },
+          unit_amount: 199,
+          recurring: { interval: 'month' },
+        },
+      }],
+      default_payment_method: payment_method_id,
+    });
+
+    const updated = await db.saveSubscription(row.id, subscription.id, subscription.status);
+    await db.addMessage(row.id, 'system', 'Membership activated — $1.99/month. You can now request a $10 cash advance each month.');
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/applications/:id/delivery', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { delivery_type } = request.body;
+    if (!['instant', 'standard'].includes(delivery_type)) {
+      return response.status(400).json({ error: { error_message: 'delivery_type must be instant or standard' } });
+    }
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    let instant_fee_paid = false;
+    if (delivery_type === 'instant' && row.stripe_customer_id) {
+      const customer = await stripe.customers.retrieve(row.stripe_customer_id);
+      const pm = customer.invoice_settings?.default_payment_method;
+      if (pm) {
+        const pi = await stripe.paymentIntents.create({
+          amount: 100,
+          currency: 'usd',
+          customer: row.stripe_customer_id,
+          payment_method: typeof pm === 'string' ? pm : pm.id,
+          off_session: true,
+          confirm: true,
+          description: 'Instant delivery fee',
+          metadata: { application_id: row.id },
+        });
+        if (pi.status === 'succeeded') instant_fee_paid = true;
+      }
+    }
+
+    const updated = await db.saveDeliveryType(row.id, delivery_type, instant_fee_paid);
+    const note = delivery_type === 'instant'
+      ? 'Instant delivery selected — funds will be sent within minutes of approval.'
+      : 'Standard delivery selected — funds will arrive within 2-3 business days of approval.';
+    await db.addMessage(row.id, 'system', note);
+    response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
 
