@@ -13,6 +13,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_id TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_status TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_next_billing DATE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
 `).catch(() => {});
@@ -132,6 +133,16 @@ async function getMessages(application_id) {
   return rows;
 }
 
+async function getDueMemberships() {
+  const { rows } = await pool.query(
+    `SELECT * FROM applications
+     WHERE subscription_status = 'active'
+       AND subscription_next_billing <= CURRENT_DATE
+       AND stripe_customer_id IS NOT NULL`
+  );
+  return rows;
+}
+
 async function getDueApplications() {
   const { rows } = await pool.query(
     `SELECT * FROM applications
@@ -143,10 +154,11 @@ async function getDueApplications() {
   return rows;
 }
 
-async function saveSubscription(id, subscription_id, subscription_status) {
+async function saveSubscription(id, subscription_id, subscription_status, subscription_next_billing) {
   const { rows } = await pool.query(
-    'UPDATE applications SET subscription_id=$1, subscription_status=$2, updated_at=NOW() WHERE id=$3 RETURNING *',
-    [subscription_id, subscription_status, id],
+    `UPDATE applications SET subscription_id=$1, subscription_status=$2,
+     subscription_next_billing=$3, updated_at=NOW() WHERE id=$4 RETURNING *`,
+    [subscription_id, subscription_status, subscription_next_billing || null, id],
   );
   return rows[0] || null;
 }
@@ -209,5 +221,6 @@ module.exports = {
   saveStripeCustomer,
   saveStripePaymentMethod,
   saveStripeCharge,
+  getDueMemberships,
   getDueApplications,
 };

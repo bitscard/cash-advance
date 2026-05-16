@@ -280,21 +280,26 @@ app.post('/api/advance/applications/:id/subscription/confirm', async function (r
       invoice_settings: { default_payment_method: payment_method_id },
     });
 
-    // Create $1.99/month Stripe subscription
-    const subscription = await stripe.subscriptions.create({
+    // Charge first month's $1.99 via PaymentIntent, then track renewal ourselves
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: 199,
+      currency: 'usd',
       customer: customerId,
-      items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: { name: 'Advance Monthly Membership' },
-          unit_amount: 199,
-          recurring: { interval: 'month' },
-        },
-      }],
-      default_payment_method: payment_method_id,
+      payment_method: payment_method_id,
+      off_session: true,
+      confirm: true,
+      description: 'Advance Monthly Membership — Month 1',
+      metadata: { application_id: row.id },
     });
 
-    const updated = await db.saveSubscription(row.id, subscription.id, subscription.status);
+    if (paymentIntent.status !== 'succeeded') {
+      return response.status(402).json({ error: { error_message: 'Membership payment did not complete. Please try a different card.' } });
+    }
+
+    // Store subscription_next_billing so the monthly action knows when to charge again
+    const nextBilling = new Date();
+    nextBilling.setMonth(nextBilling.getMonth() + 1);
+    const updated = await db.saveSubscription(row.id, paymentIntent.id, 'active', nextBilling.toISOString().slice(0, 10));
     await db.addMessage(row.id, 'system', 'Membership activated — $1.99/month. You can now request a cash advance each month.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
@@ -747,6 +752,44 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
         await db.updateApplicationStatus(row.id, 'repayment_failed');
         await db.addMessage(row.id, 'system', `Card payment failed: ${msg}`);
         results.push({ id: row.id, name: row.name, status: 'failed', error: msg });
+      }
+    }
+
+    response.json({ processed: results.length, results });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/admin/run-due-memberships', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const due = await db.getDueMemberships();
+    const results = [];
+
+    for (const row of due) {
+      const customer = await stripe.customers.retrieve(row.stripe_customer_id);
+      const pm = customer.invoice_settings?.default_payment_method;
+      if (!pm) {
+        results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No default payment method' });
+        continue;
+      }
+      try {
+        const pi = await stripe.paymentIntents.create({
+          amount: 199,
+          currency: 'usd',
+          customer: row.stripe_customer_id,
+          payment_method: typeof pm === 'string' ? pm : pm.id,
+          off_session: true,
+          confirm: true,
+          description: 'Advance Monthly Membership renewal',
+          metadata: { application_id: row.id },
+        });
+        const nextBilling = new Date();
+        nextBilling.setMonth(nextBilling.getMonth() + 1);
+        await db.saveSubscription(row.id, pi.id, 'active', nextBilling.toISOString().slice(0, 10));
+        results.push({ id: row.id, name: row.name, status: pi.status });
+      } catch (err) {
+        await db.saveSubscription(row.id, row.subscription_id, 'past_due', null);
+        results.push({ id: row.id, name: row.name, status: 'failed', error: err.message });
       }
     }
 

@@ -1,0 +1,22 @@
+name: Charge due memberships
+
+on:
+  schedule:
+    - cron: '0 10 * * *'  # 10am UTC every day
+  workflow_dispatch:
+
+jobs:
+  charge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger membership renewal collection
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${{ secrets.BACKEND_URL }}/api/advance/admin/run-due-memberships" \
+            -H "x-admin-token: ${{ secrets.ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json")
+          cat /tmp/response.json
+          if [ "$response" != "200" ]; then
+            echo "Failed with status $response"
+            exit 1
+          fi

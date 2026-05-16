@@ -661,7 +661,7 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader}>
           <p className={styles.benefitsHeaderKicker}>Advance Membership</p>
           <h1 className={styles.benefitsHeaderTitle}>Here's what you get.</h1>
-          <p className={styles.benefitsHeaderSub}>A monthly $10 cash advance with zero interest — and a lot more.</p>
+          <p className={styles.benefitsHeaderSub}>A monthly cash advance with zero interest — and a lot more.</p>
         </div>
         <div className={styles.benefitsBody}>
           <div className={styles.benefitsGrid}>

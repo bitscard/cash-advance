@@ -41,5 +41,6 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
 -- Subscription + delivery columns
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_id TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_status TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_next_billing DATE;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
