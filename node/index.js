@@ -280,20 +280,21 @@ app.post('/api/advance/applications/:id/subscription/confirm', async function (r
       invoice_settings: { default_payment_method: payment_method_id },
     });
 
-    // Charge $1.99 membership fee via PaymentIntent (avoids subscription API permissions)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: 199,
-      currency: 'usd',
+    // Create $1.99/month Stripe subscription
+    const subscription = await stripe.subscriptions.create({
       customer: customerId,
-      payment_method: payment_method_id,
-      off_session: true,
-      confirm: true,
-      description: 'Advance Monthly Membership',
-      metadata: { application_id: row.id },
+      items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: 'Advance Monthly Membership' },
+          unit_amount: 199,
+          recurring: { interval: 'month' },
+        },
+      }],
+      default_payment_method: payment_method_id,
     });
 
-    const status = paymentIntent.status === 'succeeded' ? 'active' : 'incomplete';
-    const updated = await db.saveSubscription(row.id, paymentIntent.id, status);
+    const updated = await db.saveSubscription(row.id, subscription.id, subscription.status);
     await db.addMessage(row.id, 'system', 'Membership activated — $1.99/month. You can now request a cash advance each month.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
