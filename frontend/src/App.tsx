@@ -546,9 +546,6 @@ const CustomerApp = () => {
                   <button className={styles.btnWhite} onClick={() => setView("signup")}>
                     Get started — it's free
                   </button>
-                  <button className={styles.btnGhost} onClick={() => window.location.href = "/loan"}>
-                    Sign in
-                  </button>
                 </div>
               </div>
               <div className={styles.mascotWrap}>
