@@ -136,7 +136,15 @@ function amountMatch(query: string, amount: number): boolean {
 
 // ── Shared components ─────────────────────────────────────────────────────────
 
-const NavBar = ({ onLogout }: { onLogout?: () => void }) => (
+const NavBar = ({
+  onLogout,
+  onGetStarted,
+  onSignIn,
+}: {
+  onLogout?: () => void;
+  onGetStarted?: () => void;
+  onSignIn?: () => void;
+}) => (
   <nav className={styles.nav}>
     <div className={styles.navBrand}>
       <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
@@ -147,12 +155,20 @@ const NavBar = ({ onLogout }: { onLogout?: () => void }) => (
       Advance
     </div>
     <div className={styles.navRight}>
-      <span className={styles.navSecure}>
-        <svg width="13" height="14" viewBox="0 0 13 14" fill="none" aria-hidden="true">
-          <path d="M6.5 1L11.5 3.5V8C11.5 11 9.3 13.5 6.5 14.2C3.7 13.5 1.5 11 1.5 8V3.5L6.5 1Z" fill="#607870" />
-        </svg>
-        Bank-level security
-      </span>
+      {!onGetStarted && (
+        <span className={styles.navSecure}>
+          <svg width="13" height="14" viewBox="0 0 13 14" fill="none" aria-hidden="true">
+            <path d="M6.5 1L11.5 3.5V8C11.5 11 9.3 13.5 6.5 14.2C3.7 13.5 1.5 11 1.5 8V3.5L6.5 1Z" fill="#607870" />
+          </svg>
+          Bank-level security
+        </span>
+      )}
+      {onGetStarted && onSignIn && (
+        <div className={styles.navCtas}>
+          <button className={styles.navCtaGhost} onClick={onSignIn}>Sign in</button>
+          <button className={styles.navCtaPrimary} onClick={onGetStarted}>Get started</button>
+        </div>
+      )}
       {onLogout && (
         <button className={styles.logoutBtn} onClick={onLogout}>Sign out</button>
       )}
@@ -507,7 +523,10 @@ const CustomerApp = () => {
     if (view === "landing") {
       return (
         <main className={styles.page}>
-          <NavBar />
+          <NavBar
+            onGetStarted={() => setView("signup")}
+            onSignIn={() => window.location.href = "/loan"}
+          />
 
           {/* Hero — two-column with mascot */}
           <section className={styles.hero}>
