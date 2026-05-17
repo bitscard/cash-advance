@@ -669,6 +669,9 @@ const CustomerApp = () => {
               <p className={styles.kicker}>Step 1 of 3</p>
               <h1>Tell us about yourself</h1>
               <p>Takes 2 minutes. Trusted by 700,000+ people. Never sold or shared.</p>
+              <p style={{ marginTop: "0.6rem", fontSize: "1.3rem", color: "var(--brand)", fontWeight: 600 }}>
+                🔒 No hard credit check — ever. Zero impact on your credit score.
+              </p>
             </div>
             <div className={styles.signupCardBody}>
               <form className={styles.intakeComposer} onSubmit={handleSignupSubmit}>
@@ -726,7 +729,6 @@ const CustomerApp = () => {
                 </div>
                 {error && <p className={styles.error}>{error}</p>}
                 <div className={styles.intakeFooter}>
-                  <button type="button" className={styles.backBtn} onClick={() => setView("landing")}>← Back</button>
                   <button disabled={isBusy}>{isBusy ? "Creating account…" : "Continue →"}</button>
                 </div>
               </form>
