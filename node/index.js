@@ -128,12 +128,12 @@ const requireAuth = (request, response) => {
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, employer, payday, requested_amount, password } = request.body;
+    const { name, email, phone, employer, payday, requested_amount, password, ssn_last4 } = request.body;
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
     const password_hash = await bcrypt.hash(password, 10);
-    const row = await db.createApplication({ name: name || '', email: email || '', phone: phone || '', employer: employer || '', payday, requested_amount, password_hash });
+    const row = await db.createApplication({ name: name || '', email: email || '', phone: phone || '', employer: employer || '', payday, requested_amount, password_hash, ssn_last4: ssn_last4 || null });
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $10 cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });

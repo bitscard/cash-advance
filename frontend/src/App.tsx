@@ -27,6 +27,7 @@ interface Application {
     email: string;
     phone: string;
     employer: string;
+    ssn_last4: string | null;
   };
   requested_amount: number;
   payday: string;
@@ -321,6 +322,7 @@ const CustomerApp = () => {
     phone: "",
     employer: "",
     payday: "",
+    ssn_last4: "",
     password: "",
     confirmPassword: "",
   });
@@ -610,7 +612,7 @@ const CustomerApp = () => {
                 <div className={styles.stepCard}>
                   <div className={styles.stepNum}>1</div>
                   <strong>Apply in 2 minutes</strong>
-                  <span>Name, employer, next payday. No SSN, no credit pull — ever.</span>
+                  <span>Name, employer, next payday, last 4 of SSN. No credit pull — ever.</span>
                 </div>
                 <div className={styles.stepCard}>
                   <div className={styles.stepNum}>2</div>
@@ -700,6 +702,16 @@ const CustomerApp = () => {
                       onFocus={() => setIsDateFocused(true)}
                       onBlur={() => setIsDateFocused(false)}
                       onChange={(event) => setForm({ ...form, payday: event.target.value })} />
+                  </label>
+                  <label>
+                    SSN <span style={{ color: "var(--muted)", fontWeight: 400 }}>(last 4 digits only)</span>
+                    <input required type="text" inputMode="numeric" maxLength={4}
+                      pattern="[0-9]{4}" placeholder="1234"
+                      value={form.ssn_last4}
+                      onChange={(event) => {
+                        const val = event.target.value.replace(/\D/g, "").slice(0, 4);
+                        setForm({ ...form, ssn_last4: val });
+                      }} />
                   </label>
                   <label>
                     Create a password
@@ -1101,6 +1113,8 @@ const AdminApp = () => {
                     <dd>{selected.customer.employer}</dd>
                     <dt>Payday</dt>
                     <dd>{selected.payday}</dd>
+                    <dt>SSN last 4</dt>
+                    <dd>{selected.customer.ssn_last4 || "—"}</dd>
                     <dt>Plaid</dt>
                     <dd>{selected.plaid_connected ? "Connected" : "Waiting"}</dd>
                   </dl>

@@ -38,6 +38,9 @@ CREATE INDEX IF NOT EXISTS messages_application_id_idx ON messages(application_i
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
 
+-- SSN last 4
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn_last4 TEXT;
+
 -- Subscription + delivery columns
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_id TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_status TEXT;

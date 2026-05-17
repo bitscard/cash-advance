@@ -16,6 +16,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_next_billing DATE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn_last4 TEXT;
 `).catch(() => {});
 
 const fmtDate = (v) => {
@@ -31,6 +32,7 @@ const publicApp = (row) => ({
     email: row.email,
     phone: row.phone,
     employer: row.employer,
+    ssn_last4: row.ssn_last4 || null,
   },
   requested_amount: parseFloat(row.requested_amount),
   payday: fmtDate(row.payday),
@@ -54,11 +56,11 @@ const publicApp = (row) => ({
   updated_at: row.updated_at,
 });
 
-async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash }) {
+async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4 }) {
   const { rows } = await pool.query(
-    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 25, password_hash],
+    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4 || null],
   );
   return rows[0];
 }
