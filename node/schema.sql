@@ -47,3 +47,6 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_status TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS subscription_next_billing DATE;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
+
+-- Stripe Financial Connections (replaces Plaid)
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_account_id TEXT;

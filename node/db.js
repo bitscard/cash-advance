@@ -17,6 +17,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_type TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn_last4 TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_account_id TEXT;
 `).catch(() => {});
 
 const fmtDate = (v) => {
@@ -37,7 +38,7 @@ const publicApp = (row) => ({
   requested_amount: parseFloat(row.requested_amount),
   payday: fmtDate(row.payday),
   status: row.status,
-  plaid_connected: Boolean(row.access_token),
+  plaid_connected: Boolean(row.stripe_fc_account_id || row.access_token),
   stripe_card_saved: Boolean(row.stripe_payment_method_id),
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
@@ -181,6 +182,16 @@ async function savePayoutPreference(id, methods, contact) {
   return rows[0] || null;
 }
 
+async function saveBankAccount(id, payment_method_id, fc_account_id) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET stripe_payment_method_id=$1, stripe_fc_account_id=$2, status='bank_connected', updated_at=NOW()
+     WHERE id=$3 RETURNING *`,
+    [payment_method_id, fc_account_id || null, id],
+  );
+  return rows[0] || null;
+}
+
 async function saveStripeCustomer(id, stripe_customer_id) {
   const { rows } = await pool.query(
     'UPDATE applications SET stripe_customer_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
@@ -220,6 +231,7 @@ module.exports = {
   markRepaymentPaid,
   addMessage,
   getMessages,
+  saveBankAccount,
   saveStripeCustomer,
   saveStripePaymentMethod,
   saveStripeCharge,

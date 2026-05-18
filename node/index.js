@@ -176,29 +176,60 @@ app.post('/api/advance/applications/:id/messages', async function (request, resp
   } catch (err) { next(err); }
 });
 
-app.post('/api/advance/applications/:id/create_link_token', async function (request, response, next) {
+// ── Stripe Financial Connections — bank verification + ACH payment method ─────
+
+app.post('/api/advance/applications/:id/stripe/bank-setup-intent', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    const createTokenResponse = await client.linkTokenCreate({
-      user: { client_user_id: row.id },
-      client_name: 'Cash Advance Review',
-      products: PLAID_PRODUCTS,
-      country_codes: PLAID_COUNTRY_CODES,
-      language: 'en',
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['us_bank_account'],
+      payment_method_options: {
+        us_bank_account: {
+          financial_connections: {
+            permissions: ['payment_method', 'balances', 'transactions'],
+          },
+        },
+      },
     });
-    response.json(createTokenResponse.data);
+
+    response.json({ client_secret: setupIntent.client_secret });
   } catch (err) { next(err); }
 });
 
-app.post('/api/advance/applications/:id/set_access_token', async function (request, response, next) {
+app.post('/api/advance/applications/:id/stripe/save-bank-account', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
   try {
-    const row = await db.getApplicationById(request.params.id);
-    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    const tokenResponse = await client.itemPublicTokenExchange({ public_token: request.body.public_token });
-    const updated = await db.setAccessToken(row.id, tokenResponse.data.access_token, tokenResponse.data.item_id);
-    await db.addMessage(row.id, 'system', 'Bank account connected. A reviewer will check the application and respond here.');
-    response.json({ application: db.publicApp(updated), error: null });
+    const { payment_method_id, financial_connections_account_id } = request.body;
+    if (!payment_method_id) {
+      return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
+    }
+    const updated = await db.saveBankAccount(request.params.id, payment_method_id, financial_connections_account_id || null);
+    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    await db.addMessage(request.params.id, 'system', 'Bank account connected. A reviewer will check the application and respond here.');
+    response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
 
@@ -410,51 +441,43 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
   try {
     const application = await db.getApplicationById(request.params.id);
     if (!application) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    if (!application.access_token) return response.status(400).json({ error: { error_message: 'Bank account is not connected yet' } });
 
-  Promise.resolve()
-    .then(async function () {
-      const [accountsResponse, authResponse] = await Promise.allSettled([
-        client.accountsBalanceGet({ access_token: application.access_token }),
-        client.authGet({ access_token: application.access_token }),
-      ]);
+    const fcAccountId = application.stripe_fc_account_id;
+    if (!fcAccountId) return response.status(400).json({ error: { error_message: 'No bank account connected yet. Ask the customer to connect their bank.' } });
 
-      let transactions = [];
-      try {
-        let allAdded = [];
-        let cursor = undefined;
-        let hasMore = true;
-        let iterations = 0;
-        while (hasMore && iterations < 20) {
-          const syncResponse = await client.transactionsSync({
-            access_token: application.access_token,
-            cursor,
-            count: 500,
-          });
-          allAdded = allAdded.concat(syncResponse.data.added || []);
-          cursor = syncResponse.data.next_cursor;
-          hasMore = syncResponse.data.has_more;
-          iterations++;
-        }
-        // Sort newest first, return all available history (up to what Plaid provides — typically 24 months)
-        transactions = allAdded.sort((a, b) => new Date(b.date) - new Date(a.date));
-      } catch (error) {
-        transactions = [];
-      }
+    const [accountResult, balanceResult, txResult] = await Promise.allSettled([
+      stripe.financialConnections.accounts.retrieve(fcAccountId),
+      stripe.financialConnections.accounts.retrieveBalance(fcAccountId),
+      stripe.financialConnections.transactions.list({ account: fcAccountId, limit: 200 }),
+    ]);
 
-      response.json({
-        accounts:
-          accountsResponse.status === 'fulfilled'
-            ? accountsResponse.value.data.accounts
-            : [],
-        auth:
-          authResponse.status === 'fulfilled'
-            ? authResponse.value.data
-            : null,
-        transactions,
-      });
-    })
-    .catch(next);
+    const acct = accountResult.status === 'fulfilled' ? accountResult.value : null;
+    const bal  = balanceResult.status === 'fulfilled' ? balanceResult.value : null;
+    const txs  = txResult.status === 'fulfilled' ? txResult.value.data : [];
+
+    const accounts = acct ? [{
+      id: acct.id,
+      display_name: acct.display_name || 'Bank Account',
+      institution_name: acct.institution_name,
+      last4: acct.last4 || null,
+      category: acct.category,
+      balance: bal ? {
+        available: bal.cash?.available?.usd ?? null,
+        current:   bal.cash?.current?.usd   ?? null,
+      } : null,
+    }] : [];
+
+    const transactions = txs.map(tx => ({
+      id: tx.id,
+      description: tx.description || '',
+      amount: tx.amount,                                              // positive = credit, in cents
+      currency: tx.currency,
+      date: new Date(tx.transacted_at * 1000).toISOString().slice(0, 10),
+      category: tx.category || 'other',
+      status: tx.status,
+    }));
+
+    response.json({ accounts, transactions, auth: null });
   } catch (err) { next(err); }
 });
 
@@ -718,16 +741,18 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
 
     if (paymentIntent.status === 'succeeded') {
       await db.markRepaymentPaid(row.id);
-      await db.addMessage(row.id, 'system', `Card payment of $${(amount / 100).toFixed(2)} collected successfully.`);
+      await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
+    } else if (paymentIntent.status === 'processing') {
+      await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);
     }
 
     const updated = await db.getApplicationById(request.params.id);
     response.json({ application: db.publicApp(updated), status: paymentIntent.status });
   } catch (err) {
-    if (err.type === 'StripeCardError') {
+    if (err.type === 'StripeCardError' || err.type === 'StripeInvalidRequestError') {
       await db.saveStripeCharge(request.params.id, err.payment_intent?.id || null, 'failed');
       await db.updateApplicationStatus(request.params.id, 'repayment_failed');
-      await db.addMessage(request.params.id, 'system', `Card payment failed: ${err.message}`);
+      await db.addMessage(request.params.id, 'system', `Payment failed: ${err.message}`);
       return response.status(402).json({ error: { error_message: err.message } });
     }
     next(err);
@@ -758,7 +783,9 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
 
         if (paymentIntent.status === 'succeeded') {
           await db.markRepaymentPaid(row.id);
-          await db.addMessage(row.id, 'system', `Card payment of $${(amount / 100).toFixed(2)} collected successfully.`);
+          await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
+        } else if (paymentIntent.status === 'processing') {
+          await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);
         }
 
         results.push({ id: row.id, name: row.name, status: paymentIntent.status });
@@ -766,7 +793,7 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
         const msg = err.message || 'Unknown error';
         await db.saveStripeCharge(row.id, err.payment_intent?.id || null, 'failed');
         await db.updateApplicationStatus(row.id, 'repayment_failed');
-        await db.addMessage(row.id, 'system', `Card payment failed: ${msg}`);
+        await db.addMessage(row.id, 'system', `Payment failed: ${msg}`);
         results.push({ id: row.id, name: row.name, status: 'failed', error: msg });
       }
     }

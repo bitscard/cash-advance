@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { usePlaidLink } from "react-plaid-link";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
@@ -60,21 +59,23 @@ interface Message {
 
 interface BankSnapshot {
   accounts: Array<{
-    account_id: string;
-    name: string;
-    mask: string | null;
-    subtype: string | null;
-    balances: {
-      available: number | null;
-      current: number | null;
-      iso_currency_code: string | null;
-    };
+    id: string;
+    display_name: string;
+    institution_name: string;
+    last4: string | null;
+    category: string;
+    balance: {
+      available: number | null; // cents
+      current: number | null;   // cents
+    } | null;
   }>;
   transactions: Array<{
-    transaction_id: string;
-    name: string;
-    amount: number;
+    id: string;
+    description: string;
+    amount: number;   // positive = credit, in cents
+    currency: string;
     date: string;
+    category: string;
   }>;
   auth: unknown;
 }
@@ -326,7 +327,6 @@ const CustomerApp = () => {
     password: "",
     confirmPassword: "",
   });
-  const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"landing" | "signup">("landing");
@@ -468,56 +468,68 @@ const CustomerApp = () => {
     }
   };
 
-  const createLinkToken = async () => {
+  const connectBank = async () => {
     if (!application) return;
     setIsBusy(true);
     setError(null);
     try {
-      const response = await fetch(
-        apiUrl(`/api/advance/applications/${application.id}/create_link_token`),
-        { method: "POST" },
-      );
-      if (!response.ok) throw new Error("Unable to create Plaid Link session");
-      const data = await response.json();
-      setLinkToken(data.link_token);
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Plaid Link failed");
+      const stripeInst = await stripePromise;
+      if (!stripeInst) throw new Error("Stripe is not configured on this server");
+
+      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/bank-setup-intent`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not start bank connection");
+
+      // Open Stripe Financial Connections modal
+      const { setupIntent, error: fcError } = await stripeInst.collectBankAccountForSetup({
+        clientSecret: data.client_secret,
+        params: {
+          payment_method_type: "us_bank_account",
+          payment_method_data: {
+            billing_details: {
+              name: application.customer.name,
+              email: application.customer.email,
+            },
+          },
+        },
+        expand: ["payment_method"],
+      });
+
+      if (fcError) throw new Error(fcError.message);
+      // User cancelled the modal
+      if (!setupIntent || setupIntent.status === "requires_payment_method") return;
+
+      // Confirm the SetupIntent to authorise the mandate
+      if (setupIntent.status === "requires_confirmation") {
+        const { error: confirmError } = await stripeInst.confirmUsBankAccountSetup(data.client_secret);
+        if (confirmError) throw new Error(confirmError.message);
+      }
+
+      // Extract IDs from the (expanded) payment method
+      const pm = setupIntent.payment_method as any;
+      const pmId: string | undefined = typeof pm === "string" ? pm : pm?.id;
+      const fcAccountId: string | null = typeof pm === "object"
+        ? (pm?.us_bank_account?.financial_connections_account ?? null)
+        : null;
+
+      const saveRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/save-bank-account`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ payment_method_id: pmId, financial_connections_account_id: fcAccountId }),
+      });
+      const saveData = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveData.error?.error_message || "Could not save bank account");
+      setApplication(saveData.application);
+      await loadMessages(application.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setIsBusy(false);
     }
   };
-
-  const onPlaidSuccess = useCallback(
-    async (publicToken: string) => {
-      if (!application) return;
-      const response = await fetch(
-        apiUrl(`/api/advance/applications/${application.id}/set_access_token`),
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_token: publicToken }),
-        },
-      );
-      const data = await response.json();
-      setApplication(data.application);
-      await loadMessages(application.id);
-      setLinkToken(null);
-    },
-    [application, loadMessages],
-  );
-
-  const plaidConfig = useMemo(
-    () => ({
-      token: linkToken,
-      onSuccess: onPlaidSuccess,
-    }),
-    [linkToken, onPlaidSuccess],
-  );
-  const { open, ready } = usePlaidLink(plaidConfig);
-
-  useEffect(() => {
-    if (linkToken && ready) open();
-  }, [linkToken, open, ready]);
 
 
   // ── Landing ──────────────────────────────────────────────────────────────────
@@ -881,18 +893,18 @@ const CustomerApp = () => {
 
             {needsBank && (
               <div className={styles.appCardAction}>
-                <p><strong>Next step:</strong> connect your bank via Plaid so a reviewer can verify your income and approve your advance.</p>
-                <button disabled={isBusy} onClick={createLinkToken}>
-                  Connect bank with Plaid →
+                <p><strong>Next step:</strong> connect your bank account so a reviewer can verify your income and approve your advance. Your bank account will also be used for automatic repayment via direct debit.</p>
+                <button disabled={isBusy} onClick={connectBank}>
+                  {isBusy ? "Connecting…" : "Connect bank account →"}
                 </button>
               </div>
             )}
 
             {needsCard && (
               <div className={styles.appCardAction}>
-                <p><strong>You're approved!</strong> Save a card so we can collect your repayment automatically on the due date.</p>
+                <p><strong>You're approved!</strong> Add a payment method so we can collect your repayment automatically on the due date.</p>
                 <button onClick={() => window.location.href = "/loan"}>
-                  Save repayment card →
+                  Set up repayment →
                 </button>
               </div>
             )}
@@ -1226,26 +1238,31 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
   const [nameQuery, setNameQuery] = useState("");
   const [amountQuery, setAmountQuery] = useState("");
 
-  const incoming = snapshot.transactions.filter(tx => tx.amount < 0);
-  const filtered = incoming.filter(
-    tx => fuzzyMatch(nameQuery, tx.name) && amountMatch(amountQuery, tx.amount)
+  // Stripe FC: positive amount = credit (money in). Filter to credits only for income review.
+  const credits = snapshot.transactions.filter(tx => tx.amount > 0);
+  const filtered = credits.filter(
+    tx => fuzzyMatch(nameQuery, tx.description) && amountMatch(amountQuery, tx.amount / 100)
   );
 
   return (
     <div className={styles.snapshot}>
       <h4>Accounts</h4>
       {snapshot.accounts.map((account) => (
-        <div key={account.account_id} className={styles.account}>
-          <strong>{account.name}</strong>
-          <span>{account.subtype || "account"} · {account.mask || "no mask"}</span>
-          <span>Available {formatMoney(account.balances.available)}</span>
-          <span>Current {formatMoney(account.balances.current)}</span>
+        <div key={account.id} className={styles.account}>
+          <strong>{account.display_name}</strong>
+          <span>{account.institution_name} · {account.category} · ···{account.last4 || "—"}</span>
+          {account.balance && (
+            <>
+              <span>Available {formatMoney((account.balance.available ?? 0) / 100)}</span>
+              <span>Current {formatMoney((account.balance.current ?? 0) / 100)}</span>
+            </>
+          )}
         </div>
       ))}
-      <h4>Incoming transactions</h4>
+      <h4>Incoming transactions (credits)</h4>
       <div className={styles.searchRow}>
         <label>
-          Search by name
+          Search by description
           <input
             placeholder="e.g. employer name…"
             value={nameQuery}
@@ -1263,15 +1280,15 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
           />
         </label>
       </div>
-      <p className={styles.muted}>{filtered.length} of {incoming.length} incoming transaction{incoming.length !== 1 ? "s" : ""}</p>
+      <p className={styles.muted}>{filtered.length} of {credits.length} credit{credits.length !== 1 ? "s" : ""}</p>
       {filtered.length === 0 ? (
         <p className={styles.muted}>No matching transactions.</p>
       ) : (
         filtered.map((tx) => (
-          <div key={tx.transaction_id} className={styles.incomingTransaction}>
+          <div key={tx.id} className={styles.incomingTransaction}>
             <span>{tx.date}</span>
-            <strong>{tx.name}</strong>
-            <span className={styles.incomingAmount}>{formatMoney(Math.abs(tx.amount))}</span>
+            <strong>{tx.description}</strong>
+            <span className={styles.incomingAmount}>{formatMoney(tx.amount / 100)}</span>
           </div>
         ))
       )}
@@ -1475,9 +1492,39 @@ const LoanApp = () => {
               <h3>Repayment</h3>
               {application.status === "repaid" ? (
                 <p className={styles.paidNote}>Repayment collected — thank you!</p>
-              ) : !application.stripe_card_saved && (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
+              ) : application.stripe_card_saved ? (
                 <>
-                  <p><strong>One last step.</strong> Save a card and we'll automatically collect your repayment on the due date — no action needed from you on the day.</p>
+                  {rep && (
+                    <dl>
+                      <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
+                      <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
+                    </dl>
+                  )}
+                  <p className={styles.paidNote}>Bank account saved — repayment will be collected via direct debit on the due date.</p>
+                  {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && (
+                    <details style={{ marginTop: "1.6rem" }}>
+                      <summary style={{ fontSize: "1.35rem", color: "var(--muted)", cursor: "pointer", fontWeight: 600 }}>
+                        Prefer to pay by card instead?
+                      </summary>
+                      <div style={{ marginTop: "1.2rem" }}>
+                        {!stripeKey ? (
+                          <p className={styles.error}>Card payments are not configured yet.</p>
+                        ) : (
+                          <Elements stripe={stripePromise}>
+                            <SaveCardForm
+                              applicationId={application.id}
+                              authToken={token}
+                              onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
+                            />
+                          </Elements>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                </>
+              ) : (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
+                <>
+                  <p><strong>Set up repayment.</strong> Save a card and we'll automatically collect your repayment on the due date.</p>
                   {!stripeKey ? (
                     <p className={styles.error}>Card payments are not configured yet. Please contact support.</p>
                   ) : (
@@ -1489,16 +1536,6 @@ const LoanApp = () => {
                       />
                     </Elements>
                   )}
-                </>
-              ) : application.stripe_card_saved ? (
-                <>
-                  {rep && (
-                    <dl>
-                      <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
-                      <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
-                    </dl>
-                  )}
-                  <p className={styles.paidNote}>Card saved — we'll charge it automatically on the due date.</p>
                 </>
               ) : (
                 <p className={styles.muted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
