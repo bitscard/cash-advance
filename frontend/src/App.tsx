@@ -502,16 +502,28 @@ const CustomerApp = () => {
   };
 
   const [plaidLinkToken, setPlaidLinkToken] = useState<string | null>(null);
+  const [plaidLinkError, setPlaidLinkError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchPlaidLinkToken = () => {
     if (!application || application.plaid_connected) return;
+    setPlaidLinkError(null);
     fetch(apiUrl(`/api/advance/applications/${application.id}/plaid/link-token`), {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(d => { if (d.link_token) setPlaidLinkToken(d.link_token); })
-      .catch(() => {});
+      .then(d => {
+        if (d.link_token) {
+          setPlaidLinkToken(d.link_token);
+        } else {
+          setPlaidLinkError(d.error?.error_message || "Could not load bank connection. Please try again.");
+        }
+      })
+      .catch(() => setPlaidLinkError("Could not load bank connection. Please try again."));
+  };
+
+  useEffect(() => {
+    fetchPlaidLinkToken();
   }, [application?.id, application?.plaid_connected, token]);
 
 
@@ -946,6 +958,11 @@ const CustomerApp = () => {
                     onConnected={(app) => { setApplication(app); setPlaidLinkToken(null); loadMessages(app.id); }}
                     onError={(msg) => setError(msg)}
                   />
+                ) : plaidLinkError ? (
+                  <div>
+                    <p style={{ color: "var(--error, #c0392b)", marginBottom: "0.8rem", fontSize: "1.4rem" }}>{plaidLinkError}</p>
+                    <button onClick={fetchPlaidLinkToken}>Retry →</button>
+                  </div>
                 ) : (
                   <button disabled>Loading…</button>
                 )}
