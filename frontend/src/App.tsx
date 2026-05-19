@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { usePlaidLink } from "react-plaid-link";
 
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
@@ -82,7 +83,6 @@ interface BankSnapshot {
     category: string;
   }>;
   auth: unknown;
-  needs_reconnect?: boolean;
 }
 
 const US_STATES = ["Georgia", "Utah"];
@@ -501,68 +501,18 @@ const CustomerApp = () => {
     }
   };
 
-  const connectBank = async () => {
-    if (!application) return;
-    setIsBusy(true);
-    setError(null);
-    try {
-      const stripeInst = await stripePromise;
-      if (!stripeInst) throw new Error("Stripe is not configured on this server");
+  const [plaidLinkToken, setPlaidLinkToken] = useState<string | null>(null);
 
-      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/bank-setup-intent`), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.error_message || "Could not start bank connection");
-
-      // Open Stripe Financial Connections modal
-      const { setupIntent, error: fcError } = await stripeInst.collectBankAccountForSetup({
-        clientSecret: data.client_secret,
-        params: {
-          payment_method_type: "us_bank_account",
-          payment_method_data: {
-            billing_details: {
-              name: application.customer.name,
-              email: application.customer.email,
-            },
-          },
-        },
-        expand: ["payment_method"],
-      });
-
-      if (fcError) throw new Error(fcError.message);
-      // User cancelled the modal
-      if (!setupIntent || setupIntent.status === "requires_payment_method") return;
-
-      // Confirm the SetupIntent to authorise the mandate
-      if (setupIntent.status === "requires_confirmation") {
-        const { error: confirmError } = await stripeInst.confirmUsBankAccountSetup(data.client_secret);
-        if (confirmError) throw new Error(confirmError.message);
-      }
-
-      // Extract IDs from the (expanded) payment method
-      const pm = setupIntent.payment_method as any;
-      const pmId: string | undefined = typeof pm === "string" ? pm : pm?.id;
-      const fcAccountId: string | null = typeof pm === "object"
-        ? (pm?.us_bank_account?.financial_connections_account ?? null)
-        : null;
-
-      const saveRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/save-bank-account`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ payment_method_id: pmId, financial_connections_account_id: fcAccountId }),
-      });
-      const saveData = await saveRes.json();
-      if (!saveRes.ok) throw new Error(saveData.error?.error_message || "Could not save bank account");
-      setApplication(saveData.application);
-      await loadMessages(application.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setIsBusy(false);
-    }
-  };
+  useEffect(() => {
+    if (!application || application.plaid_connected) return;
+    fetch(apiUrl(`/api/advance/applications/${application.id}/plaid/link-token`), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => { if (d.link_token) setPlaidLinkToken(d.link_token); })
+      .catch(() => {});
+  }, [application?.id, application?.plaid_connected, token]);
 
 
   // ── Landing ──────────────────────────────────────────────────────────────────
@@ -905,8 +855,8 @@ const CustomerApp = () => {
 
   // ── Authenticated application view ────────────────────────────────────────
   const needsBank = !application.plaid_connected;
-  // Bank connection sets up ACH direct debit — no card required as primary
-  const needsCard = !application.stripe_card_saved && !application.plaid_connected &&
+  // Bank verifies income via Plaid; card is required for repayment
+  const needsCard = application.plaid_connected && !application.stripe_card_saved &&
     (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled");
 
   return (
@@ -987,10 +937,18 @@ const CustomerApp = () => {
 
             {needsBank && (
               <div className={styles.appCardAction}>
-                <p><strong>Next step:</strong> connect your bank account. This verifies your income <em>and</em> sets up direct debit for automatic repayment — no card needed.</p>
-                <button disabled={isBusy} onClick={connectBank}>
-                  {isBusy ? "Connecting…" : "Connect bank account →"}
-                </button>
+                <p><strong>Next step:</strong> connect your bank account via Plaid. This verifies your income so we can review your application.</p>
+                {plaidLinkToken ? (
+                  <PlaidConnectButton
+                    linkToken={plaidLinkToken}
+                    applicationId={application.id}
+                    authToken={token}
+                    onConnected={(app) => { setApplication(app); setPlaidLinkToken(null); loadMessages(app.id); }}
+                    onError={(msg) => setError(msg)}
+                  />
+                ) : (
+                  <button disabled>Loading…</button>
+                )}
               </div>
             )}
 
@@ -1399,14 +1357,9 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
         </div>
       ))}
       <h4>All transactions</h4>
-      {snapshot.needs_reconnect && (
-        <p style={{ color: "#c0392b", fontWeight: 600, fontSize: "1.35rem", marginBottom: "0.8rem" }}>
-          Transaction access not granted. Ask the customer to disconnect and reconnect their bank account — the original session did not include transaction permission.
-        </p>
-      )}
-      {!snapshot.needs_reconnect && allTx.length === 0 && (
-        <p style={{ color: "#c0392b", fontWeight: 600, fontSize: "1.35rem" }}>
-          Stripe returned 0 transactions. Data may still be loading — wait 30s and try again, or ask the customer to reconnect their bank.
+      {allTx.length === 0 && (
+        <p style={{ color: "var(--muted)", fontSize: "1.35rem" }}>
+          No transactions yet — Plaid may still be syncing. Refresh in a moment.
         </p>
       )}
       <div className={styles.searchRow}>
@@ -1655,29 +1608,24 @@ const LoanApp = () => {
               {application.status === "repaid" ? (
                 <p className={styles.paidNote}>Repayment collected — thank you!</p>
               ) : application.plaid_connected ? (
-                // Bank / ACH connected — direct debit is primary
+                // Bank verified via Plaid — card required for repayment
                 <>
+                  <p className={styles.paidNote}>✓ Bank verified via Plaid.</p>
                   {rep && (
-                    <dl>
+                    <dl style={{ marginTop: "1.2rem" }}>
                       <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
                       <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
                     </dl>
                   )}
-                  <p className={styles.paidNote}>✓ Direct debit set up — repayment will be automatically collected from your bank account on the due date.</p>
                   {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && (
-                    <details style={{ marginTop: "1.6rem" }}>
-                      <summary style={{ fontSize: "1.35rem", color: "var(--muted)", cursor: "pointer", fontWeight: 600 }}>
-                        Add a backup card (optional)
-                      </summary>
-                      <div style={{ marginTop: "1.2rem" }}>
-                        <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1rem" }}>
-                          We'll only charge this if the direct debit fails.
-                        </p>
-                        {application.stripe_card_saved ? (
-                          <p className={styles.paidNote}>✓ Backup card on file.</p>
-                        ) : !stripeKey ? (
-                          <p className={styles.error}>Card payments are not configured yet.</p>
-                        ) : (
+                    <div style={{ marginTop: "1.6rem" }}>
+                      {application.stripe_card_saved ? (
+                        <p className={styles.paidNote}>✓ Card on file — repayment will be collected automatically on the due date.</p>
+                      ) : !stripeKey ? (
+                        <p className={styles.error}>Card payments are not configured yet.</p>
+                      ) : (
+                        <>
+                          <p style={{ marginBottom: "1rem", fontWeight: 600 }}>Add a card to complete repayment setup:</p>
                           <Elements stripe={stripePromise}>
                             <SaveCardForm
                               applicationId={application.id}
@@ -1685,9 +1633,9 @@ const LoanApp = () => {
                               onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
                             />
                           </Elements>
-                        )}
-                      </div>
-                    </details>
+                        </>
+                      )}
+                    </div>
                   )}
                 </>
               ) : application.stripe_card_saved ? (
@@ -1703,25 +1651,15 @@ const LoanApp = () => {
                 </>
               ) : (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
                 <>
-                  <p><strong>Set up repayment.</strong> Connect your bank for direct debit (recommended) — or save a card as a fallback.</p>
-                  <button onClick={() => window.location.href = "/"} style={{ marginBottom: "1.2rem" }}>
-                    Connect bank for direct debit →
-                  </button>
+                  <p><strong>Set up repayment.</strong> Save a card to complete your repayment setup.</p>
                   {stripeKey && (
-                    <details>
-                      <summary style={{ fontSize: "1.35rem", color: "var(--muted)", cursor: "pointer", fontWeight: 600 }}>
-                        Or save a card instead
-                      </summary>
-                      <div style={{ marginTop: "1.2rem" }}>
-                        <Elements stripe={stripePromise}>
-                          <SaveCardForm
-                            applicationId={application.id}
-                            authToken={token}
-                            onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
-                          />
-                        </Elements>
-                      </div>
-                    </details>
+                    <Elements stripe={stripePromise}>
+                      <SaveCardForm
+                        applicationId={application.id}
+                        authToken={token}
+                        onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
+                      />
+                    </Elements>
                   )}
                 </>
               ) : (
@@ -1858,6 +1796,50 @@ const SaveCardForm = ({
       {error && <p className={styles.error}>{error}</p>}
       <button disabled={isBusy || !stripe}>{isBusy ? "Saving…" : "Save card"}</button>
     </form>
+  );
+};
+
+// ── Plaid connect button ──────────────────────────────────────────────────────
+
+const PlaidConnectButton = ({
+  linkToken,
+  applicationId,
+  authToken,
+  onConnected,
+  onError,
+}: {
+  linkToken: string;
+  applicationId: string;
+  authToken: string;
+  onConnected: (app: Application) => void;
+  onError: (msg: string) => void;
+}) => {
+  const [busy, setBusy] = useState(false);
+  const { open, ready } = usePlaidLink({
+    token: linkToken,
+    onSuccess: async (publicToken) => {
+      setBusy(true);
+      try {
+        const res = await fetch(apiUrl(`/api/advance/applications/${applicationId}/plaid/exchange-token`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ public_token: publicToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.error_message || "Could not save bank account");
+        onConnected(data.application);
+      } catch (e) {
+        onError(e instanceof Error ? e.message : "Something went wrong");
+      } finally {
+        setBusy(false);
+      }
+    },
+    onExit: () => setBusy(false),
+  });
+  return (
+    <button disabled={!ready || busy} onClick={() => open()}>
+      {busy ? "Connecting…" : "Connect bank account →"}
+    </button>
   );
 };
 

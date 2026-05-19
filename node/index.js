@@ -222,9 +222,9 @@ app.post('/api/advance/applications/:id/messages', async function (request, resp
   } catch (err) { next(err); }
 });
 
-// ── Stripe Financial Connections — bank verification + ACH payment method ─────
+// ── Plaid — bank verification ─────────────────────────────────────────────────
 
-app.post('/api/advance/applications/:id/stripe/bank-setup-intent', async function (request, response, next) {
+app.post('/api/advance/applications/:id/plaid/link-token', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
@@ -233,66 +233,32 @@ app.post('/api/advance/applications/:id/stripe/bank-setup-intent', async functio
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-
-    let customerId = row.stripe_customer_id;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: row.email,
-        name: row.name,
-        metadata: { application_id: row.id },
-      });
-      customerId = customer.id;
-      await db.saveStripeCustomer(row.id, customerId);
-    }
-
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      payment_method_types: ['us_bank_account'],
-      payment_method_options: {
-        us_bank_account: {
-          financial_connections: {
-            permissions: ['payment_method', 'balances', 'transactions', 'ownership'],
-          },
-        },
-      },
+    const resp = await client.linkTokenCreate({
+      user: { client_user_id: row.id },
+      client_name: 'Advance',
+      products: [Products.Auth, Products.Transactions],
+      country_codes: ['US'],
+      language: 'en',
     });
-
-    response.json({ client_secret: setupIntent.client_secret });
+    response.json({ link_token: resp.data.link_token });
   } catch (err) { next(err); }
 });
 
-app.post('/api/advance/applications/:id/stripe/save-bank-account', async function (request, response, next) {
+app.post('/api/advance/applications/:id/plaid/exchange-token', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
   }
   try {
-    const { payment_method_id } = request.body;
-    if (!payment_method_id) {
-      return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
-    }
-
-    // Retrieve the PM server-side — more reliable than trusting the client-side expand
-    const pm = await stripe.paymentMethods.retrieve(payment_method_id);
-    const fc_account_id = pm?.us_bank_account?.financial_connections_account ?? null;
-    console.log('[save-bank-account] pm type:', pm.type, '| fc_account_id:', fc_account_id);
-
-    // Subscribe to transactions so we can list them later
-    if (fc_account_id) {
-      try {
-        await stripe.financialConnections.accounts.subscribe(fc_account_id, {
-          features: ['transactions'],
-        });
-        console.log('[save-bank-account] subscribed to transactions for', fc_account_id);
-      } catch (e) {
-        console.log('[save-bank-account] subscribe error:', e.message);
-      }
-    }
-
-    const updated = await db.saveBankAccount(request.params.id, payment_method_id, fc_account_id);
+    const { public_token } = request.body;
+    if (!public_token) return response.status(400).json({ error: { error_message: 'public_token is required' } });
+    const tokenResp = await client.itemPublicTokenExchange({ public_token });
+    const access_token = tokenResp.data.access_token;
+    const item_id = tokenResp.data.item_id;
+    const updated = await db.setAccessToken(request.params.id, access_token, item_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    await db.addMessage(request.params.id, 'system', 'Bank account connected. A reviewer will check the application and respond here.');
+    await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -513,89 +479,70 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
   try {
     const application = await db.getApplicationById(request.params.id);
     if (!application) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!application.access_token) {
+      return response.status(400).json({ error: { error_message: 'No bank account connected yet.' } });
+    }
 
-    const fcAccountId = application.stripe_fc_account_id;
-    console.log('[bank_snapshot] fc_account_id from DB:', fcAccountId);
-    if (!fcAccountId) return response.status(400).json({ error: { error_message: 'No bank account connected yet. Ask the customer to connect their bank.' } });
-
-    // 1. Retrieve account to inspect permissions and refresh state
-    let acct = null;
+    // 1. Accounts + balances
+    let accounts = [];
     try {
-      acct = await stripe.financialConnections.accounts.retrieve(fcAccountId);
-      console.log('[bank_snapshot] account permissions:', JSON.stringify(acct.permissions));
-      console.log('[bank_snapshot] transaction_refresh:', JSON.stringify(acct.transaction_refresh));
+      const acctResp = await client.accountsBalance.get({ access_token: application.access_token });
+      accounts = acctResp.data.accounts.map(a => ({
+        id: a.account_id,
+        display_name: a.name,
+        institution_name: '',
+        last4: a.mask || null,
+        routing_number: null,
+        category: a.subtype || a.type,
+        balance: {
+          available: a.balances.available != null ? Math.round(a.balances.available * 100) : null,
+          current:   a.balances.current  != null ? Math.round(a.balances.current  * 100) : null,
+        },
+      }));
     } catch (e) {
-      console.log('[bank_snapshot] retrieve error:', e.message);
+      console.log('[bank_snapshot] accounts error:', e.message);
     }
 
-    const hasTransactionPermission = acct?.permissions?.includes('transactions');
-    if (!hasTransactionPermission) {
-      console.log('[bank_snapshot] WARNING: transactions permission not on this FC account. Customer must re-connect bank.');
-    }
-
-    // 2. Subscribe (idempotent — only works if permission was granted in the original session)
-    let subscribeOk = false;
+    // 2. Routing number via Plaid Auth
     try {
-      await stripe.financialConnections.accounts.subscribe(fcAccountId, { features: ['transactions'] });
-      subscribeOk = true;
-      console.log('[bank_snapshot] subscribe ok');
+      const authResp = await client.authGet({ access_token: application.access_token });
+      const achNumbers = authResp.data.numbers.ach;
+      accounts = accounts.map(a => {
+        const ach = achNumbers.find(n => n.account_id === a.id);
+        return ach ? { ...a, routing_number: ach.routing } : a;
+      });
     } catch (e) {
-      console.log('[bank_snapshot] subscribe error (full):', e.message, '| code:', e.code);
+      console.log('[bank_snapshot] auth error (non-fatal):', e.message);
     }
 
-    // 3. Fetch balance
-    const balanceResult = await Promise.resolve(
-      stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`)
-    ).catch(e => { console.log('[bank_snapshot] balance error:', e.message); return null; });
-
-    // 4. List transactions (skip refresh — it's async and we can't wait for it)
+    // 3. Transactions via transactionsSync
     let txs = [];
     try {
-      const txList = await stripe.financialConnections.transactions.list({ account: fcAccountId, limit: 200 });
-      txs = txList.data;
-      console.log('[bank_snapshot] transactions count:', txs.length, '| has_more:', txList.has_more);
+      let cursor, hasMore = true, iter = 0;
+      while (hasMore && iter < 10) {
+        const syncResp = await client.transactionsSync({ access_token: application.access_token, cursor, count: 500 });
+        txs = txs.concat(syncResp.data.added || []);
+        cursor = syncResp.data.next_cursor;
+        hasMore = syncResp.data.has_more;
+        iter++;
+      }
+      console.log('[bank_snapshot] transactions count:', txs.length);
     } catch (e) {
-      console.log('[bank_snapshot] list error:', e.message);
+      console.log('[bank_snapshot] transactions error:', e.message);
     }
 
-    const bal = balanceResult;
-
-    // Get routing number from the saved PM (not available on FC account object)
-    let routingNumber = null;
-    if (application.stripe_payment_method_id) {
-      try {
-        const pm = await stripe.paymentMethods.retrieve(application.stripe_payment_method_id);
-        if (pm.type === 'us_bank_account') routingNumber = pm.us_bank_account.routing_number || null;
-      } catch (e) { /* non-fatal */ }
-    }
-
-    const accounts = acct ? [{
-      id: acct.id,
-      display_name: acct.display_name || 'Bank Account',
-      institution_name: acct.institution_name,
-      last4: acct.last4 || null,
-      routing_number: routingNumber,
-      category: acct.category,
-      balance: bal ? {
-        available: bal.cash?.available?.usd ?? null,
-        current:   bal.cash?.current?.usd   ?? null,
-      } : null,
-    }] : [];
-
-    // Return ALL transactions (positive = credit/income, negative = debit/spend)
+    // Plaid: positive amount = money leaving (debit), negative = money coming in (credit)
+    // Normalise: positive = credit/income, negative = debit/spend (matches UI expectations)
     const transactions = txs.map(tx => ({
-      id: tx.id,
-      description: tx.description || '',
-      amount: tx.amount,
-      currency: tx.currency,
-      date: new Date(tx.transacted_at * 1000).toISOString().slice(0, 10),
-      category: tx.category || 'other',
-      status: tx.status,
+      id: tx.transaction_id,
+      description: tx.merchant_name || tx.name || '',
+      amount: Math.round(-tx.amount * 100),
+      currency: (tx.iso_currency_code || 'usd').toLowerCase(),
+      date: tx.date,
+      category: (tx.category || []).join(', '),
     }));
 
-    const needs_reconnect = !hasTransactionPermission || !subscribeOk;
-
-    response.json({ accounts, transactions, auth: null, needs_reconnect });
+    response.json({ accounts, transactions, auth: null });
   } catch (err) { next(err); }
 });
 
@@ -604,20 +551,22 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    if (!row.stripe_payment_method_id) {
-      return response.status(400).json({ error: { error_message: 'No bank account connected for this application' } });
+
+    // Prefer Plaid Auth (routing + account details)
+    if (row.access_token) {
+      const authResp = await client.authGet({ access_token: row.access_token });
+      const acct = authResp.data.accounts[0];
+      const ach = authResp.data.numbers.ach[0];
+      return response.json({
+        bank_name: acct?.official_name || acct?.name || 'Bank Account',
+        routing_number: ach?.routing || 'Not available',
+        last4: acct?.mask || '----',
+        account_type: acct?.subtype || acct?.type || 'unknown',
+        account_holder_type: 'individual',
+      });
     }
-    const pm = await stripe.paymentMethods.retrieve(row.stripe_payment_method_id);
-    if (pm.type !== 'us_bank_account') {
-      return response.status(400).json({ error: { error_message: 'Payment method on file is not a bank account' } });
-    }
-    response.json({
-      bank_name: pm.us_bank_account.bank_name || 'Unknown bank',
-      routing_number: pm.us_bank_account.routing_number,
-      last4: pm.us_bank_account.last4,
-      account_type: pm.us_bank_account.account_type,
-      account_holder_type: pm.us_bank_account.account_holder_type,
-    });
+
+    return response.status(400).json({ error: { error_message: 'No bank account connected for this application' } });
   } catch (err) { next(err); }
 });
 
@@ -857,43 +806,25 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
 
 // Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
 // Fails open (ok: true) when balance is unavailable so card-only users are unaffected.
-async function checkOverdraft(fcAccountId, amountCents) {
-  if (!fcAccountId) return { ok: true };
-
-  // Refresh to get the latest balance from the institution
+async function checkOverdraft(accessToken, amountCents) {
+  if (!accessToken) return { ok: true };
   try {
-    await stripe.financialConnections.accounts.refresh(fcAccountId, { features: ['balance'] });
-  } catch (e) {
-    console.log('[overdraft_check] refresh error (non-fatal):', e.message);
-  }
-
-  let availableCents = null;
-  try {
-    const bal = await stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`);
-    availableCents = bal.cash?.available?.usd ?? null;
+    const resp = await client.accountsBalance.get({ access_token: accessToken });
+    const checking = resp.data.accounts.find(a => a.type === 'depository') || resp.data.accounts[0];
+    const availableCents = checking?.balances.available != null
+      ? Math.round(checking.balances.available * 100) : null;
     console.log(`[overdraft_check] available=${availableCents} cents | charge=${amountCents} cents`);
+    if (availableCents === null) return { ok: true };
+    if (availableCents < amountCents) {
+      const avail = (availableCents / 100).toFixed(2);
+      const needed = (amountCents / 100).toFixed(2);
+      return { ok: false, reason: `Payment skipped to avoid overdraft — account has $${avail} available but repayment is $${needed}. We'll retry when funds are available.` };
+    }
+    return { ok: true };
   } catch (e) {
     console.log('[overdraft_check] balance unavailable:', e.message, '— proceeding');
     return { ok: true };
   }
-
-  if (availableCents === null) {
-    console.log('[overdraft_check] balance null — proceeding');
-    return { ok: true };
-  }
-
-  if (availableCents < amountCents) {
-    const avail = (availableCents / 100).toFixed(2);
-    const needed = (amountCents / 100).toFixed(2);
-    console.log(`[overdraft_check] BLOCKED — $${avail} available, $${needed} needed`);
-    return {
-      ok: false,
-      reason: `Payment skipped to avoid overdraft — account has $${avail} available but repayment is $${needed}. We'll retry when funds are available.`,
-    };
-  }
-
-  console.log('[overdraft_check] balance sufficient — proceeding');
-  return { ok: true };
 }
 
 app.post('/api/advance/admin/applications/:id/charge', async function (request, response, next) {
@@ -914,7 +845,7 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
 
     // Overdraft check — uses FC balance if available
-    const overdraft = await checkOverdraft(row.stripe_fc_account_id, amount);
+    const overdraft = await checkOverdraft(row.access_token, amount);
     if (!overdraft.ok) {
       await db.addMessage(row.id, 'system', overdraft.reason);
       return response.status(402).json({ error: { error_message: overdraft.reason } });
@@ -985,7 +916,7 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
       if (!primaryPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
         // Overdraft check before charging
-        const overdraft = await checkOverdraft(row.stripe_fc_account_id, amount);
+        const overdraft = await checkOverdraft(row.access_token, amount);
         if (!overdraft.ok) {
           await db.addMessage(row.id, 'system', overdraft.reason);
           results.push({ id: row.id, name: row.name, status: 'skipped_overdraft', reason: overdraft.reason });
