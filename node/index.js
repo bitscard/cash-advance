@@ -4,6 +4,7 @@
 require('dotenv').config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const { Configuration, PlaidApi, Products, PlaidEnvironments, CraCheckReportProduct } = require('plaid');
+const Anthropic = require('@anthropic-ai/sdk');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
@@ -109,6 +110,101 @@ const configuration = new Configuration({
 });
 
 const client = new PlaidApi(configuration);
+
+// ── Income classification ─────────────────────────────────────────────────────
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Layer 1: Plaid personal_finance_category codes to exclude
+const EXCLUDED_PFC = new Set([
+  'INCOME_RETIREMENT_PENSION',       // pension, annuity
+  'INCOME_DIVIDENDS',                // investment income
+  'INCOME_SOCIAL_SECURITY',          // social security
+  'INCOME_UNEMPLOYMENT_BENEFITS',    // state unemployment insurance
+  'INCOME_TAX_REFUND',               // IRS tax refunds, EITC
+  'GOVERNMENT_BENEFITS',             // TANF, SNAP, WIC, stimulus, VA, disability
+]);
+
+// Layer 2: Keyword matching on description (catches what PFC misses)
+const EXCLUDED_KEYWORDS = [
+  'social security', 'ssa treas', ' ssa ', 'ssdi', 'ssi treas',
+  'va comp', 'va benefit', 'veterans affairs', 'vacp treas', 'dfas va',
+  'railroad retirement', 'rrta', 'rrb treas',
+  'unemployment', 'unemp ins', 'state ui ',
+  'irs treas', 'tax refund', 'eitc', 'earned income',
+  'stimulus', 'eip treas', 'economic impact', 'recovery rebate',
+  'pension', 'annuity', 'retirement dist',
+  'tanf', 'snap benefit', 'wic benefit', 'welfare',
+  'workers comp', 'workmans comp', 'workerscomp',
+  'child support', 'alimony',
+  'lottery', 'gambling win', 'casino win',
+  'insurance settlement', 'lawsuit', 'legal settlement',
+  'trust distribution', 'trust dist',
+  'federal retirement', ' csrs ', ' fers ',
+  'opm treas',   // Office of Personnel Management (federal civil service)
+  'disability payment', 'state disability',
+  'rental income', 'rent payment received',
+];
+
+function isExcludedByPFC(pfc) {
+  return pfc && EXCLUDED_PFC.has(pfc);
+}
+
+function isExcludedByKeyword(description) {
+  const lower = ` ${description.toLowerCase()} `;
+  return EXCLUDED_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+// Layer 3: AI classification cache (normalized description → result)
+const aiClassificationCache = new Map();
+
+async function classifyWithAI(description, category, pfc) {
+  const key = description.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (aiClassificationCache.has(key)) return aiClassificationCache.get(key);
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 10,
+      messages: [{
+        role: 'user',
+        content: `You are a financial underwriter for a wage advance product. Classify this bank transaction.
+
+Transaction: "${description}"
+Plaid category: "${category}"
+Plaid PFC: "${pfc}"
+
+Count as "wage_income" ONLY if it is a regular paycheck, salary, or hourly wages from an employer (e.g. ADP, Gusto, payroll, direct deposit from employer).
+
+Count as "excluded" if it is ANY of: pension/annuity, investment/dividend income, rental income, alimony/child support, trust distribution, lottery/gambling winnings, insurance/lawsuit settlement, IRS tax refund/EITC, stimulus/one-time relief, unemployment insurance, TANF/SNAP/WIC, state/local disability, workers compensation, Social Security, VA benefits, federal civil service retirement, Railroad Retirement Board benefits.
+
+Count as "uncertain" if you cannot determine from the description alone.
+
+Reply with ONLY one word: wage_income, excluded, or uncertain`,
+      }],
+    });
+
+    const raw = msg.content[0].text.trim().toLowerCase().replace(/[^a-z_]/g, '');
+    const result = ['wage_income', 'excluded', 'uncertain'].includes(raw) ? raw : 'uncertain';
+    aiClassificationCache.set(key, result);
+    return result;
+  } catch (e) {
+    console.log('[classifyWithAI] error:', e.message);
+    return 'uncertain';
+  }
+}
+
+async function classifyTransaction(description, category, pfc) {
+  if (isExcludedByPFC(pfc)) return { status: 'excluded', reason: 'pfc', ai_classified: false };
+  if (isExcludedByKeyword(description)) return { status: 'excluded', reason: 'keyword', ai_classified: false };
+  // Only call AI for credits (already filtered upstream) not obviously wage income
+  const pfcWage = pfc === 'INCOME_WAGES' || pfc === 'INCOME_OTHER_INCOME';
+  if (pfcWage) return { status: 'wage_income', reason: 'pfc', ai_classified: false };
+  const aiResult = await classifyWithAI(description, category, pfc);
+  return { status: aiResult, reason: 'ai', ai_classified: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
 app.use(
@@ -515,12 +611,17 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
       console.log('[bank_snapshot] auth error (non-fatal):', e.message);
     }
 
-    // 3. Transactions via transactionsSync
+    // 3. Transactions via transactionsSync (with personal_finance_category)
     let txs = [];
     try {
       let cursor, hasMore = true, iter = 0;
       while (hasMore && iter < 10) {
-        const syncResp = await client.transactionsSync({ access_token: application.access_token, cursor, count: 500 });
+        const syncResp = await client.transactionsSync({
+          access_token: application.access_token,
+          cursor,
+          count: 500,
+          options: { include_personal_finance_category: true },
+        });
         txs = txs.concat(syncResp.data.added || []);
         cursor = syncResp.data.next_cursor;
         hasMore = syncResp.data.has_more;
@@ -533,14 +634,31 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
 
     // Plaid: positive amount = money leaving (debit), negative = money coming in (credit)
     // Normalise: positive = credit/income, negative = debit/spend (matches UI expectations)
-    const transactions = txs.map(tx => ({
+    const rawTxs = txs.map(tx => ({
       id: tx.transaction_id,
       description: tx.merchant_name || tx.name || '',
       amount: Math.round(-tx.amount * 100),
       currency: (tx.iso_currency_code || 'usd').toLowerCase(),
       date: tx.date,
       category: (tx.category || []).join(', '),
+      pfc: tx.personal_finance_category?.primary || null,
     }));
+
+    // Classify incoming transactions through all three layers
+    const incoming = rawTxs.filter(tx => tx.amount > 0);
+    const classified = await Promise.all(
+      incoming.map(async tx => {
+        const cls = await classifyTransaction(tx.description, tx.category, tx.pfc);
+        return { ...tx, ...cls };
+      })
+    );
+
+    // Outgoing transactions pass through unclassified
+    const outgoing = rawTxs.filter(tx => tx.amount <= 0).map(tx => ({
+      ...tx, status: 'outgoing', reason: null, ai_classified: false,
+    }));
+
+    const transactions = [...classified, ...outgoing].sort((a, b) => b.date.localeCompare(a.date));
 
     response.json({ accounts, transactions, auth: null });
   } catch (err) { next(err); }

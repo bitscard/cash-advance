@@ -81,6 +81,10 @@ interface BankSnapshot {
     currency: string;
     date: string;
     category: string;
+    pfc: string | null;
+    status: "wage_income" | "excluded" | "uncertain" | "outgoing";
+    reason: "pfc" | "keyword" | "ai" | null;
+    ai_classified: boolean;
   }>;
   auth: unknown;
 }
@@ -1346,8 +1350,55 @@ const MessageList = ({ messages }: { messages: Message[] }) => (
 
 // ── Bank snapshot view ────────────────────────────────────────────────────────
 
+const STATUS_LABEL: Record<string, string> = {
+  pfc: "Plaid category",
+  keyword: "keyword match",
+  ai: "AI",
+};
+
 const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
+  const [showExcluded, setShowExcluded] = useState(false);
+
   const incoming = snapshot.transactions.filter(tx => tx.amount > 0);
+  const eligible = incoming.filter(tx => tx.status === "wage_income");
+  const uncertain = incoming.filter(tx => tx.status === "uncertain");
+  const excluded = incoming.filter(tx => tx.status === "excluded");
+
+  const renderTx = (tx: BankSnapshot["transactions"][number]) => {
+    const isExcluded = tx.status === "excluded";
+    const isUncertain = tx.status === "uncertain";
+    return (
+      <div
+        key={tx.id}
+        className={styles.incomingTransaction}
+        style={{ opacity: isExcluded ? 0.45 : 1 }}
+      >
+        <span>{tx.date}</span>
+        <strong>{tx.description}</strong>
+        <span style={{ fontSize: "1.2rem", color: "var(--muted)" }}>{tx.category}</span>
+        <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+          {isUncertain && (
+            <span style={{ fontSize: "1.1rem", background: "#fff3cd", color: "#856404", borderRadius: "4px", padding: "1px 6px" }}>
+              uncertain
+            </span>
+          )}
+          {isExcluded && (
+            <span style={{ fontSize: "1.1rem", background: "#fde", color: "#a00", borderRadius: "4px", padding: "1px 6px" }}>
+              excluded · {STATUS_LABEL[tx.reason!] ?? tx.reason}
+            </span>
+          )}
+          {tx.ai_classified && (
+            <span style={{ fontSize: "1.1rem", background: "#e8f0fe", color: "#1a56db", borderRadius: "4px", padding: "1px 6px" }}>
+              AI
+            </span>
+          )}
+          <span className={isExcluded ? styles.outgoingAmount : styles.incomingAmount}>
+            +{formatMoney(tx.amount / 100)}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className={styles.snapshot}>
@@ -1364,20 +1415,34 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
           )}
         </div>
       ))}
-      <h4>Incoming transactions</h4>
-      {incoming.length === 0 ? (
-        <p style={{ color: "var(--muted)", fontSize: "1.35rem" }}>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2rem" }}>
+        <h4 style={{ margin: 0 }}>
+          Eligible income ({eligible.length + uncertain.length} of {incoming.length})
+        </h4>
+        <button
+          style={{ fontSize: "1.2rem", padding: "4px 10px" }}
+          onClick={() => setShowExcluded(s => !s)}
+        >
+          {showExcluded ? "Hide excluded" : `Show excluded (${excluded.length})`}
+        </button>
+      </div>
+
+      {incoming.length === 0 && (
+        <p style={{ color: "var(--muted)", fontSize: "1.35rem", marginTop: "1rem" }}>
           No incoming transactions yet — Plaid may still be syncing. Refresh in a moment.
         </p>
-      ) : (
-        incoming.map((tx) => (
-          <div key={tx.id} className={styles.incomingTransaction}>
-            <span>{tx.date}</span>
-            <strong>{tx.description}</strong>
-            {tx.category && <span style={{ fontSize: "1.2rem", color: "var(--muted)" }}>{tx.category}</span>}
-            <span className={styles.incomingAmount}>+{formatMoney(tx.amount / 100)}</span>
-          </div>
-        ))
+      )}
+
+      {[...eligible, ...uncertain].map(renderTx)}
+
+      {showExcluded && excluded.length > 0 && (
+        <>
+          <p style={{ fontSize: "1.2rem", color: "var(--muted)", marginTop: "1.2rem", marginBottom: "0.4rem" }}>
+            — excluded transactions —
+          </p>
+          {excluded.map(renderTx)}
+        </>
       )}
     </div>
   );
