@@ -1347,13 +1347,7 @@ const MessageList = ({ messages }: { messages: Message[] }) => (
 // ── Bank snapshot view ────────────────────────────────────────────────────────
 
 const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
-  const [nameQuery, setNameQuery] = useState("");
-  const [amountQuery, setAmountQuery] = useState("");
-
-  const allTx = snapshot.transactions;
-  const filtered = allTx.filter(
-    tx => fuzzyMatch(nameQuery, tx.description) && amountMatch(amountQuery, Math.abs(tx.amount) / 100)
-  );
+  const incoming = snapshot.transactions.filter(tx => tx.amount > 0);
 
   return (
     <div className={styles.snapshot}>
@@ -1362,9 +1356,6 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
         <div key={account.id} className={styles.account}>
           <strong>{account.display_name}</strong>
           <span>{account.institution_name} · {account.category} · ···{account.last4 || "—"}</span>
-          {account.routing_number && (
-            <span style={{ fontSize: "1.25rem", color: "var(--muted)" }}>Routing: {account.routing_number}</span>
-          )}
           {account.balance && (
             <>
               <span>Available {formatMoney((account.balance.available ?? 0) / 100)}</span>
@@ -1373,43 +1364,17 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
           )}
         </div>
       ))}
-      <h4>All transactions</h4>
-      {allTx.length === 0 && (
+      <h4>Incoming transactions</h4>
+      {incoming.length === 0 ? (
         <p style={{ color: "var(--muted)", fontSize: "1.35rem" }}>
-          No transactions yet — Plaid may still be syncing. Refresh in a moment.
+          No incoming transactions yet — Plaid may still be syncing. Refresh in a moment.
         </p>
-      )}
-      <div className={styles.searchRow}>
-        <label>
-          Search by description
-          <input
-            placeholder="e.g. employer name…"
-            value={nameQuery}
-            onChange={(e) => setNameQuery(e.target.value)}
-          />
-        </label>
-        <label>
-          Filter by amount (±25%)
-          <input
-            type="number"
-            min="0"
-            placeholder="e.g. 2000"
-            value={amountQuery}
-            onChange={(e) => setAmountQuery(e.target.value)}
-          />
-        </label>
-      </div>
-      <p className={styles.muted}>{filtered.length} of {allTx.length} transaction{allTx.length !== 1 ? "s" : ""}</p>
-      {filtered.length === 0 && allTx.length > 0 ? (
-        <p className={styles.muted}>No matching transactions.</p>
       ) : (
-        filtered.map((tx) => (
+        incoming.map((tx) => (
           <div key={tx.id} className={styles.incomingTransaction}>
             <span>{tx.date}</span>
             <strong>{tx.description}</strong>
-            <span className={tx.amount > 0 ? styles.incomingAmount : styles.outgoingAmount}>
-              {tx.amount > 0 ? "+" : ""}{formatMoney(tx.amount / 100)}
-            </span>
+            <span className={styles.incomingAmount}>+{formatMoney(tx.amount / 100)}</span>
           </div>
         ))
       )}
