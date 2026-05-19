@@ -63,6 +63,7 @@ interface BankSnapshot {
     display_name: string;
     institution_name: string;
     last4: string | null;
+    routing_number: string | null;
     category: string;
     balance: {
       available: number | null; // cents
@@ -816,7 +817,8 @@ const CustomerApp = () => {
 
   // ── Authenticated application view ────────────────────────────────────────
   const needsBank = !application.plaid_connected;
-  const needsCard = !application.stripe_card_saved &&
+  // Bank connection sets up ACH direct debit — no card required as primary
+  const needsCard = !application.stripe_card_saved && !application.plaid_connected &&
     (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled");
 
   return (
@@ -894,7 +896,7 @@ const CustomerApp = () => {
 
             {needsBank && (
               <div className={styles.appCardAction}>
-                <p><strong>Next step:</strong> connect your bank account so a reviewer can verify your income and approve your advance. Your bank account will also be used for automatic repayment via direct debit.</p>
+                <p><strong>Next step:</strong> connect your bank account. This verifies your income <em>and</em> sets up direct debit for automatic repayment — no card needed.</p>
                 <button disabled={isBusy} onClick={connectBank}>
                   {isBusy ? "Connecting…" : "Connect bank account →"}
                 </button>
@@ -903,7 +905,7 @@ const CustomerApp = () => {
 
             {needsCard && (
               <div className={styles.appCardAction}>
-                <p><strong>You're approved!</strong> Add a payment method so we can collect your repayment automatically on the due date.</p>
+                <p><strong>You're approved!</strong> Set up your repayment method via your loan dashboard.</p>
                 <button onClick={() => window.location.href = "/loan"}>
                   Set up repayment →
                 </button>
@@ -940,6 +942,7 @@ const AdminApp = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [snapshot, setSnapshot] = useState<BankSnapshot | null>(null);
+  const [pmDetails, setPmDetails] = useState<{ bank_name: string; routing_number: string; last4: string; account_type: string } | null>(null);
   const [repaymentDate, setRepaymentDate] = useState(thirtyDaysFromNow);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -987,6 +990,7 @@ const AdminApp = () => {
     if (!selectedId) return;
     loadMessages(selectedId);
     setSnapshot(null);
+    setPmDetails(null);
   }, [selectedId, loadMessages]);
 
   const sendAdminMessage = async (event: React.FormEvent) => {
@@ -1013,6 +1017,22 @@ const AdminApp = () => {
     await loadApplications();
     await loadMessages(selected.id);
     setIsBusy(false);
+  };
+
+  const loadPaymentMethodDetails = async () => {
+    if (!selected) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/admin/applications/${selected.id}/payment-method-details`), { headers: adminHeaders });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Unable to load bank details");
+      setPmDetails(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to load bank details");
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const loadBankSnapshot = async () => {
@@ -1127,11 +1147,13 @@ const AdminApp = () => {
                     <dd>{selected.payday}</dd>
                     <dt>SSN last 4</dt>
                     <dd>{selected.customer.ssn_last4 || "—"}</dd>
-                    <dt>Plaid</dt>
-                    <dd>{selected.plaid_connected ? "Connected" : "Waiting"}</dd>
+                    <dt>Bank / direct debit</dt>
+                    <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
+                    <dt>Backup card</dt>
+                    <dd>{selected.stripe_card_saved ? "✓ On file" : "None"}</dd>
                   </dl>
                   <div className={styles.actions}>
-                    <button disabled={isBusy} onClick={loadBankSnapshot}>Load bank details</button>
+                    <button disabled={isBusy} onClick={loadBankSnapshot}>Load transactions</button>
                     <button
                       disabled={isBusy}
                       onClick={() =>
@@ -1154,10 +1176,24 @@ const AdminApp = () => {
                           <strong>Method:</strong> {selected.payout_methods}
                         </p>
                       )}
-                      {selected.payout_contact && (
-                        <p style={{ margin: 0, fontSize: "1.4rem" }}>
-                          <strong>Contact:</strong> {selected.payout_contact}
-                        </p>
+                      {selected.payout_methods?.includes("Bank transfer") ? (
+                        pmDetails ? (
+                          <dl style={{ margin: "0.8rem 0 0", fontSize: "1.35rem" }}>
+                            <dt>Bank</dt><dd>{pmDetails.bank_name}</dd>
+                            <dt>Routing</dt><dd>{pmDetails.routing_number}</dd>
+                            <dt>Account</dt><dd>···{pmDetails.last4} ({pmDetails.account_type})</dd>
+                          </dl>
+                        ) : (
+                          <button disabled={isBusy} onClick={loadPaymentMethodDetails} style={{ marginTop: "0.6rem" }}>
+                            View routing details
+                          </button>
+                        )
+                      ) : (
+                        selected.payout_contact && (
+                          <p style={{ margin: 0, fontSize: "1.4rem" }}>
+                            <strong>Contact:</strong> {selected.payout_contact}
+                          </p>
+                        )
                       )}
                     </div>
                   )}
@@ -1172,13 +1208,12 @@ const AdminApp = () => {
                       />
                     </label>
                     <button disabled={isBusy} onClick={scheduleRepayment}>Record repayment schedule</button>
-                    {selected.stripe_card_saved && (
+                    {(selected.plaid_connected || selected.stripe_card_saved) ? (
                       <button disabled={isBusy} onClick={chargeCard} style={{ marginTop: "0.6rem" }}>
-                        {isBusy ? "Charging…" : "Charge card now"}
+                        {isBusy ? "Processing…" : "Collect repayment now"}
                       </button>
-                    )}
-                    {!selected.stripe_card_saved && (
-                      <p className={styles.muted} style={{ marginTop: "0.6rem" }}>No card on file — customer must save one via their loan dashboard.</p>
+                    ) : (
+                      <p className={styles.muted} style={{ marginTop: "0.6rem" }}>No payment method on file yet.</p>
                     )}
                   </div>
                   {error && <p className={styles.error}>{error}</p>}
@@ -1251,6 +1286,9 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
         <div key={account.id} className={styles.account}>
           <strong>{account.display_name}</strong>
           <span>{account.institution_name} · {account.category} · ···{account.last4 || "—"}</span>
+          {account.routing_number && (
+            <span style={{ fontSize: "1.25rem", color: "var(--muted)" }}>Routing: {account.routing_number}</span>
+          )}
           {account.balance && (
             <>
               <span>Available {formatMoney((account.balance.available ?? 0) / 100)}</span>
@@ -1353,14 +1391,25 @@ const LoanApp = () => {
     if (application?.payout_methods && application?.payout_contact) setPayoutSaved(true);
   }, [application?.payout_methods, application?.payout_contact]);
 
+  const isBankTransferPayout = payoutMethods.includes("Bank transfer");
+
   const togglePayoutMethod = (method: string) => {
-    setPayoutMethods(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]);
+    if (method === "Bank transfer") {
+      // Bank transfer is exclusive — deselects PayPal/CashApp/Zelle
+      setPayoutMethods(prev => prev.includes("Bank transfer") ? [] : ["Bank transfer"]);
+    } else {
+      // Selecting PayPal/CashApp/Zelle deselects bank transfer
+      setPayoutMethods(prev => {
+        const withoutBank = prev.filter(m => m !== "Bank transfer");
+        return withoutBank.includes(method) ? withoutBank.filter(m => m !== method) : [...withoutBank, method];
+      });
+    }
     setPayoutSaved(false);
   };
 
   const submitPayoutPreference = async () => {
     if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
-    if (!payoutContact.trim()) { setPayoutError("Please enter your username, email, or phone number"); return; }
+    if (!isBankTransferPayout && !payoutContact.trim()) { setPayoutError("Please enter your username, email, or phone number"); return; }
     setPayoutBusy(true);
     setPayoutError(null);
     try {
@@ -1504,7 +1553,8 @@ const LoanApp = () => {
               <h3>Repayment</h3>
               {application.status === "repaid" ? (
                 <p className={styles.paidNote}>Repayment collected — thank you!</p>
-              ) : application.stripe_card_saved ? (
+              ) : application.plaid_connected ? (
+                // Bank / ACH connected — direct debit is primary
                 <>
                   {rep && (
                     <dl>
@@ -1512,14 +1562,19 @@ const LoanApp = () => {
                       <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
                     </dl>
                   )}
-                  <p className={styles.paidNote}>Bank account saved — repayment will be collected via direct debit on the due date.</p>
+                  <p className={styles.paidNote}>✓ Direct debit set up — repayment will be automatically collected from your bank account on the due date.</p>
                   {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && (
                     <details style={{ marginTop: "1.6rem" }}>
                       <summary style={{ fontSize: "1.35rem", color: "var(--muted)", cursor: "pointer", fontWeight: 600 }}>
-                        Prefer to pay by card instead?
+                        Add a backup card (optional)
                       </summary>
                       <div style={{ marginTop: "1.2rem" }}>
-                        {!stripeKey ? (
+                        <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1rem" }}>
+                          We'll only charge this if the direct debit fails.
+                        </p>
+                        {application.stripe_card_saved ? (
+                          <p className={styles.paidNote}>✓ Backup card on file.</p>
+                        ) : !stripeKey ? (
                           <p className={styles.error}>Card payments are not configured yet.</p>
                         ) : (
                           <Elements stripe={stripePromise}>
@@ -1534,19 +1589,38 @@ const LoanApp = () => {
                     </details>
                   )}
                 </>
+              ) : application.stripe_card_saved ? (
+                // Card-only (old flow)
+                <>
+                  {rep && (
+                    <dl>
+                      <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
+                      <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
+                    </dl>
+                  )}
+                  <p className={styles.paidNote}>Card saved — repayment will be collected automatically on the due date.</p>
+                </>
               ) : (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
                 <>
-                  <p><strong>Set up repayment.</strong> Save a card and we'll automatically collect your repayment on the due date.</p>
-                  {!stripeKey ? (
-                    <p className={styles.error}>Card payments are not configured yet. Please contact support.</p>
-                  ) : (
-                    <Elements stripe={stripePromise}>
-                      <SaveCardForm
-                        applicationId={application.id}
-                        authToken={token}
-                        onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
-                      />
-                    </Elements>
+                  <p><strong>Set up repayment.</strong> Connect your bank for direct debit (recommended) — or save a card as a fallback.</p>
+                  <button onClick={() => window.location.href = "/"} style={{ marginBottom: "1.2rem" }}>
+                    Connect bank for direct debit →
+                  </button>
+                  {stripeKey && (
+                    <details>
+                      <summary style={{ fontSize: "1.35rem", color: "var(--muted)", cursor: "pointer", fontWeight: 600 }}>
+                        Or save a card instead
+                      </summary>
+                      <div style={{ marginTop: "1.2rem" }}>
+                        <Elements stripe={stripePromise}>
+                          <SaveCardForm
+                            applicationId={application.id}
+                            authToken={token}
+                            onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
+                          />
+                        </Elements>
+                      </div>
+                    </details>
                   )}
                 </>
               ) : (
@@ -1559,7 +1633,7 @@ const LoanApp = () => {
                   <p style={{ fontWeight: 700, marginBottom: "0.8rem", color: "var(--ink)" }}>How should we send you the money?</p>
                   <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1.2rem" }}>Select one or more and enter your contact info.</p>
                   <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap" }}>
-                    {["PayPal", "CashApp", "Zelle"].map(method => (
+                    {["PayPal", "CashApp", "Zelle", "Bank transfer"].map(method => (
                       <button
                         key={method}
                         type="button"
@@ -1575,20 +1649,31 @@ const LoanApp = () => {
                           cursor: "pointer",
                         }}
                       >
-                        {method}
+                        {method === "Bank transfer" ? "🏦 Bank transfer" : method}
                       </button>
                     ))}
                   </div>
-                  <label style={{ display: "block", marginTop: "1.2rem" }}>
-                    <span style={{ fontSize: "1.35rem", fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: "0.4rem" }}>
-                      {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
-                    </span>
-                    <input
-                      value={payoutContact}
-                      placeholder="e.g. @username or email@example.com"
-                      onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
-                    />
-                  </label>
+                  {isBankTransferPayout ? (
+                    <p style={{ marginTop: "1.2rem", fontSize: "1.35rem", color: "var(--brand)", fontWeight: 600 }}>
+                      ✓ We'll send funds directly to your connected bank account — no extra info needed.
+                      {!application.plaid_connected && (
+                        <span style={{ color: "#c0392b", display: "block", marginTop: "0.4rem" }}>
+                          You'll need to connect your bank first from this page.
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <label style={{ display: "block", marginTop: "1.2rem" }}>
+                      <span style={{ fontSize: "1.35rem", fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: "0.4rem" }}>
+                        {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
+                      </span>
+                      <input
+                        value={payoutContact}
+                        placeholder="e.g. @username or email@example.com"
+                        onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
+                      />
+                    </label>
+                  )}
                   {payoutError && <p className={styles.error}>{payoutError}</p>}
                   {payoutSaved && <p className={styles.paidNote}>✓ Payout preference saved!</p>}
                   <button disabled={payoutBusy} onClick={submitPayoutPreference} style={{ marginTop: "1.2rem" }}>

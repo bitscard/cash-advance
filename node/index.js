@@ -420,10 +420,18 @@ app.patch('/api/advance/applications/:id/payout-preference', async function (req
   }
   try {
     const { methods, contact } = request.body;
-    if (!methods || !contact || !contact.trim()) {
-      return response.status(400).json({ error: { error_message: 'methods and contact are required' } });
+    if (!methods) {
+      return response.status(400).json({ error: { error_message: 'methods is required' } });
     }
-    const updated = await db.savePayoutPreference(request.params.id, methods, contact.trim());
+    const isBankTransfer = methods === 'Bank transfer' || methods.includes('Bank transfer');
+    if (!isBankTransfer && (!contact || !contact.trim())) {
+      return response.status(400).json({ error: { error_message: 'contact is required for this payout method' } });
+    }
+    const updated = await db.savePayoutPreference(
+      request.params.id,
+      methods,
+      isBankTransfer ? 'connected_bank_account' : contact.trim(),
+    );
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
@@ -506,11 +514,21 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
 
     const bal = balanceResult;
 
+    // Get routing number from the saved PM (not available on FC account object)
+    let routingNumber = null;
+    if (application.stripe_payment_method_id) {
+      try {
+        const pm = await stripe.paymentMethods.retrieve(application.stripe_payment_method_id);
+        if (pm.type === 'us_bank_account') routingNumber = pm.us_bank_account.routing_number || null;
+      } catch (e) { /* non-fatal */ }
+    }
+
     const accounts = acct ? [{
       id: acct.id,
       display_name: acct.display_name || 'Bank Account',
       institution_name: acct.institution_name,
       last4: acct.last4 || null,
+      routing_number: routingNumber,
       category: acct.category,
       balance: bal ? {
         available: bal.cash?.available?.usd ?? null,
@@ -532,6 +550,28 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
     const needs_reconnect = !hasTransactionPermission || !subscribeOk;
 
     response.json({ accounts, transactions, auth: null, needs_reconnect });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/advance/admin/applications/:id/payment-method-details', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!row.stripe_payment_method_id) {
+      return response.status(400).json({ error: { error_message: 'No bank account connected for this application' } });
+    }
+    const pm = await stripe.paymentMethods.retrieve(row.stripe_payment_method_id);
+    if (pm.type !== 'us_bank_account') {
+      return response.status(400).json({ error: { error_message: 'Payment method on file is not a bank account' } });
+    }
+    response.json({
+      bank_name: pm.us_bank_account.bank_name || 'Unknown bank',
+      routing_number: pm.us_bank_account.routing_number,
+      last4: pm.us_bank_account.last4,
+      account_type: pm.us_bank_account.account_type,
+      account_holder_type: pm.us_bank_account.account_holder_type,
+    });
   } catch (err) { next(err); }
 });
 
@@ -774,22 +814,46 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    if (!row.stripe_customer_id || !row.stripe_payment_method_id) {
-      return response.status(400).json({ error: { error_message: 'No card on file for this application' } });
+
+    // Bank ACH is primary; card is fallback
+    const bankPmId = row.stripe_payment_method_id;
+    const cardPmId = row.stripe_card_pm_id;
+    const primaryPmId = bankPmId || cardPmId;
+
+    if (!row.stripe_customer_id || !primaryPmId) {
+      return response.status(400).json({ error: { error_message: 'No payment method on file for this application' } });
     }
 
     const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: 'usd',
-      customer: row.stripe_customer_id,
-      payment_method: row.stripe_payment_method_id,
-      off_session: true,
-      confirm: true,
-      description: `Cash advance repayment — ${row.name}`,
-      metadata: { application_id: row.id },
-    });
+    let paymentIntent = null;
+
+    try {
+      paymentIntent = await stripe.paymentIntents.create({
+        amount, currency: 'usd',
+        customer: row.stripe_customer_id,
+        payment_method: primaryPmId,
+        off_session: true, confirm: true,
+        description: `Cash advance repayment — ${row.name}`,
+        metadata: { application_id: row.id },
+      });
+    } catch (primaryErr) {
+      // If bank failed and a card backup exists, try the card
+      if ((primaryErr.type === 'StripeCardError' || primaryErr.type === 'StripeInvalidRequestError')
+          && cardPmId && cardPmId !== primaryPmId) {
+        await db.addMessage(row.id, 'system', `Direct debit failed: ${primaryErr.message}. Retrying with backup card.`);
+        paymentIntent = await stripe.paymentIntents.create({
+          amount, currency: 'usd',
+          customer: row.stripe_customer_id,
+          payment_method: cardPmId,
+          off_session: true, confirm: true,
+          description: `Cash advance repayment (card backup) — ${row.name}`,
+          metadata: { application_id: row.id },
+        });
+      } else {
+        throw primaryErr;
+      }
+    }
 
     await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
 
@@ -821,17 +885,35 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
 
     for (const row of due) {
       const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
+      const bankPmId = row.stripe_payment_method_id;
+      const cardPmId = row.stripe_card_pm_id;
+      const primaryPmId = bankPmId || cardPmId;
+      if (!primaryPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount,
-          currency: 'usd',
-          customer: row.stripe_customer_id,
-          payment_method: row.stripe_payment_method_id,
-          off_session: true,
-          confirm: true,
-          description: `Cash advance repayment — ${row.name}`,
-          metadata: { application_id: row.id },
-        });
+        let paymentIntent = null;
+        try {
+          paymentIntent = await stripe.paymentIntents.create({
+            amount, currency: 'usd',
+            customer: row.stripe_customer_id,
+            payment_method: primaryPmId,
+            off_session: true, confirm: true,
+            description: `Cash advance repayment — ${row.name}`,
+            metadata: { application_id: row.id },
+          });
+        } catch (primaryErr) {
+          if ((primaryErr.type === 'StripeCardError' || primaryErr.type === 'StripeInvalidRequestError')
+              && cardPmId && cardPmId !== primaryPmId) {
+            await db.addMessage(row.id, 'system', `Direct debit failed: ${primaryErr.message}. Retrying with backup card.`);
+            paymentIntent = await stripe.paymentIntents.create({
+              amount, currency: 'usd',
+              customer: row.stripe_customer_id,
+              payment_method: cardPmId,
+              off_session: true, confirm: true,
+              description: `Cash advance repayment (card backup) — ${row.name}`,
+              metadata: { application_id: row.id },
+            });
+          } else { throw primaryErr; }
+        }
 
         await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
 

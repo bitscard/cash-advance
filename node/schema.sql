@@ -50,3 +50,6 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAU
 
 -- Stripe Financial Connections (replaces Plaid)
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_account_id TEXT;
+
+-- Separate card PM from bank PM so they don't overwrite each other
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_card_pm_id TEXT;

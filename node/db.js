@@ -18,6 +18,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS instant_fee_paid BOOLEAN DEFAULT FALSE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn_last4 TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_account_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_card_pm_id TEXT;
 `).catch(() => {});
 
 const fmtDate = (v) => {
@@ -39,7 +40,8 @@ const publicApp = (row) => ({
   payday: fmtDate(row.payday),
   status: row.status,
   plaid_connected: Boolean(row.stripe_fc_account_id || row.access_token),
-  stripe_card_saved: Boolean(row.stripe_payment_method_id),
+  // stripe_card_saved: new flow uses stripe_card_pm_id; old card-only users have no fc_account_id
+  stripe_card_saved: Boolean(row.stripe_card_pm_id || (row.stripe_payment_method_id && !row.stripe_fc_account_id)),
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -200,10 +202,10 @@ async function saveStripeCustomer(id, stripe_customer_id) {
   return rows[0] || null;
 }
 
-async function saveStripePaymentMethod(id, stripe_payment_method_id) {
+async function saveStripePaymentMethod(id, stripe_card_pm_id) {
   const { rows } = await pool.query(
-    'UPDATE applications SET stripe_payment_method_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
-    [stripe_payment_method_id, id],
+    'UPDATE applications SET stripe_card_pm_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+    [stripe_card_pm_id, id],
   );
   return rows[0] || null;
 }
