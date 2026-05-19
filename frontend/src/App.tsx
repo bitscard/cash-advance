@@ -583,7 +583,7 @@ const CustomerApp = () => {
                 </div>
                 <h1 className={styles.heroHeading}>Get cash<br />before payday.</h1>
                 <p className={styles.heroSub}>
-                  Connect your bank, get a decision today, and pay it back within 30 days. That's it.
+                  Connect your bank, get a decision today, and pay it back on your next payday. That's it.
                 </p>
                 <div className={styles.heroActions}>
                   <button className={styles.btnWhite} onClick={() => setView("signup")}>
@@ -638,8 +638,8 @@ const CustomerApp = () => {
               <span className={styles.trustStatLabel}>Hidden fees,<br />ever</span>
             </div>
             <div className={styles.trustStatItem}>
-              <span className={styles.trustStatNum}>30</span>
-              <span className={styles.trustStatLabel}>Days to repay,<br />no pressure</span>
+              <span className={styles.trustStatNum}>0%</span>
+              <span className={styles.trustStatLabel}>Interest — repay<br />on your payday</span>
             </div>
           </div>
 
@@ -912,6 +912,9 @@ const CustomerApp = () => {
               Approved for a{" "}
               <span style={{ color: "var(--brand)" }}>${application.requested_amount} cash advance</span>
             </h2>
+            <p style={{ color: "var(--muted)", marginBottom: "0.8rem" }}>
+              Repayment due on your payday: <strong style={{ color: "var(--ink)" }}>{application.payday}</strong>
+            </p>
             <p style={{ color: "var(--muted)", marginBottom: "2.4rem" }}>
               How fast do you need your money?
             </p>
