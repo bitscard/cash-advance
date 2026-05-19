@@ -1374,6 +1374,7 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
           <div key={tx.id} className={styles.incomingTransaction}>
             <span>{tx.date}</span>
             <strong>{tx.description}</strong>
+            {tx.category && <span style={{ fontSize: "1.2rem", color: "var(--muted)" }}>{tx.category}</span>}
             <span className={styles.incomingAmount}>+{formatMoney(tx.amount / 100)}</span>
           </div>
         ))
