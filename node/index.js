@@ -809,6 +809,47 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
   } catch (err) { next(err); }
 });
 
+// Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
+// Fails open (ok: true) when balance is unavailable so card-only users are unaffected.
+async function checkOverdraft(fcAccountId, amountCents) {
+  if (!fcAccountId) return { ok: true };
+
+  // Refresh to get the latest balance from the institution
+  try {
+    await stripe.financialConnections.accounts.refresh(fcAccountId, { features: ['balance'] });
+  } catch (e) {
+    console.log('[overdraft_check] refresh error (non-fatal):', e.message);
+  }
+
+  let availableCents = null;
+  try {
+    const bal = await stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`);
+    availableCents = bal.cash?.available?.usd ?? null;
+    console.log(`[overdraft_check] available=${availableCents} cents | charge=${amountCents} cents`);
+  } catch (e) {
+    console.log('[overdraft_check] balance unavailable:', e.message, '— proceeding');
+    return { ok: true };
+  }
+
+  if (availableCents === null) {
+    console.log('[overdraft_check] balance null — proceeding');
+    return { ok: true };
+  }
+
+  if (availableCents < amountCents) {
+    const avail = (availableCents / 100).toFixed(2);
+    const needed = (amountCents / 100).toFixed(2);
+    console.log(`[overdraft_check] BLOCKED — $${avail} available, $${needed} needed`);
+    return {
+      ok: false,
+      reason: `Payment skipped to avoid overdraft — account has $${avail} available but repayment is $${needed}. We'll retry when funds are available.`,
+    };
+  }
+
+  console.log('[overdraft_check] balance sufficient — proceeding');
+  return { ok: true };
+}
+
 app.post('/api/advance/admin/applications/:id/charge', async function (request, response, next) {
   if (!requireAdmin(request, response)) return;
   try {
@@ -825,6 +866,13 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     }
 
     const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
+
+    // Overdraft check — uses FC balance if available
+    const overdraft = await checkOverdraft(row.stripe_fc_account_id, amount);
+    if (!overdraft.ok) {
+      await db.addMessage(row.id, 'system', overdraft.reason);
+      return response.status(402).json({ error: { error_message: overdraft.reason } });
+    }
 
     let paymentIntent = null;
 
@@ -890,6 +938,14 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
       const primaryPmId = bankPmId || cardPmId;
       if (!primaryPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
+        // Overdraft check before charging
+        const overdraft = await checkOverdraft(row.stripe_fc_account_id, amount);
+        if (!overdraft.ok) {
+          await db.addMessage(row.id, 'system', overdraft.reason);
+          results.push({ id: row.id, name: row.name, status: 'skipped_overdraft', reason: overdraft.reason });
+          continue;
+        }
+
         let paymentIntent = null;
         try {
           paymentIntent = await stripe.paymentIntents.create({
