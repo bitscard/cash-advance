@@ -447,7 +447,7 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
 
     const [accountResult, balanceResult, txResult] = await Promise.allSettled([
       stripe.financialConnections.accounts.retrieve(fcAccountId),
-      stripe.financialConnections.accounts.retrieveBalance(fcAccountId),
+      stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`),
       stripe.financialConnections.transactions.list({ account: fcAccountId, limit: 200 }),
     ]);
 
