@@ -14,18 +14,20 @@ const TermsPage = () => (
 
     <Section title="A. What Advance Is (and Is Not)">
       <p>Advance provides a <strong>wage access service — not a loan</strong>. We allow eligible members to access a portion of wages they have already earned during the current pay period, based on their verified income and deposit history. No interest is charged. We do not use your credit score and we never pull your credit. We do not report your account or repayment history to any credit bureau.</p>
-      <p style={{ marginTop: "1.2rem" }}>Advances are limited to a conservative fraction of wages you have demonstrably earned in the current pay period based on your historical deposit pattern. We do not advance against future expected income. Current advances are up to <strong>$25</strong>.</p>
+      <p style={{ marginTop: "1.2rem" }}>Advances are limited to a conservative fraction of wages you have demonstrably earned in the current pay period based on your historical deposit pattern. We do not advance against future expected income. Maximum advance amounts vary by membership tier and are displayed in-app at the time of your request.</p>
       <p style={{ marginTop: "1.2rem" }}>You may not hold more than one outstanding advance at a time. You may not roll over or refinance an unpaid advance.</p>
     </Section>
 
     <Section title="B. Delivery Options">
-      <p><strong>Standard delivery</strong> (1–3 business days): <strong>Free.</strong> This is always available and never requires a fee.</p>
-      <p style={{ marginTop: "0.8rem" }}><strong>Instant delivery</strong> (within minutes): <strong>$1.00 convenience fee.</strong> This fee is for the speed of delivery only, not for the use of the advanced funds.</p>
-      <p style={{ marginTop: "0.8rem" }}>We do not solicit tips, donations, or optional payments of any kind beyond the instant delivery fee.</p>
+      <p><strong>Standard delivery</strong> (1–3 business days): Free on all membership tiers. This option is always available and never requires a fee.</p>
+      <p style={{ marginTop: "0.8rem" }}><strong>Instant delivery</strong> (within minutes): Available on eligible membership tiers and may carry a convenience fee. The current fee, if any, is displayed in-app at the time of selection. This fee is for the speed of delivery only, not for the use of the advanced funds.</p>
+      <p style={{ marginTop: "0.8rem" }}>We do not solicit tips, donations, or optional payments of any kind beyond the applicable instant delivery fee.</p>
     </Section>
 
-    <Section title="C. Membership and Fees">
-      <p>Access requires an active Advance membership at <strong>$1.99/month</strong>, billed monthly and auto-renewed. You may cancel at any time. If you cancel within <strong>7 days</strong> of your initial sign-up and no advance has been disbursed, you are entitled to a full refund of your first membership fee.</p>
+    <Section title="C. Membership Tiers and Fees">
+      <p>Access to Advance services requires an active membership. We offer three membership tiers — <strong>Free</strong>, <strong>Pro</strong>, and <strong>Premium</strong> — each providing different advance limits, delivery options, and features. Current pricing, tier benefits, and feature comparisons for all tiers are available at <a href="https://www.getbits.app/pricing" style={{ color: "var(--brand)" }}>www.getbits.app/pricing</a>.</p>
+      <p style={{ marginTop: "0.8rem" }}>Paid memberships are billed monthly and auto-renewed at the then-current rate. You may upgrade, downgrade, or cancel at any time. If you cancel a paid membership within <strong>7 days</strong> of your initial sign-up and no advance has been disbursed under that tier, you are entitled to a full refund of your first membership fee.</p>
+      <p style={{ marginTop: "0.8rem" }}>We reserve the right to adjust pricing and tier features at any time. We will notify you by email at least <strong>30 days</strong> before any increase to your current membership fee takes effect. Continued use after the effective date constitutes acceptance of the new pricing.</p>
       <p style={{ marginTop: "0.8rem" }}>To cancel: email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with your name and account email.</p>
       <p style={{ marginTop: "0.8rem" }}>If we charge your payment method in error, contact us within 60 days and we will issue a full refund within 5 business days.</p>
     </Section>
@@ -60,8 +62,9 @@ const TermsPage = () => (
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "0.8rem", fontSize: "1.4rem" }}>
         <tbody>
           {[
-            ["Standard delivery", "$0.00"],
-            ["Instant delivery (if selected)", "$1.00"],
+            ["Standard delivery", "Free on all tiers"],
+            ["Instant delivery (if selected)", "Displayed in-app at time of selection; varies by tier"],
+            ["Membership fee", "Varies by tier — see getbits.app/pricing"],
             ["Interest", "$0.00"],
             ["Tips", "$0.00 (we do not accept tips)"],
             ["Amount due at settlement", "Advance amount only"],
@@ -73,7 +76,8 @@ const TermsPage = () => (
           ))}
         </tbody>
       </table>
-      <p style={{ marginTop: "1.2rem" }}>We will not report missed settlements to credit bureaus. We will not pursue collections. We will reimburse overdraft fees caused by our debit.</p>
+      <p style={{ marginTop: "1.2rem" }}>Current pricing for all tiers is published at <a href="https://www.getbits.app/pricing" style={{ color: "var(--brand)" }}>www.getbits.app/pricing</a> and is always disclosed in-app before any fee is charged.</p>
+      <p style={{ marginTop: "0.8rem" }}>We will not report missed settlements to credit bureaus. We will not pursue collections. We will reimburse overdraft fees caused by our debit.</p>
     </Section>
 
     <Section title="H. Weekly $300 Raffle">
@@ -106,7 +110,7 @@ const TermsPage = () => (
     </Section>
 
     <Section title="N. Limitation of Liability">
-      <p>THE SERVICES ARE PROVIDED "AS IS." ADVANCE'S TOTAL LIABILITY TO YOU SHALL NOT EXCEED THE TOTAL MEMBERSHIP FEES YOU PAID IN THE 12 MONTHS PRECEDING THE CLAIM. THESE LIMITATIONS DO NOT APPLY TO GROSS NEGLIGENCE, FRAUD, OR INTENTIONAL MISCONDUCT.</p>
+      <p>THE SERVICES ARE PROVIDED "AS IS." ADVANCE'S TOTAL LIABILITY TO YOU SHALL NOT EXCEED THE TOTAL FEES YOU PAID FOR THE SERVICE IN THE 12 MONTHS PRECEDING THE CLAIM. THESE LIMITATIONS DO NOT APPLY TO GROSS NEGLIGENCE, FRAUD, OR INTENTIONAL MISCONDUCT.</p>
     </Section>
 
     <Section title="O. Governing Law">
