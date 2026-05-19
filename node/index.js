@@ -1810,6 +1810,10 @@ app.post('/api/link_exit_error', function (request, response, next) {
   response.json({ status: 'logged' });
 });
 
+app.use('/api', function (request, response, next) {
+  response.status(404).json({ error: { error_message: `Route not found: ${request.method} ${request.originalUrl}` } });
+});
+
 app.use('/api', function (error, request, response, next) {
   if (error.response?.data) {
     prettyPrintResponse(error.response);
