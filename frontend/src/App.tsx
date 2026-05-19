@@ -1021,6 +1021,7 @@ const AdminApp = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [snapshot, setSnapshot] = useState<BankSnapshot | null>(null);
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
   const [pmDetails, setPmDetails] = useState<{ bank_name: string; routing_number: string; last4: string; account_type: string } | null>(null);
   const [repaymentDate, setRepaymentDate] = useState(thirtyDaysFromNow);
   const [isBusy, setIsBusy] = useState(false);
@@ -1070,7 +1071,8 @@ const AdminApp = () => {
     loadMessages(selectedId);
     setSnapshot(null);
     setPmDetails(null);
-  }, [selectedId, loadMessages]);
+    loadBankSnapshot(selectedId);
+  }, [selectedId, loadMessages, loadBankSnapshot]);
 
   const sendAdminMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1114,12 +1116,11 @@ const AdminApp = () => {
     }
   };
 
-  const loadBankSnapshot = async () => {
-    if (!selected) return;
-    setIsBusy(true);
+  const loadBankSnapshot = useCallback(async (id: string) => {
+    setIsSnapshotLoading(true);
     setError(null);
     try {
-      const response = await fetch(apiUrl(`/api/advance/admin/applications/${selected.id}/bank_snapshot`), {
+      const response = await fetch(apiUrl(`/api/advance/admin/applications/${id}/bank_snapshot`), {
         headers: adminHeaders,
       });
       const data = await response.json();
@@ -1128,9 +1129,9 @@ const AdminApp = () => {
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Unable to load bank details");
     } finally {
-      setIsBusy(false);
+      setIsSnapshotLoading(false);
     }
-  };
+  }, [adminHeaders]);
 
   const scheduleRepayment = async () => {
     if (!selected) return;
@@ -1199,6 +1200,9 @@ const AdminApp = () => {
               >
                 <span>{application.customer.name || "Unnamed applicant"}</span>
                 <small>{statusLabel[application.status]}</small>
+                <small style={{ color: "var(--muted)", fontSize: "1.2rem" }}>
+                  {new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </small>
               </button>
             ))}
           </aside>
@@ -1236,7 +1240,6 @@ const AdminApp = () => {
                     <dd>{selected.stripe_card_saved ? "✓ On file" : "None"}</dd>
                   </dl>
                   <div className={styles.actions}>
-                    <button disabled={isBusy} onClick={loadBankSnapshot}>Load transactions</button>
                     <button
                       disabled={isBusy}
                       onClick={() =>
@@ -1303,8 +1306,10 @@ const AdminApp = () => {
                 </section>
                 <section className={styles.panel}>
                   <h3>Bank snapshot</h3>
-                  {!snapshot ? (
-                    <p className={styles.muted}>Load bank details after the applicant connects Plaid.</p>
+                  {isSnapshotLoading ? (
+                    <p className={styles.muted}>Loading bank data…</p>
+                  ) : !snapshot ? (
+                    <p className={styles.muted}>No bank data — applicant may not have connected yet.</p>
                   ) : (
                     <BankSnapshotView snapshot={snapshot} />
                   )}
