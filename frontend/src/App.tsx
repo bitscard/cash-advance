@@ -84,16 +84,7 @@ interface BankSnapshot {
   needs_reconnect?: boolean;
 }
 
-const US_STATES = [
-  "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut",
-  "Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa",
-  "Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan",
-  "Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada",
-  "New Hampshire","New Jersey","New Mexico","New York","North Carolina",
-  "North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island",
-  "South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont",
-  "Virginia","Washington","West Virginia","Wisconsin","Wyoming",
-];
+const US_STATES = ["Georgia", "Utah"];
 
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
@@ -765,8 +756,7 @@ const CustomerApp = () => {
                     >
                       <option value="" disabled>Select frequency…</option>
                       <option value="weekly">Weekly</option>
-                      <option value="biweekly">Biweekly (every 2 weeks)</option>
-                      <option value="semimonthly">Semimonthly (twice a month)</option>
+                      <option value="biweekly">Biweekly</option>
                       <option value="monthly">Monthly</option>
                       <option value="daily">Daily</option>
                       <option value="other">Other</option>
@@ -1858,7 +1848,7 @@ const SaveCardForm = ({
 const StatesFooter = () => (
   <div className={styles.statesFooter}>
     <p className={styles.statesFooterTitle}>Available states only</p>
-    <p>Arkansas · Louisiana · Arizona · Montana · Nevada · Missouri · Wisconsin · Kansas · South Carolina · Utah · Indiana</p>
+    <p>Georgia · Utah</p>
   </div>
 );
 
