@@ -1105,6 +1105,7 @@ dd {
 .searchRow           { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .incomingTransaction { display: grid; grid-template-columns: 9rem minmax(0,1fr) auto; gap: 0.3rem; align-items: center; border: 1px solid var(--brand-tint2); border-radius: var(--r-sm); padding: 1.2rem; background: var(--brand-tint); }
 .incomingAmount      { font-weight: 700; color: var(--brand); }
+.outgoingAmount      { font-weight: 700; color: #c0392b; }
 .empty               { min-height: 30rem; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.5rem; }
 
 

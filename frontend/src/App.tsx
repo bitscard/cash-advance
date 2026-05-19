@@ -1238,10 +1238,9 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
   const [nameQuery, setNameQuery] = useState("");
   const [amountQuery, setAmountQuery] = useState("");
 
-  // Stripe FC: positive amount = credit (money in). Filter to credits only for income review.
-  const credits = snapshot.transactions.filter(tx => tx.amount > 0);
-  const filtered = credits.filter(
-    tx => fuzzyMatch(nameQuery, tx.description) && amountMatch(amountQuery, tx.amount / 100)
+  const allTx = snapshot.transactions;
+  const filtered = allTx.filter(
+    tx => fuzzyMatch(nameQuery, tx.description) && amountMatch(amountQuery, Math.abs(tx.amount) / 100)
   );
 
   return (
@@ -1259,7 +1258,12 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
           )}
         </div>
       ))}
-      <h4>Incoming transactions (credits)</h4>
+      <h4>All transactions</h4>
+      {allTx.length === 0 && (
+        <p style={{ color: "#c0392b", fontWeight: 600, fontSize: "1.35rem" }}>
+          No transactions returned — check server logs (subscribe/refresh may be pending)
+        </p>
+      )}
       <div className={styles.searchRow}>
         <label>
           Search by description
@@ -1280,15 +1284,17 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
           />
         </label>
       </div>
-      <p className={styles.muted}>{filtered.length} of {credits.length} credit{credits.length !== 1 ? "s" : ""}</p>
-      {filtered.length === 0 ? (
+      <p className={styles.muted}>{filtered.length} of {allTx.length} transaction{allTx.length !== 1 ? "s" : ""}</p>
+      {filtered.length === 0 && allTx.length > 0 ? (
         <p className={styles.muted}>No matching transactions.</p>
       ) : (
         filtered.map((tx) => (
           <div key={tx.id} className={styles.incomingTransaction}>
             <span>{tx.date}</span>
             <strong>{tx.description}</strong>
-            <span className={styles.incomingAmount}>{formatMoney(tx.amount / 100)}</span>
+            <span className={tx.amount > 0 ? styles.incomingAmount : styles.outgoingAmount}>
+              {tx.amount > 0 ? "+" : ""}{formatMoney(tx.amount / 100)}
+            </span>
           </div>
         ))
       )}
