@@ -251,7 +251,7 @@ app.post('/api/advance/applications/:id/stripe/bank-setup-intent', async functio
       payment_method_options: {
         us_bank_account: {
           financial_connections: {
-            permissions: ['payment_method', 'balances', 'transactions'],
+            permissions: ['payment_method', 'balances', 'transactions', 'ownership'],
           },
         },
       },
