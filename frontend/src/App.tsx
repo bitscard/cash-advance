@@ -6,6 +6,7 @@ import { usePlaidLink } from "react-plaid-link";
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
 import TermsPage from "./TermsPage";
+import PrivacyPage from "./PrivacyPage";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -321,6 +322,7 @@ const App = () => {
   if (path === "/admin") return <AdminApp />;
   if (path === "/loan") return <LoanApp />;
   if (path === "/terms") return <TermsPage />;
+  if (path === "/privacy") return <PrivacyPage />;
   return <CustomerApp />;
 };
 
@@ -1899,6 +1901,8 @@ const StatesFooter = () => (
     <p>Georgia · Utah</p>
     <p style={{ marginTop: "0.8rem", fontSize: "1.25rem" }}>
       <a href="/terms" style={{ color: "var(--muted)", textDecoration: "underline" }}>Terms &amp; Conditions</a>
+      {" · "}
+      <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "underline" }}>Privacy Policy</a>
       {" · "}
       <a href="mailto:usa@getbits.app" style={{ color: "var(--muted)", textDecoration: "underline" }}>usa@getbits.app</a>
     </p>
