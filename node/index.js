@@ -236,7 +236,7 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
     const resp = await client.linkTokenCreate({
       user: { client_user_id: row.id },
       client_name: 'Advance',
-      products: [Products.Auth, Products.Transactions],
+      products: [Products.Transactions],
       country_codes: ['US'],
       language: 'en',
     });
@@ -552,18 +552,26 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // Prefer Plaid Auth (routing + account details)
+    // Get account details via Plaid balance (Auth not required)
     if (row.access_token) {
-      const authResp = await client.authGet({ access_token: row.access_token });
-      const acct = authResp.data.accounts[0];
-      const ach = authResp.data.numbers.ach[0];
-      return response.json({
-        bank_name: acct?.official_name || acct?.name || 'Bank Account',
-        routing_number: ach?.routing || 'Not available',
-        last4: acct?.mask || '----',
-        account_type: acct?.subtype || acct?.type || 'unknown',
-        account_holder_type: 'individual',
-      });
+      let bankName = 'Bank Account', last4 = '----', accountType = 'unknown', routingNumber = 'Not available';
+      try {
+        const balResp = await client.accountsBalance.get({ access_token: row.access_token });
+        const acct = balResp.data.accounts[0];
+        bankName = acct?.official_name || acct?.name || 'Bank Account';
+        last4 = acct?.mask || '----';
+        accountType = acct?.subtype || acct?.type || 'unknown';
+      } catch (e) {
+        console.log('[payment-method-details] balance error (non-fatal):', e.message);
+      }
+      try {
+        const authResp = await client.authGet({ access_token: row.access_token });
+        const ach = authResp.data.numbers.ach[0];
+        if (ach?.routing) routingNumber = ach.routing;
+      } catch (e) {
+        console.log('[payment-method-details] auth error (non-fatal):', e.message);
+      }
+      return response.json({ bank_name: bankName, routing_number: routingNumber, last4, account_type: accountType, account_holder_type: 'individual' });
     }
 
     return response.status(400).json({ error: { error_message: 'No bank account connected for this application' } });
