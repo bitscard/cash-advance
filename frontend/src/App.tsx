@@ -1089,6 +1089,7 @@ const AdminApp = () => {
     setSnapshot(null);
     setPmDetails(null);
     loadBankSnapshot(selectedId);
+    if (selected?.payday) setRepaymentDate(selected.payday);
   }, [selectedId, loadMessages, loadBankSnapshot]);
 
   const sendAdminMessage = async (event: React.FormEvent) => {
@@ -1285,7 +1286,7 @@ const AdminApp = () => {
                   )}
                   <div className={styles.repayment}>
                     <label>
-                      Repayment due date (30 days from funding)
+                      Repayment due date (defaults to payday)
                       <input
                         type="date"
                         min={today}
