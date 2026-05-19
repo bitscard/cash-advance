@@ -80,6 +80,13 @@ async function getApplicationById(id) {
   return rows[0] || null;
 }
 
+async function getApplicationBySSN(ssn) {
+  const { rows } = await pool.query(
+    'SELECT * FROM applications WHERE ssn = $1 ORDER BY created_at DESC LIMIT 1', [ssn],
+  );
+  return rows[0] || null;
+}
+
 async function getApplicationByEmail(email) {
   const { rows } = await pool.query(
     'SELECT * FROM applications WHERE LOWER(email) = LOWER($1)', [email],
@@ -232,6 +239,7 @@ module.exports = {
   saveDeliveryType,
   savePayoutPreference,
   getApplicationById,
+  getApplicationBySSN,
   getApplicationByEmail,
   getAllApplications,
   updateApplicationStatus,

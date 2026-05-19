@@ -132,6 +132,24 @@ app.post('/api/advance/applications', async function (request, response, next) {
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
+
+    // SSN deduplication — blocks new accounts when an active advance already exists for this SSN.
+    // Set BYPASS_SSN_DUPE_CHECK=true in .env to skip this during testing.
+    if (!process.env.BYPASS_SSN_DUPE_CHECK) {
+      const ssnClean = (ssn || '').replace(/-/g, '');
+      if (ssnClean.length === 9) {
+        const existing = await db.getApplicationBySSN(ssnClean);
+        if (existing) {
+          const activeStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'funded', 'repayment_scheduled', 'repayment_failed'];
+          if (activeStatuses.includes(existing.status)) {
+            return response.status(409).json({
+              error: { error_message: 'An advance linked to this SSN already exists. Please sign in to your existing account instead.' },
+            });
+          }
+        }
+      }
+    }
+
     const password_hash = await bcrypt.hash(password, 10);
     const row = await db.createApplication({ name: name || '', email: email || '', phone: phone || '', employer: employer || '', payday, requested_amount, password_hash, ssn: ssn || null, pay_frequency: pay_frequency || null, state: state || null });
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $10 cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
