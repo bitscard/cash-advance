@@ -21,6 +21,30 @@ const PLAID_ENV = process.env.PLAID_ENV || 'sandbox';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_production';
 
+// SSNs that bypass both format validation and the dupe check (for testing).
+// Add your own SSN here: TEST_SSNS=123456789,987654321 in .env (dashes optional).
+const TEST_SSNS = new Set(
+  (process.env.TEST_SSNS || '').split(',').map(s => s.replace(/-/g, '').trim()).filter(s => s.length === 9)
+);
+
+// Basic SSN plausibility check — catches impossible numbers per SSA rules and
+// known fake/advertised SSNs. Does NOT verify the number was actually issued.
+function isPlausibleSSN(ssn) {
+  const area   = ssn.slice(0, 3);
+  const group  = ssn.slice(3, 5);
+  const serial = ssn.slice(5, 9);
+
+  if (area === '000' || area === '666')      return false; // never assigned
+  if (parseInt(area, 10) >= 900)             return false; // 900–999 never assigned (ITINs etc.)
+  if (group  === '00')                       return false; // invalid group
+  if (serial === '0000')                     return false; // invalid serial
+  if (/^(\d)\1{8}$/.test(ssn))              return false; // all same digit (111111111 etc.)
+  // Known advertised / wallet-insert fakes
+  if (['078051120', '219099999', '123456789'].includes(ssn)) return false;
+
+  return true;
+}
+
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // PLAID_PRODUCTS is a comma-separated list of products to use when initializing
@@ -133,19 +157,23 @@ app.post('/api/advance/applications', async function (request, response, next) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
 
-    // SSN deduplication — blocks new accounts when an active advance already exists for this SSN.
-    // Set BYPASS_SSN_DUPE_CHECK=true in .env to skip this during testing.
-    if (!process.env.BYPASS_SSN_DUPE_CHECK) {
-      const ssnClean = (ssn || '').replace(/-/g, '');
-      if (ssnClean.length === 9) {
-        const existing = await db.getApplicationBySSN(ssnClean);
-        if (existing) {
-          const activeStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'funded', 'repayment_scheduled', 'repayment_failed'];
-          if (activeStatuses.includes(existing.status)) {
-            return response.status(409).json({
-              error: { error_message: 'An advance linked to this SSN already exists. Please sign in to your existing account instead.' },
-            });
-          }
+    const ssnClean = (ssn || '').replace(/-/g, '');
+    const isTestSSN = TEST_SSNS.has(ssnClean);
+
+    if (!isTestSSN) {
+      // 1. Format / plausibility check
+      if (ssnClean.length !== 9 || !isPlausibleSSN(ssnClean)) {
+        return response.status(400).json({ error: { error_message: 'Please enter a valid Social Security Number.' } });
+      }
+
+      // 2. Dupe check — block if an active advance already exists for this SSN
+      const existing = await db.getApplicationBySSN(ssnClean);
+      if (existing) {
+        const activeStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'funded', 'repayment_scheduled', 'repayment_failed'];
+        if (activeStatuses.includes(existing.status)) {
+          return response.status(409).json({
+            error: { error_message: 'An advance linked to this SSN already exists. Please sign in to your existing account instead.' },
+          });
         }
       }
     }
