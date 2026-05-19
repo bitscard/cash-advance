@@ -1060,6 +1060,23 @@ const AdminApp = () => {
     setMessages(data.messages);
   }, []);
 
+  const loadBankSnapshot = useCallback(async (id: string) => {
+    setIsSnapshotLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(apiUrl(`/api/advance/admin/applications/${id}/bank_snapshot`), {
+        headers: adminHeaders,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.error_message || "Unable to load bank details");
+      setSnapshot(data);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Unable to load bank details");
+    } finally {
+      setIsSnapshotLoading(false);
+    }
+  }, [adminHeaders]);
+
   useEffect(() => {
     loadApplications();
     const interval = window.setInterval(loadApplications, 4000);
@@ -1115,23 +1132,6 @@ const AdminApp = () => {
       setIsBusy(false);
     }
   };
-
-  const loadBankSnapshot = useCallback(async (id: string) => {
-    setIsSnapshotLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(apiUrl(`/api/advance/admin/applications/${id}/bank_snapshot`), {
-        headers: adminHeaders,
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error?.error_message || "Unable to load bank details");
-      setSnapshot(data);
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to load bank details");
-    } finally {
-      setIsSnapshotLoading(false);
-    }
-  }, [adminHeaders]);
 
   const scheduleRepayment = async () => {
     if (!selected) return;
