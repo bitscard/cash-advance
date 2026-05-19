@@ -445,6 +445,11 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
     const fcAccountId = application.stripe_fc_account_id;
     if (!fcAccountId) return response.status(400).json({ error: { error_message: 'No bank account connected yet. Ask the customer to connect their bank.' } });
 
+    // Stripe FC doesn't auto-sync — must refresh before data is available
+    await stripe.financialConnections.accounts.refresh(fcAccountId, {
+      features: ['balance', 'transactions'],
+    }).catch(() => {}); // ignore if permissions weren't granted for a feature
+
     const [accountResult, balanceResult, txResult] = await Promise.allSettled([
       stripe.financialConnections.accounts.retrieve(fcAccountId),
       stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`),
