@@ -78,6 +78,7 @@ interface BankSnapshot {
     category: string;
   }>;
   auth: unknown;
+  needs_reconnect?: boolean;
 }
 
 const applicationStorageKey = "advance_application_id";
@@ -1259,9 +1260,14 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
         </div>
       ))}
       <h4>All transactions</h4>
-      {allTx.length === 0 && (
+      {snapshot.needs_reconnect && (
+        <p style={{ color: "#c0392b", fontWeight: 600, fontSize: "1.35rem", marginBottom: "0.8rem" }}>
+          Transaction access not granted. Ask the customer to disconnect and reconnect their bank account — the original session did not include transaction permission.
+        </p>
+      )}
+      {!snapshot.needs_reconnect && allTx.length === 0 && (
         <p style={{ color: "#c0392b", fontWeight: 600, fontSize: "1.35rem" }}>
-          No transactions returned — check server logs (subscribe/refresh may be pending)
+          Stripe returned 0 transactions. Data may still be loading — wait 30s and try again, or ask the customer to reconnect their bank.
         </p>
       )}
       <div className={styles.searchRow}>

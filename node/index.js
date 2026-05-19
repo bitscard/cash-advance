@@ -222,11 +222,29 @@ app.post('/api/advance/applications/:id/stripe/save-bank-account', async functio
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
   }
   try {
-    const { payment_method_id, financial_connections_account_id } = request.body;
+    const { payment_method_id } = request.body;
     if (!payment_method_id) {
       return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
     }
-    const updated = await db.saveBankAccount(request.params.id, payment_method_id, financial_connections_account_id || null);
+
+    // Retrieve the PM server-side — more reliable than trusting the client-side expand
+    const pm = await stripe.paymentMethods.retrieve(payment_method_id);
+    const fc_account_id = pm?.us_bank_account?.financial_connections_account ?? null;
+    console.log('[save-bank-account] pm type:', pm.type, '| fc_account_id:', fc_account_id);
+
+    // Subscribe to transactions so we can list them later
+    if (fc_account_id) {
+      try {
+        await stripe.financialConnections.accounts.subscribe(fc_account_id, {
+          features: ['transactions'],
+        });
+        console.log('[save-bank-account] subscribed to transactions for', fc_account_id);
+      } catch (e) {
+        console.log('[save-bank-account] subscribe error:', e.message);
+      }
+    }
+
+    const updated = await db.saveBankAccount(request.params.id, payment_method_id, fc_account_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     await db.addMessage(request.params.id, 'system', 'Bank account connected. A reviewer will check the application and respond here.');
     response.json({ application: db.publicApp(updated) });
@@ -443,22 +461,50 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
     if (!application) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
     const fcAccountId = application.stripe_fc_account_id;
+    console.log('[bank_snapshot] fc_account_id from DB:', fcAccountId);
     if (!fcAccountId) return response.status(400).json({ error: { error_message: 'No bank account connected yet. Ask the customer to connect their bank.' } });
 
-    // Stripe FC doesn't auto-sync — must refresh before data is available
-    await stripe.financialConnections.accounts.refresh(fcAccountId, {
-      features: ['balance', 'transactions'],
-    }).catch(() => {}); // ignore if permissions weren't granted for a feature
+    // 1. Retrieve account to inspect permissions and refresh state
+    let acct = null;
+    try {
+      acct = await stripe.financialConnections.accounts.retrieve(fcAccountId);
+      console.log('[bank_snapshot] account permissions:', JSON.stringify(acct.permissions));
+      console.log('[bank_snapshot] transaction_refresh:', JSON.stringify(acct.transaction_refresh));
+    } catch (e) {
+      console.log('[bank_snapshot] retrieve error:', e.message);
+    }
 
-    const [accountResult, balanceResult, txResult] = await Promise.allSettled([
-      stripe.financialConnections.accounts.retrieve(fcAccountId),
-      stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`),
-      stripe.financialConnections.transactions.list({ account: fcAccountId, limit: 200 }),
-    ]);
+    const hasTransactionPermission = acct?.permissions?.includes('transactions');
+    if (!hasTransactionPermission) {
+      console.log('[bank_snapshot] WARNING: transactions permission not on this FC account. Customer must re-connect bank.');
+    }
 
-    const acct = accountResult.status === 'fulfilled' ? accountResult.value : null;
-    const bal  = balanceResult.status === 'fulfilled' ? balanceResult.value : null;
-    const txs  = txResult.status === 'fulfilled' ? txResult.value.data : [];
+    // 2. Subscribe (idempotent — only works if permission was granted in the original session)
+    let subscribeOk = false;
+    try {
+      await stripe.financialConnections.accounts.subscribe(fcAccountId, { features: ['transactions'] });
+      subscribeOk = true;
+      console.log('[bank_snapshot] subscribe ok');
+    } catch (e) {
+      console.log('[bank_snapshot] subscribe error (full):', e.message, '| code:', e.code);
+    }
+
+    // 3. Fetch balance
+    const balanceResult = await Promise.resolve(
+      stripe.rawRequest('GET', `/v1/financial_connections/accounts/${fcAccountId}/balance`)
+    ).catch(e => { console.log('[bank_snapshot] balance error:', e.message); return null; });
+
+    // 4. List transactions (skip refresh — it's async and we can't wait for it)
+    let txs = [];
+    try {
+      const txList = await stripe.financialConnections.transactions.list({ account: fcAccountId, limit: 200 });
+      txs = txList.data;
+      console.log('[bank_snapshot] transactions count:', txs.length, '| has_more:', txList.has_more);
+    } catch (e) {
+      console.log('[bank_snapshot] list error:', e.message);
+    }
+
+    const bal = balanceResult;
 
     const accounts = acct ? [{
       id: acct.id,
@@ -472,17 +518,20 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
       } : null,
     }] : [];
 
+    // Return ALL transactions (positive = credit/income, negative = debit/spend)
     const transactions = txs.map(tx => ({
       id: tx.id,
       description: tx.description || '',
-      amount: tx.amount,                                              // positive = credit, in cents
+      amount: tx.amount,
       currency: tx.currency,
       date: new Date(tx.transacted_at * 1000).toISOString().slice(0, 10),
       category: tx.category || 'other',
       status: tx.status,
     }));
 
-    response.json({ accounts, transactions, auth: null });
+    const needs_reconnect = !hasTransactionPermission || !subscribeOk;
+
+    response.json({ accounts, transactions, auth: null, needs_reconnect });
   } catch (err) { next(err); }
 });
 
