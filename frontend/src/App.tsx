@@ -4,6 +4,7 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
+import TermsPage from "./TermsPage";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -315,6 +316,7 @@ const App = () => {
   const path = window.location.pathname;
   if (path === "/admin") return <AdminApp />;
   if (path === "/loan") return <LoanApp />;
+  if (path === "/terms") return <TermsPage />;
   return <CustomerApp />;
 };
 
@@ -821,6 +823,13 @@ const CustomerApp = () => {
                   </label>
                 </div>
                 {error && <p className={styles.error}>{error}</p>}
+                <p style={{ fontSize: "1.25rem", color: "var(--muted)", margin: "1.2rem 0 0.8rem", lineHeight: 1.6 }}>
+                  By creating an account, you agree to our{" "}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
+                    Terms &amp; Conditions
+                  </a>
+                  . We never pull your credit and we will never send your account to collections.
+                </p>
                 <div className={styles.intakeFooter}>
                   <button disabled={isBusy}>{isBusy ? "Creating account…" : "Continue →"}</button>
                 </div>
@@ -1858,6 +1867,11 @@ const StatesFooter = () => (
   <div className={styles.statesFooter}>
     <p className={styles.statesFooterTitle}>Available states only</p>
     <p>Georgia · Utah</p>
+    <p style={{ marginTop: "0.8rem", fontSize: "1.25rem" }}>
+      <a href="/terms" style={{ color: "var(--muted)", textDecoration: "underline" }}>Terms &amp; Conditions</a>
+      {" · "}
+      <a href="mailto:usa@getbits.app" style={{ color: "var(--muted)", textDecoration: "underline" }}>usa@getbits.app</a>
+    </p>
   </div>
 );
 
