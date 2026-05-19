@@ -27,6 +27,8 @@ interface Application {
     phone: string;
     employer: string;
     ssn_last4: string | null;
+    pay_frequency: string | null;
+    state: string | null;
   };
   requested_amount: number;
   payday: string;
@@ -81,6 +83,17 @@ interface BankSnapshot {
   auth: unknown;
   needs_reconnect?: boolean;
 }
+
+const US_STATES = [
+  "Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut",
+  "Delaware","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa",
+  "Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan",
+  "Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada",
+  "New Hampshire","New Jersey","New Mexico","New York","North Carolina",
+  "North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island",
+  "South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont",
+  "Virginia","Washington","West Virginia","Wisconsin","Wyoming",
+];
 
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
@@ -325,7 +338,10 @@ const CustomerApp = () => {
     phone: "",
     employer: "",
     payday: "",
-    ssn_last4: "",
+    ssn: "",
+    pay_frequency: "",
+    pay_frequency_other: "",
+    state: "",
     password: "",
     confirmPassword: "",
   });
@@ -437,6 +453,22 @@ const CustomerApp = () => {
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (form.ssn.replace(/-/g, "").length !== 9) {
+      setError("Please enter your full 9-digit Social Security Number");
+      return;
+    }
+    if (!form.pay_frequency) {
+      setError("Please select how often you get paid");
+      return;
+    }
+    if (form.pay_frequency === "other" && !form.pay_frequency_other.trim()) {
+      setError("Please describe your pay schedule");
+      return;
+    }
+    if (!form.state) {
+      setError("Please select your state");
+      return;
+    }
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -449,11 +481,17 @@ const CustomerApp = () => {
     setIsBusy(true);
     setError(null);
     try {
-      const { confirmPassword, ...body } = form;
+      const { confirmPassword, pay_frequency_other, pay_frequency, ssn, ...rest } = form;
+      const body = {
+        ...rest,
+        ssn: ssn.replace(/-/g, ""),
+        pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
+        requested_amount: 10,
+      };
       const response = await fetch(apiUrl("/api/advance/applications"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...body, requested_amount: 10 }),
+        body: JSON.stringify(body),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.error_message || "Unable to start application");
@@ -718,14 +756,65 @@ const CustomerApp = () => {
                       onChange={(event) => setForm({ ...form, payday: event.target.value })} />
                   </label>
                   <label>
-                    SSN <span style={{ color: "var(--muted)", fontWeight: 400 }}>(last 4 digits only)</span>
-                    <input required type="text" inputMode="numeric" maxLength={4}
-                      pattern="[0-9]{4}" placeholder="1234"
-                      value={form.ssn_last4}
-                      onChange={(event) => {
-                        const val = event.target.value.replace(/\D/g, "").slice(0, 4);
-                        setForm({ ...form, ssn_last4: val });
-                      }} />
+                    How often do you get paid?
+                    <select
+                      required
+                      value={form.pay_frequency}
+                      onChange={(e) => setForm({ ...form, pay_frequency: e.target.value, pay_frequency_other: "" })}
+                      style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: form.pay_frequency ? "var(--ink)" : "var(--muted)", appearance: "auto" }}
+                    >
+                      <option value="" disabled>Select frequency…</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Biweekly (every 2 weeks)</option>
+                      <option value="semimonthly">Semimonthly (twice a month)</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="daily">Daily</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                  {form.pay_frequency === "other" && (
+                    <label style={{ gridColumn: "1 / -1" }}>
+                      Describe your pay schedule
+                      <input
+                        required
+                        type="text"
+                        placeholder="e.g. every Friday, on the 1st and 15th…"
+                        value={form.pay_frequency_other}
+                        onChange={(e) => setForm({ ...form, pay_frequency_other: e.target.value })}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    State
+                    <select
+                      required
+                      value={form.state}
+                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: form.state ? "var(--ink)" : "var(--muted)", appearance: "auto" }}
+                    >
+                      <option value="" disabled>Select state…</option>
+                      {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    Social Security Number
+                    <input
+                      required
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="XXX-XX-XXXX"
+                      value={(() => {
+                        const d = form.ssn.replace(/-/g, "");
+                        if (d.length > 5) return `${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}`;
+                        if (d.length > 3) return `${d.slice(0,3)}-${d.slice(3)}`;
+                        return d;
+                      })()}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+                        setForm({ ...form, ssn: digits });
+                      }}
+                    />
                   </label>
                   <label>
                     Create a password
@@ -1147,6 +1236,10 @@ const AdminApp = () => {
                     <dd>{selected.payday}</dd>
                     <dt>SSN last 4</dt>
                     <dd>{selected.customer.ssn_last4 || "—"}</dd>
+                    <dt>State</dt>
+                    <dd>{selected.customer.state || "—"}</dd>
+                    <dt>Pay frequency</dt>
+                    <dd>{selected.customer.pay_frequency || "—"}</dd>
                     <dt>Bank / direct debit</dt>
                     <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
                     <dt>Backup card</dt>

@@ -19,6 +19,9 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn_last4 TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_account_id TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_card_pm_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS pay_frequency TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
 `).catch(() => {});
 
 const fmtDate = (v) => {
@@ -34,7 +37,9 @@ const publicApp = (row) => ({
     email: row.email,
     phone: row.phone,
     employer: row.employer,
-    ssn_last4: row.ssn_last4 || null,
+    ssn_last4: row.ssn ? row.ssn.slice(-4) : (row.ssn_last4 || null),
+    pay_frequency: row.pay_frequency || null,
+    state: row.state || null,
   },
   requested_amount: parseFloat(row.requested_amount),
   payday: fmtDate(row.payday),
@@ -59,11 +64,13 @@ const publicApp = (row) => ({
   updated_at: row.updated_at,
 });
 
-async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4 }) {
+async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state }) {
+  const ssn_last4 = ssn ? ssn.replace(/-/g, '').slice(-4) : null;
+  const ssn_clean = ssn ? ssn.replace(/-/g, '') : null;
   const { rows } = await pool.query(
-    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4 || null],
+    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null],
   );
   return rows[0];
 }

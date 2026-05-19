@@ -53,3 +53,8 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_account_id TEXT;
 
 -- Separate card PM from bank PM so they don't overwrite each other
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_card_pm_id TEXT;
+
+-- Extended intake fields
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS pay_frequency TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
