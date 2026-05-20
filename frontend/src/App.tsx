@@ -22,6 +22,19 @@ type Status =
   | "repaid"
   | "repayment_failed";
 
+interface IncomeSource {
+  id: number | null;
+  employer: string;
+  payday: string;
+  pay_frequency: string;
+  accrued_cents?: number | null;
+  days_elapsed?: number;
+  period_days?: number;
+  avg_paycheck_cents?: number;
+  matched_tx_count?: number;
+  error?: string;
+}
+
 interface Application {
   id: string;
   customer: {
@@ -44,6 +57,7 @@ interface Application {
   subscription_status: string | null;
   delivery_type: string | null;
   instant_fee_paid: boolean;
+  income_sources: Array<Pick<IncomeSource, "id" | "employer" | "payday" | "pay_frequency">>;
   repayment: null | {
     amount: number;
     due_date: string;
@@ -87,6 +101,8 @@ interface BankSnapshot {
     reason: "pfc" | "keyword" | "ai" | null;
     ai_classified: boolean;
   }>;
+  income_sources: IncomeSource[];
+  total_accrued_cents: number;
   auth: unknown;
 }
 
@@ -335,11 +351,8 @@ const CustomerApp = () => {
     name: "",
     email: "",
     phone: "",
-    employer: "",
-    payday: "",
+    income_sources: [{ employer: "", payday: "", pay_frequency: "", pay_frequency_other: "" }],
     ssn: "",
-    pay_frequency: "",
-    pay_frequency_other: "",
     state: "",
     password: "",
     confirmPassword: "",
@@ -456,13 +469,10 @@ const CustomerApp = () => {
       setError("Please enter your full 9-digit Social Security Number");
       return;
     }
-    if (!form.pay_frequency) {
-      setError("Please select how often you get paid");
-      return;
-    }
-    if (form.pay_frequency === "other" && !form.pay_frequency_other.trim()) {
-      setError("Please describe your pay schedule");
-      return;
+    for (const [i, src] of form.income_sources.entries()) {
+      const label = form.income_sources.length > 1 ? ` (source ${i + 1})` : "";
+      if (!src.pay_frequency) { setError(`Please select how often you get paid${label}`); return; }
+      if (src.pay_frequency === "other" && !src.pay_frequency_other.trim()) { setError(`Please describe your pay schedule${label}`); return; }
     }
     if (!form.state) {
       setError("Please select your state");
@@ -480,11 +490,14 @@ const CustomerApp = () => {
     setIsBusy(true);
     setError(null);
     try {
-      const { confirmPassword, pay_frequency_other, pay_frequency, ssn, ...rest } = form;
+      const { confirmPassword, income_sources: rawSources, ssn, ...rest } = form;
       const body = {
         ...rest,
         ssn: ssn.replace(/-/g, ""),
-        pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
+        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => ({
+          ...s,
+          pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
+        })),
         requested_amount: 10,
       };
       const response = await fetch(apiUrl("/api/advance/applications"), {
@@ -506,6 +519,13 @@ const CustomerApp = () => {
       setIsBusy(false);
     }
   };
+
+  const updateSource = (i: number, field: string, value: string) =>
+    setForm(f => { const s = [...f.income_sources]; s[i] = { ...s[i], [field]: value }; return { ...f, income_sources: s }; });
+  const addSource = () =>
+    setForm(f => ({ ...f, income_sources: [...f.income_sources, { employer: "", payday: "", pay_frequency: "", pay_frequency_other: "" }] }));
+  const removeSource = (i: number) =>
+    setForm(f => ({ ...f, income_sources: f.income_sources.filter((_, idx) => idx !== i) }));
 
   const [plaidLinkToken, setPlaidLinkToken] = useState<string | null>(null);
   const [plaidLinkError, setPlaidLinkError] = useState<string | null>(null);
@@ -704,46 +724,59 @@ const CustomerApp = () => {
                     <input required value={form.phone} placeholder="(555) 000-0000"
                       onChange={(event) => setForm({ ...form, phone: event.target.value })} />
                   </label>
-                  <label>
-                    Employer
-                    <input required value={form.employer} placeholder="Acme Corp"
-                      onChange={(event) => setForm({ ...form, employer: event.target.value })} />
-                  </label>
-                  <label>
-                    Next payday <span style={{ color: "var(--muted)", fontWeight: 400 }}>(future dates only)</span>
-                    <input required min={today} type="date" value={form.payday}
-                      onFocus={() => setIsDateFocused(true)}
-                      onBlur={() => setIsDateFocused(false)}
-                      onChange={(event) => setForm({ ...form, payday: event.target.value })} />
-                  </label>
-                  <label>
-                    How often do you get paid?
-                    <select
-                      required
-                      value={form.pay_frequency}
-                      onChange={(e) => setForm({ ...form, pay_frequency: e.target.value, pay_frequency_other: "" })}
-                      style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: form.pay_frequency ? "var(--ink)" : "var(--muted)", appearance: "auto" }}
-                    >
-                      <option value="" disabled>Select frequency…</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="biweekly">Biweekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="daily">Daily</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </label>
-                  {form.pay_frequency === "other" && (
-                    <label style={{ gridColumn: "1 / -1" }}>
-                      Describe your pay schedule
-                      <input
-                        required
-                        type="text"
-                        placeholder="e.g. every Friday, on the 1st and 15th…"
-                        value={form.pay_frequency_other}
-                        onChange={(e) => setForm({ ...form, pay_frequency_other: e.target.value })}
-                      />
-                    </label>
-                  )}
+                  <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                    {form.income_sources.map((src, i) => (
+                      <div key={i} style={{ border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <strong style={{ fontSize: "1.4rem" }}>
+                            {form.income_sources.length > 1 ? `Income source ${i + 1}` : "Income source"}
+                          </strong>
+                          {form.income_sources.length > 1 && (
+                            <button type="button" onClick={() => removeSource(i)}
+                              style={{ fontSize: "1.2rem", color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                        <label>
+                          Employer
+                          <input required value={src.employer} placeholder="Acme Corp"
+                            onChange={e => updateSource(i, "employer", e.target.value)} />
+                        </label>
+                        <label>
+                          Next payday <span style={{ color: "var(--muted)", fontWeight: 400 }}>(future dates only)</span>
+                          <input required min={today} type="date" value={src.payday}
+                            onChange={e => updateSource(i, "payday", e.target.value)} />
+                        </label>
+                        <label>
+                          How often do you get paid?
+                          <select required value={src.pay_frequency}
+                            onChange={e => updateSource(i, "pay_frequency", e.target.value)}
+                            style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: src.pay_frequency ? "var(--ink)" : "var(--muted)", appearance: "auto" }}>
+                            <option value="" disabled>Select frequency…</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Biweekly</option>
+                            <option value="semimonthly">Semi-monthly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="daily">Daily</option>
+                            <option value="other">Other</option>
+                          </select>
+                        </label>
+                        {src.pay_frequency === "other" && (
+                          <label>
+                            Describe your pay schedule
+                            <input required type="text" placeholder="e.g. every Friday, on the 1st and 15th…"
+                              value={src.pay_frequency_other}
+                              onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                    <button type="button" onClick={addSource}
+                      style={{ alignSelf: "flex-start", fontSize: "1.3rem", background: "none", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.6rem 1.2rem", cursor: "pointer" }}>
+                      + Add another income source
+                    </button>
+                  </div>
                   <label>
                     State
                     <select
@@ -937,10 +970,10 @@ const CustomerApp = () => {
             <dl>
               <dt>Name</dt>
               <dd>{application.customer.name}</dd>
-              <dt>Employer</dt>
-              <dd>{application.customer.employer}</dd>
-              <dt>Payday</dt>
-              <dd>{application.payday}</dd>
+              <dt>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
+              <dd>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
+              <dt>Next payday</dt>
+              <dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
               <dt>Delivery</dt>
               <dd>{application.delivery_type === "instant" ? "⚡ Instant" : "📬 Standard (2-3 days)"}</dd>
               <dt>Bank</dt>
@@ -1218,16 +1251,19 @@ const AdminApp = () => {
                   <dl>
                     <dt>Requested</dt>
                     <dd>{formatMoney(selected.requested_amount)}</dd>
-                    <dt>Employer</dt>
-                    <dd>{selected.customer.employer}</dd>
-                    <dt>Payday</dt>
-                    <dd>{selected.payday}</dd>
+                    <dt>Income sources</dt>
+                    <dd>
+                      {(selected.income_sources?.length > 0 ? selected.income_sources : [{ employer: selected.customer.employer, payday: selected.payday, pay_frequency: selected.customer.pay_frequency }]).map((src, i) => (
+                        <div key={i} style={{ marginBottom: "0.4rem" }}>
+                          <strong>{src.employer || "—"}</strong>
+                          <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}> · {src.payday} · {src.pay_frequency || "—"}</span>
+                        </div>
+                      ))}
+                    </dd>
                     <dt>SSN last 4</dt>
                     <dd>{selected.customer.ssn_last4 || "—"}</dd>
                     <dt>State</dt>
                     <dd>{selected.customer.state || "—"}</dd>
-                    <dt>Pay frequency</dt>
-                    <dd>{selected.customer.pay_frequency || "—"}</dd>
                     <dt>Bank / direct debit</dt>
                     <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
                     <dt>Backup card</dt>
@@ -1404,6 +1440,33 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
 
   return (
     <div className={styles.snapshot}>
+      {snapshot.income_sources?.length > 0 && (
+        <>
+          <h4>Accrued wages today</h4>
+          {snapshot.income_sources.map((src, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "0.8rem 0", borderBottom: "1px solid var(--border)" }}>
+              <div>
+                <strong style={{ fontSize: "1.4rem" }}>{src.employer || "Unknown employer"}</strong>
+                <div style={{ fontSize: "1.2rem", color: "var(--muted)", marginTop: "0.2rem" }}>
+                  {src.accrued_cents != null
+                    ? `${src.days_elapsed} of ${src.period_days} days elapsed · avg paycheck ${formatMoney((src.avg_paycheck_cents ?? 0) / 100)}`
+                    : src.error === "no_transactions" ? "No matching wage transactions found" : "Unable to calculate"}
+                </div>
+              </div>
+              <strong style={{ fontSize: "1.5rem", color: src.accrued_cents != null ? "var(--ink)" : "var(--muted)" }}>
+                {src.accrued_cents != null ? formatMoney(src.accrued_cents / 100) : "—"}
+              </strong>
+            </div>
+          ))}
+          {snapshot.income_sources.length > 1 && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "0.8rem 0", fontWeight: 700, fontSize: "1.4rem" }}>
+              <span>Total accrued</span>
+              <span>{formatMoney(snapshot.total_accrued_cents / 100)}</span>
+            </div>
+          )}
+        </>
+      )}
+
       <h4>Accounts</h4>
       {snapshot.accounts.map((account) => (
         <div key={account.id} className={styles.account}>
@@ -1647,8 +1710,9 @@ const LoanApp = () => {
             <section className={styles.panel}>
               <h3>Loan details</h3>
               <dl>
-                <dt>Employer</dt><dd>{application.customer.employer}</dd>
-                <dt>Payday</dt><dd>{application.payday}</dd>
+                <dt>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
+                <dd>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
+                <dt>Next payday</dt><dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
                 <dt>Bank</dt><dd>{application.plaid_connected ? "Connected" : "Not connected"}</dd>
               </dl>
             </section>

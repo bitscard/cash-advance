@@ -24,6 +24,17 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
 `).catch(() => {});
 
+pool.query(`
+  CREATE TABLE IF NOT EXISTS income_sources (
+    id SERIAL PRIMARY KEY,
+    application_id INTEGER NOT NULL,
+    employer TEXT NOT NULL,
+    payday DATE NOT NULL,
+    pay_frequency TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+`).catch(() => {});
+
 const fmtDate = (v) => {
   if (!v) return null;
   if (typeof v === 'string') return v.slice(0, 10);
@@ -63,6 +74,28 @@ const publicApp = (row) => ({
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
+
+async function createIncomeSources(application_id, sources) {
+  for (const s of sources) {
+    await pool.query(
+      'INSERT INTO income_sources (application_id, employer, payday, pay_frequency) VALUES ($1,$2,$3,$4)',
+      [application_id, s.employer, s.payday, s.pay_frequency],
+    );
+  }
+}
+
+async function getIncomeSources(application_id) {
+  const { rows } = await pool.query(
+    'SELECT * FROM income_sources WHERE application_id=$1 ORDER BY id ASC',
+    [application_id],
+  );
+  return rows.map(r => ({
+    id: r.id,
+    employer: r.employer,
+    payday: fmtDate(r.payday),
+    pay_frequency: r.pay_frequency,
+  }));
+}
 
 async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state }) {
   const ssn_last4 = ssn ? ssn.replace(/-/g, '').slice(-4) : null;
@@ -235,6 +268,8 @@ async function saveStripeCharge(id, charge_id, charge_status) {
 module.exports = {
   publicApp,
   createApplication,
+  createIncomeSources,
+  getIncomeSources,
   saveSubscription,
   saveDeliveryType,
   savePayoutPreference,

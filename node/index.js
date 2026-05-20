@@ -198,10 +198,51 @@ async function classifyTransaction(description, category, pfc) {
   if (isExcludedByPFC(pfc)) return { status: 'excluded', reason: 'pfc', ai_classified: false };
   if (isExcludedByKeyword(description)) return { status: 'excluded', reason: 'keyword', ai_classified: false };
   // Only call AI for credits (already filtered upstream) not obviously wage income
-  const pfcWage = pfc === 'INCOME_WAGES' || pfc === 'INCOME_OTHER_INCOME';
+  const pfcWage = pfc === 'INCOME_WAGES';
   if (pfcWage) return { status: 'wage_income', reason: 'pfc', ai_classified: false };
   const aiResult = await classifyWithAI(description, category, pfc);
   return { status: aiResult, reason: 'ai', ai_classified: true };
+}
+
+// ── Accrued wage calculation ──────────────────────────────────────────────────
+
+function payPeriodDays(frequency) {
+  const f = (frequency || '').toLowerCase();
+  if (f === 'weekly') return 7;
+  if (f === 'biweekly') return 14;
+  if (f === 'semimonthly') return 15;
+  if (f === 'monthly') return 30;
+  if (f === 'daily') return 1;
+  return 14;
+}
+
+function calcSourceAccrued(source, wageTxs) {
+  const words = source.employer.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const sourceTxs = words.length > 0
+    ? wageTxs.filter(tx => words.some(w => tx.description.toLowerCase().includes(w)))
+    : wageTxs;
+  const sorted = [...sourceTxs].sort((a, b) => b.date.localeCompare(a.date));
+
+  if (sorted.length === 0) return { ...source, accrued_cents: null, error: 'no_transactions' };
+
+  const periodDays = payPeriodDays(source.pay_frequency);
+  const nextPayday = new Date(source.payday + 'T00:00:00');
+  const today = new Date();
+  const daysUntilNext = Math.max(0, Math.round((nextPayday - today) / 86400000));
+  const daysElapsed = Math.max(0, periodDays - daysUntilNext);
+
+  const recent = sorted.slice(0, 3);
+  const avgPaycheck = recent.reduce((sum, tx) => sum + tx.amount, 0) / recent.length;
+  const accrued_cents = Math.max(0, Math.round((avgPaycheck / periodDays) * daysElapsed));
+
+  return {
+    ...source,
+    accrued_cents,
+    days_elapsed: daysElapsed,
+    period_days: periodDays,
+    avg_paycheck_cents: Math.round(avgPaycheck),
+    matched_tx_count: sorted.length,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -248,9 +289,12 @@ const requireAuth = (request, response) => {
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, employer, payday, requested_amount, password, ssn, pay_frequency, state } = request.body;
+    const { name, email, phone, requested_amount, password, ssn, state, income_sources } = request.body;
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
+    }
+    if (!Array.isArray(income_sources) || income_sources.length === 0) {
+      return response.status(400).json({ error: { error_message: 'At least one income source is required.' } });
     }
 
     const ssnClean = (ssn || '').replace(/-/g, '');
@@ -274,8 +318,20 @@ app.post('/api/advance/applications', async function (request, response, next) {
       }
     }
 
+    // Store primary source fields on applications row for backwards compat
+    const primary = income_sources[0];
     const password_hash = await bcrypt.hash(password, 10);
-    const row = await db.createApplication({ name: name || '', email: email || '', phone: phone || '', employer: employer || '', payday, requested_amount, password_hash, ssn: ssn || null, pay_frequency: pay_frequency || null, state: state || null });
+    const row = await db.createApplication({
+      name: name || '', email: email || '', phone: phone || '',
+      employer: primary.employer || '',
+      payday: primary.payday,
+      requested_amount,
+      password_hash,
+      ssn: ssn || null,
+      pay_frequency: primary.pay_frequency || null,
+      state: state || null,
+    });
+    await db.createIncomeSources(row.id, income_sources);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $10 cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
@@ -292,7 +348,8 @@ app.get('/api/advance/applications/:id', async function (request, response, next
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    response.json({ application: db.publicApp(row) });
+    const income_sources = await db.getIncomeSources(row.id);
+    response.json({ application: { ...db.publicApp(row), income_sources } });
   } catch (err) { next(err); }
 });
 
@@ -660,7 +717,18 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
 
     const transactions = [...classified, ...outgoing].sort((a, b) => b.date.localeCompare(a.date));
 
-    response.json({ accounts, transactions, auth: null });
+    // Compute per-source accrued wages
+    const wageTxs = classified.filter(tx => tx.status === 'wage_income');
+    let incomeSources = await db.getIncomeSources(application.id);
+    // Fall back to application row for pre-multi-source applications
+    if (incomeSources.length === 0 && application.payday) {
+      const fmtDate = v => v ? (typeof v === 'string' ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10)) : null;
+      incomeSources = [{ id: null, employer: application.employer || '', payday: fmtDate(application.payday), pay_frequency: application.pay_frequency }];
+    }
+    const sourcesWithAccrued = incomeSources.map(src => calcSourceAccrued(src, wageTxs));
+    const total_accrued_cents = sourcesWithAccrued.reduce((sum, s) => sum + (s.accrued_cents || 0), 0);
+
+    response.json({ accounts, transactions, auth: null, income_sources: sourcesWithAccrued, total_accrued_cents });
   } catch (err) { next(err); }
 });
 
