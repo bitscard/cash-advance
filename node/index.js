@@ -117,12 +117,14 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Layer 1: Plaid personal_finance_category codes to exclude
 const EXCLUDED_PFC = new Set([
-  'INCOME_RETIREMENT_PENSION',       // pension, annuity
-  'INCOME_DIVIDENDS',                // investment income
-  'INCOME_SOCIAL_SECURITY',          // social security
-  'INCOME_UNEMPLOYMENT_BENEFITS',    // state unemployment insurance
-  'INCOME_TAX_REFUND',               // IRS tax refunds, EITC
-  'GOVERNMENT_BENEFITS',             // TANF, SNAP, WIC, stimulus, VA, disability
+  'INCOME_RETIREMENT_PENSION',                      // pension, annuity
+  'INCOME_DIVIDENDS',                               // investment income
+  'INCOME_SOCIAL_SECURITY',                         // social security
+  'INCOME_UNEMPLOYMENT_BENEFITS',                   // state unemployment insurance
+  'INCOME_TAX_REFUND',                              // IRS tax refunds, EITC
+  'GOVERNMENT_BENEFITS',                            // TANF, SNAP, WIC, stimulus, VA, disability
+  'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS',    // transfers from brokerage/retirement accounts
+  'TRANSFER_IN_OTHER_TRANSFER_IN',                  // catch-all inbound transfers (not payroll)
 ]);
 
 // Layer 2: Keyword matching on description (catches what PFC misses)
@@ -141,9 +143,16 @@ const EXCLUDED_KEYWORDS = [
   'insurance settlement', 'lawsuit', 'legal settlement',
   'trust distribution', 'trust dist',
   'federal retirement', ' csrs ', ' fers ',
-  'opm treas',   // Office of Personnel Management (federal civil service)
+  'opm treas',
   'disability payment', 'state disability',
   'rental income', 'rent payment received',
+  // refunds
+  'refund', 'purchase return', 'return credit', 'merchandise credit',
+  // investment / brokerage transfers
+  'fidelity', 'vanguard', 'schwab', 'etrade', 'e*trade', 'robinhood',
+  'ameritrade', 'merrill', 'wealthfront', 'betterment', 'acorns',
+  'brokerage', 'investment transfer', 'transfer from investment',
+  'dividend', 'capital gain', '401k', 'ira distribution',
 ];
 
 function isExcludedByPFC(pfc) {
@@ -176,7 +185,7 @@ Plaid PFC: "${pfc}"
 
 Count as "wage_income" ONLY if it is a regular paycheck, salary, or hourly wages from an employer (e.g. ADP, Gusto, payroll, direct deposit from employer).
 
-Count as "excluded" if it is ANY of: pension/annuity, investment/dividend income, rental income, alimony/child support, trust distribution, lottery/gambling winnings, insurance/lawsuit settlement, IRS tax refund/EITC, stimulus/one-time relief, unemployment insurance, TANF/SNAP/WIC, state/local disability, workers compensation, Social Security, VA benefits, federal civil service retirement, Railroad Retirement Board benefits.
+Count as "excluded" if it is ANY of: pension/annuity, investment/dividend income, brokerage or retirement account transfer, rental income, alimony/child support, trust distribution, lottery/gambling winnings, insurance/lawsuit settlement, IRS tax refund/EITC, merchandise or purchase refund, stimulus/one-time relief, unemployment insurance, TANF/SNAP/WIC, state/local disability, workers compensation, Social Security, VA benefits, federal civil service retirement, Railroad Retirement Board benefits.
 
 Count as "uncertain" if you cannot determine from the description alone.
 
