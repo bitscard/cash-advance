@@ -114,7 +114,12 @@ const TermsPage = () => (
     </Section>
 
     <Section title="O. Governing Law">
-      <p>These Terms are governed by the laws of the State of <strong>Georgia</strong>. Disputes shall be resolved in courts located in <strong>Atlanta, Georgia</strong>.</p>
+      <p>These Terms are governed by the laws of the state in which you reside at the time of registration:</p>
+      <ul>
+        <li><strong>Georgia residents:</strong> Governed by Georgia law. Disputes resolved in courts located in <strong>Atlanta, Georgia</strong>.</li>
+        <li><strong>Utah residents:</strong> Governed by Utah law. Disputes resolved in courts located in <strong>Salt Lake City, Utah</strong>.</li>
+      </ul>
+      <p>Applicable federal law governs where federal statutes or regulations apply.</p>
     </Section>
 
     <Section title="P. Termination">
