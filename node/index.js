@@ -203,10 +203,26 @@ Reply with ONLY one word: wage_income, excluded, or uncertain`,
   }
 }
 
-async function classifyTransaction(description, category, pfc) {
+function buildRefundSet(rawTxs) {
+  // Merchants that appear in outgoing transactions
+  const merchantsWithSpend = new Set(
+    rawTxs
+      .filter(tx => tx.amount < 0 && tx.description)
+      .map(tx => tx.description.toLowerCase().trim())
+      .filter(Boolean)
+  );
+  // Incoming transactions from those same merchants are likely refunds
+  return new Set(
+    rawTxs
+      .filter(tx => tx.amount > 0 && merchantsWithSpend.has(tx.description.toLowerCase().trim()))
+      .map(tx => tx.id)
+  );
+}
+
+async function classifyTransaction(description, category, pfc, isRefund) {
+  if (isRefund) return { status: 'excluded', reason: 'refund', ai_classified: false };
   if (isExcludedByPFC(pfc)) return { status: 'excluded', reason: 'pfc', ai_classified: false };
   if (isExcludedByKeyword(description)) return { status: 'excluded', reason: 'keyword', ai_classified: false };
-  // Only call AI for credits (already filtered upstream) not obviously wage income
   const pfcWage = pfc === 'INCOME_WAGES';
   if (pfcWage) return { status: 'wage_income', reason: 'pfc', ai_classified: false };
   const aiResult = await classifyWithAI(description, category, pfc);
@@ -710,11 +726,12 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
       pfc: tx.personal_finance_category?.primary || null,
     }));
 
-    // Classify incoming transactions through all three layers
+    // Classify incoming transactions through all layers
     const incoming = rawTxs.filter(tx => tx.amount > 0);
+    const refundIds = buildRefundSet(rawTxs);
     const classified = await Promise.all(
       incoming.map(async tx => {
-        const cls = await classifyTransaction(tx.description, tx.category, tx.pfc);
+        const cls = await classifyTransaction(tx.description, tx.category, tx.pfc, refundIds.has(tx.id));
         return { ...tx, ...cls };
       })
     );

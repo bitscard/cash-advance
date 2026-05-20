@@ -98,7 +98,7 @@ interface BankSnapshot {
     category: string;
     pfc: string | null;
     status: "wage_income" | "excluded" | "uncertain" | "outgoing";
-    reason: "pfc" | "keyword" | "ai" | null;
+    reason: "pfc" | "keyword" | "ai" | "refund" | null;
     ai_classified: boolean;
   }>;
   income_sources: IncomeSource[];
@@ -1392,6 +1392,7 @@ const STATUS_LABEL: Record<string, string> = {
   pfc: "Plaid category",
   keyword: "keyword match",
   ai: "AI",
+  refund: "refund detected",
 };
 
 const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
