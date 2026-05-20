@@ -382,6 +382,7 @@ const CustomerApp = () => {
   const [deliveryChoice, setDeliveryChoice] = useState<"instant" | "standard" | null>(null);
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const [trustScreenSeen, setTrustScreenSeen] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
@@ -430,13 +431,14 @@ const CustomerApp = () => {
     if (
       application &&
       !application.delivery_type &&
+      trustScreenSeen &&
       (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled")
     ) {
       setShowDeliveryModal(true);
     } else {
       setShowDeliveryModal(false);
     }
-  }, [application?.delivery_type, application?.status]);
+  }, [application?.delivery_type, application?.status, trustScreenSeen]);
 
   const activateSubscription = async () => {
     if (!application) return;
@@ -526,7 +528,7 @@ const CustomerApp = () => {
           ...s,
           pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
         })),
-        requested_amount: 10,
+        requested_amount: 25,
       };
       const response = await fetch(apiUrl("/api/advance/applications"), {
         method: "POST",
@@ -1091,6 +1093,131 @@ const CustomerApp = () => {
     );
   }
 
+  // ── Approval trust screen (shown once before delivery choice) ───────────────
+  if (
+    application.status === "approved" &&
+    !application.delivery_type &&
+    !trustScreenSeen
+  ) {
+    const milestones = [
+      { amount: "$25", label: "1st advance", current: true },
+      { amount: "$50", label: "2nd advance", current: false },
+      { amount: "$75", label: "3rd advance", current: false },
+      { amount: "$100", label: "4th advance", current: false },
+      { amount: "$150", label: "5th advance", current: false },
+      { amount: "$200", label: "6th+", current: false },
+    ];
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+
+        {/* Hero band */}
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>You're approved</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                $25 is on<br />its way. 🎉
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Your first advance is <strong>$25</strong>. Pay it back on time and your limit grows — all the way up to $200.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={180} />
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className={styles.benefitsBody}>
+
+          {/* Trust explanation */}
+          <div style={{
+            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "3.2rem",
+          }}>
+            <p style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.8rem" }}>
+              How trust-building works
+            </p>
+            <p style={{ fontSize: "1.4rem", color: "var(--muted)", lineHeight: 1.7, margin: 0 }}>
+              Every on-time repayment earns you a higher limit on your next advance. We start small because we're just getting to know each other — but the more history we build together, the more we can offer you.
+            </p>
+          </div>
+
+          {/* Milestone ladder */}
+          <p style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.6rem" }}>
+            Your advance limit roadmap
+          </p>
+          <div style={{ display: "flex", gap: "1rem", marginBottom: "3.2rem", overflowX: "auto", paddingBottom: "0.4rem" }}>
+            {milestones.map((m, i) => (
+              <div
+                key={m.amount}
+                style={{
+                  flex: "1 0 9rem",
+                  background: m.current ? "var(--brand)" : "var(--white)",
+                  border: m.current ? "none" : "1.5px solid var(--border)",
+                  borderRadius: "var(--r-lg)",
+                  padding: "1.8rem 1.2rem",
+                  textAlign: "center",
+                  position: "relative",
+                  opacity: m.current ? 1 : 0.55 + i * 0.07,
+                }}
+              >
+                {m.current && (
+                  <span style={{
+                    position: "absolute", top: "-1.2rem", left: "50%", transform: "translateX(-50%)",
+                    background: "#fbbf24", color: "#78350f", fontSize: "1.05rem", fontWeight: 700,
+                    padding: "0.2rem 0.8rem", borderRadius: "99px", whiteSpace: "nowrap",
+                  }}>
+                    You are here
+                  </span>
+                )}
+                <p style={{
+                  fontSize: "2rem", fontWeight: 800, margin: "0 0 0.4rem",
+                  color: m.current ? "white" : "var(--ink)",
+                }}>
+                  {m.amount}
+                </p>
+                <p style={{
+                  fontSize: "1.15rem", color: m.current ? "rgba(255,255,255,0.75)" : "var(--muted)",
+                  margin: 0,
+                }}>
+                  {m.label}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* What happens next cards */}
+          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
+            {[
+              { icon: "📅", title: "Repay on payday", sub: "Your advance is automatically due on your next payday. Repay on time to unlock a higher limit." },
+              { icon: "🚫", title: "No credit bureau reporting", sub: "We never report anything to any credit bureau — good or bad. Your score is always safe." },
+              { icon: "🔄", title: "No rollover, no interest", sub: "This isn't a loan. There's zero interest and you can't roll over your balance. Just pay back what you got." },
+              { icon: "🛡️", title: "We never chase you", sub: "If repayment fails, we write it off. No collections, no lawsuits, no debt buyers — ever." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className={styles.benefitCard}>
+                <span className={styles.benefitIcon}>{icon}</span>
+                <p className={styles.benefitCardTitle}>{title}</p>
+                <p className={styles.benefitCardSub}>{sub}</p>
+              </div>
+            ))}
+          </div>
+
+          <button
+            style={{ width: "100%" }}
+            onClick={() => setTrustScreenSeen(true)}
+          >
+            Choose how to receive my $25 →
+          </button>
+        </div>
+
+        <StatesFooter />
+      </main>
+    );
+  }
+
   // ── Authenticated application view ────────────────────────────────────────
   const needsBank = !application.plaid_connected;
   // Bank verifies income via Plaid; card is required for repayment
@@ -1104,10 +1231,10 @@ const CustomerApp = () => {
       {showDeliveryModal && (
         <div className={styles.modalBackdrop}>
           <div className={styles.modal}>
-            <p className={styles.modalKicker}>You're approved! 🎉</p>
+            <p className={styles.modalKicker}>How fast do you need it?</p>
             <h2 className={styles.modalTitle}>
-              Approved for a{" "}
-              <span style={{ color: "var(--brand)" }}>${application.requested_amount} cash advance</span>
+              Receive your{" "}
+              <span style={{ color: "var(--brand)" }}>${application.requested_amount} advance</span>
             </h2>
             <p style={{ color: "var(--muted)", marginBottom: "0.8rem" }}>
               Repayment due on your payday: <strong style={{ color: "var(--ink)" }}>{application.payday}</strong>
@@ -1121,7 +1248,7 @@ const CustomerApp = () => {
                 className={`${styles.deliveryOption} ${deliveryChoice === "instant" ? styles.deliveryOptionSelected : ""}`}
                 onClick={() => setDeliveryChoice("instant")}
               >
-                <p className={styles.deliveryOptionBadge}>+$1 fee</p>
+                <p className={styles.deliveryOptionBadge}>+$3 fee</p>
                 <p className={styles.deliveryOptionTitle}>⚡ Instant</p>
                 <p className={styles.deliveryOptionSub}>Money sent within minutes to your PayPal, CashApp, or Zelle.</p>
               </button>
