@@ -1019,6 +1019,78 @@ const CustomerApp = () => {
     );
   }
 
+  // ── Denied screen (shown instead of raw "Denied" status) ────────────────────
+  if (application.status === 'denied') {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+
+        {/* Hero band */}
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Application update</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Not quite ready<br />yet.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                We weren't able to approve your advance at this time — but this isn't permanent.
+                Many members get approved on a second try once their income history builds up.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={180} />
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className={styles.benefitsBody}>
+          {/* Reassurance card */}
+          <div style={{
+            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "3.2rem",
+            display: "flex", alignItems: "center", gap: "1.6rem", flexWrap: "wrap",
+          }}>
+            <span style={{ fontSize: "2.4rem" }}>💌</span>
+            <div>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>
+                No mark on your credit
+              </p>
+              <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: 0 }}>
+                We never reported anything to any credit bureau. Your score is exactly where it was.
+              </p>
+            </div>
+          </div>
+
+          {/* What typically helps */}
+          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
+            {[
+              { icon: "📅", title: "Consistent deposit history", sub: "A few more pay cycles showing regular deposits can make a big difference. Try again in 30–60 days." },
+              { icon: "🏦", title: "Keep your bank connected", sub: "Your account is still active. When you're ready to reapply, your bank connection will still be in place." },
+              { icon: "🚫", title: "No collections, ever", sub: "We'll never refer you to a debt collector, sell your information, or file a lawsuit — unconditionally." },
+              { icon: "📩", title: "Get in touch", sub: "If you think this was a mistake or have questions, email us. We review every message personally." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className={styles.benefitCard}>
+                <span className={styles.benefitIcon}>{icon}</span>
+                <p className={styles.benefitCardTitle}>{title}</p>
+                <p className={styles.benefitCardSub}>{sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Contact */}
+          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "1.4rem" }}>
+            Questions about your application? Email{" "}
+            <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
+          </div>
+        </div>
+
+        <StatesFooter />
+      </main>
+    );
+  }
+
   // ── Authenticated application view ────────────────────────────────────────
   const needsBank = !application.plaid_connected;
   // Bank verifies income via Plaid; card is required for repayment
