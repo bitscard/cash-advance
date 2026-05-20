@@ -27,12 +27,13 @@ pool.query(`
 pool.query(`
   CREATE TABLE IF NOT EXISTS income_sources (
     id SERIAL PRIMARY KEY,
-    application_id INTEGER NOT NULL,
+    application_id TEXT NOT NULL,
     employer TEXT NOT NULL,
     payday DATE NOT NULL,
     pay_frequency TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
+  ALTER TABLE income_sources ALTER COLUMN application_id TYPE TEXT USING application_id::TEXT;
 `).catch(() => {});
 
 const fmtDate = (v) => {
