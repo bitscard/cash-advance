@@ -17,6 +17,7 @@ type Status =
   | "reviewing"
   | "approved"
   | "denied"
+  | "expired"
   | "funded"
   | "repayment_scheduled"
   | "repaid"
@@ -58,6 +59,7 @@ interface Application {
   subscription_status: string | null;
   delivery_type: string | null;
   instant_fee_paid: boolean;
+  offer_expires_at: string | null;
   income_sources: Array<Pick<IncomeSource, "id" | "employer" | "payday" | "pay_frequency">>;
   repayment: null | {
     amount: number;
@@ -132,6 +134,7 @@ const statusLabel: Record<Status, string> = {
   reviewing: "Reviewing",
   approved: "Approved",
   denied: "Denied",
+  expired: "Offer expired",
   funded: "Funded",
   repayment_scheduled: "Repayment scheduled",
   repaid: "Repaid",
@@ -1093,6 +1096,67 @@ const CustomerApp = () => {
     );
   }
 
+  // ── Expired offer screen ──────────────────────────────────────────────────────
+  if (application.status === "expired") {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Offer expired</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Your offer<br />has expired.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Approved offers must be accepted by midnight on the day of approval. Yours wasn't claimed in time — but you can reapply.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={180} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody}>
+          <div style={{
+            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "3.2rem",
+            display: "flex", alignItems: "center", gap: "1.6rem", flexWrap: "wrap",
+          }}>
+            <span style={{ fontSize: "2.4rem" }}>🔄</span>
+            <div>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>
+                Nothing was charged
+              </p>
+              <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: 0 }}>
+                No fees, no marks on your credit, no collections — your expired offer has no consequences.
+              </p>
+            </div>
+          </div>
+          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
+            {[
+              { icon: "📝", title: "Reapply anytime", sub: "Your account is still active. Email us and we'll re-open your application for a fresh review." },
+              { icon: "📈", title: "Your history is saved", sub: "Your bank connection and income history are still on file, so a second review will be faster." },
+              { icon: "🚫", title: "No credit impact", sub: "We never pulled your credit and never will. Your score is exactly where it was." },
+              { icon: "🛡️", title: "No collections, ever", sub: "There is nothing owed. We will never refer you to a debt collector or file any legal action." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className={styles.benefitCard}>
+                <span className={styles.benefitIcon}>{icon}</span>
+                <p className={styles.benefitCardTitle}>{title}</p>
+                <p className={styles.benefitCardSub}>{sub}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "1.4rem" }}>
+            Ready to reapply? Email{" "}
+            <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
+          </div>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
   // ── Approval trust screen (shown once before delivery choice) ───────────────
   if (
     application.status === "approved" &&
@@ -1131,6 +1195,24 @@ const CustomerApp = () => {
 
         {/* Body */}
         <div className={styles.benefitsBody}>
+
+          {/* Expiry notice */}
+          {application.offer_expires_at && (() => {
+            const exp = new Date(application.offer_expires_at);
+            const timeStr = exp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+            return (
+              <div style={{
+                background: "#fffbeb", border: "1.5px solid #fde68a",
+                borderRadius: "var(--r-lg)", padding: "1.6rem 2rem", marginBottom: "2.4rem",
+                display: "flex", alignItems: "center", gap: "1.2rem",
+              }}>
+                <span style={{ fontSize: "2rem" }}>⏰</span>
+                <p style={{ fontSize: "1.4rem", color: "#78350f", margin: 0, lineHeight: 1.6 }}>
+                  <strong>This offer expires tonight at {timeStr}.</strong> If you don't choose a delivery method before then, your offer will be cancelled and you'll need to reapply.
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Trust explanation */}
           <div style={{

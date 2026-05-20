@@ -498,10 +498,31 @@ app.post('/api/advance/applications', async function (request, response, next) {
   }
 });
 
+// Returns the UTC timestamp of midnight (23:59:59.999) on `date` in the user's state timezone.
+function getOfferExpiresAt(date, state) {
+  const tz = state === 'Utah' ? 'America/Denver' : 'America/New_York';
+  const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(date); // 'YYYY-MM-DD'
+  const [year, month, day] = dateStr.split('-').map(Number);
+  // Determine UTC offset for this timezone at noon on this date (handles DST)
+  const noon = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const localHour = parseInt(
+    new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hour12: false }).format(noon),
+    10,
+  );
+  const utcOffset = 12 - localHour; // hours ahead of UTC needed to reach local time
+  // 23:59:59.999 local = UTC + utcOffset hours on the same local day
+  // Date.UTC handles hour > 23 automatically (rolls to next day)
+  return new Date(Date.UTC(year, month - 1, day, 23 + utcOffset, 59, 59, 999));
+}
+
 app.get('/api/advance/applications/:id', async function (request, response, next) {
   try {
-    const row = await db.getApplicationById(request.params.id);
+    let row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    // Lazy expiry: if still approved but deadline has passed and no delivery chosen, expire it
+    if (row.status === 'approved' && !row.delivery_type && row.offer_expires_at && new Date(row.offer_expires_at) < new Date()) {
+      row = await db.updateApplicationStatus(row.id, 'expired') || row;
+    }
     const income_sources = await db.getIncomeSources(row.id);
     response.json({ application: { ...db.publicApp(row), income_sources } });
   } catch (err) { next(err); }
@@ -1085,12 +1106,16 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
   if (!requireAdmin(request, response)) return;
   try {
     const status = request.body.status;
-    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed'];
+    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed'];
     if (!allowedStatuses.includes(status)) {
       return response.status(400).json({ error: { error_message: 'Unsupported status' } });
     }
-    const updated = await db.updateApplicationStatus(request.params.id, status);
+    let updated = await db.updateApplicationStatus(request.params.id, status);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (status === 'approved') {
+      const expiresAt = getOfferExpiresAt(new Date(), updated.state);
+      updated = await db.saveOfferExpiry(updated.id, expiresAt) || updated;
+    }
     if (request.body.note) {
       await db.addMessage(request.params.id, 'admin', request.body.note);
     }

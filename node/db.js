@@ -23,6 +23,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS pay_frequency TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS dob DATE;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
 `).catch(() => {});
 
 pool.query(`
@@ -77,6 +78,7 @@ const publicApp = (row) => ({
   subscription_status: row.subscription_status || null,
   delivery_type: row.delivery_type || null,
   instant_fee_paid: row.instant_fee_paid || false,
+  offer_expires_at: row.offer_expires_at ? new Date(row.offer_expires_at).toISOString() : null,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -271,6 +273,14 @@ async function saveStripeCharge(id, charge_id, charge_status) {
   return rows[0] || null;
 }
 
+async function saveOfferExpiry(id, offer_expires_at) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET offer_expires_at=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+    [offer_expires_at, id],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   publicApp,
   createApplication,
@@ -293,6 +303,7 @@ module.exports = {
   saveStripeCustomer,
   saveStripePaymentMethod,
   saveStripeCharge,
+  saveOfferExpiry,
   getDueMemberships,
   getDueApplications,
 };
