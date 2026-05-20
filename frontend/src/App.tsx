@@ -948,32 +948,73 @@ const CustomerApp = () => {
 
   // ── Waitlist screen (non-eligible state — cannot proceed past here) ─────────
   if (application.subscription_status === 'waitlisted') {
+    const stateName = application.customer.state || "your state";
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
-        <section className={styles.chatOnly} style={{ paddingTop: "6rem" }}>
-          <div style={{ maxWidth: "52rem", margin: "0 auto", textAlign: "center", padding: "0 2rem" }}>
-            <div style={{ fontSize: "4.8rem", marginBottom: "2rem" }}>📋</div>
-            <h1 style={{ fontSize: "3.2rem", fontWeight: 800, marginBottom: "1.2rem", color: "var(--ink)" }}>
-              You're on the waitlist!
-            </h1>
-            <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.7, marginBottom: "1.6rem" }}>
-              Advance is currently available in <strong>Georgia</strong> and <strong>Utah</strong> only.
-              We're expanding fast — you'll be among the first to know when we launch in{" "}
-              <strong>{application.customer.state || "your state"}</strong>.
-            </p>
-            <p style={{ fontSize: "1.5rem", color: "var(--muted)", lineHeight: 1.7, marginBottom: "3.2rem" }}>
-              We've saved your information and you'll receive an email at{" "}
-              <strong style={{ color: "var(--ink)" }}>{application.customer.email}</strong> the moment we go live in your area.
-            </p>
-            <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r)", padding: "2.4rem", marginBottom: "3.2rem" }}>
-              <p style={{ fontSize: "1.4rem", color: "var(--muted)", marginBottom: "0" }}>
-                Questions? Email us at{" "}
-                <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
+
+        {/* Hero band */}
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>You're in line</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                We're coming to<br />{stateName}!
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Advance is live in Georgia and Utah today. We're expanding state by state — {stateName} is on the roadmap.
+                You'll get an email the moment we go live.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={180} />
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className={styles.benefitsBody}>
+          {/* Confirmation card */}
+          <div style={{
+            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "3.2rem",
+            display: "flex", alignItems: "center", gap: "1.6rem", flexWrap: "wrap",
+          }}>
+            <span style={{ fontSize: "2.4rem" }}>✅</span>
+            <div>
+              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>
+                You're confirmed
+              </p>
+              <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: 0 }}>
+                We'll email <strong style={{ color: "var(--ink)" }}>{application.customer.email}</strong> as soon as Advance launches in {stateName}.
               </p>
             </div>
           </div>
-        </section>
+
+          {/* What to expect cards */}
+          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
+            {[
+              { icon: "🚫", title: "No credit check, ever", sub: "We won't pull your credit now or when we launch. Your score is safe." },
+              { icon: "💸", title: "Instant access at launch", sub: "When we go live in your state, you'll skip the line — your account is ready to go." },
+              { icon: "🔒", title: "Your data is safe", sub: "We've stored your information securely. We will never sell it or share it with advertisers." },
+              { icon: "🎰", title: "Weekly $300 raffle", sub: "Once Advance is live in your state, you'll be automatically entered in our weekly cash raffle." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className={styles.benefitCard}>
+                <span className={styles.benefitIcon}>{icon}</span>
+                <p className={styles.benefitCardTitle}>{title}</p>
+                <p className={styles.benefitCardSub}>{sub}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Contact */}
+          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "1.4rem" }}>
+            Questions? Reach us at{" "}
+            <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
+          </div>
+        </div>
+
+        <StatesFooter />
       </main>
     );
   }
