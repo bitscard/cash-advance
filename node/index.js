@@ -288,6 +288,51 @@ app.use(
 app.use(bodyParser.json());
 app.use(cors());
 
+// ── Waitlist ──────────────────────────────────────────────────────────────────
+app.post('/api/waitlist', async function (request, response, next) {
+  try {
+    const { name, email, state } = request.body;
+    if (!email) return response.status(400).json({ error: { error_message: 'Email is required' } });
+
+    const apiKey = process.env.MAILCHIMP_API_KEY;
+    const listId = process.env.MAILCHIMP_LIST_ID;
+    const server = process.env.MAILCHIMP_SERVER_PREFIX;
+
+    if (!apiKey || !listId || !server) {
+      console.log('[waitlist] Mailchimp env vars not set — logging signup only:', email, state);
+      return response.json({ success: true });
+    }
+
+    const [firstName, ...rest] = (name || '').trim().split(' ');
+    const lastName = rest.join(' ');
+
+    const mcResponse = await fetch(
+      `https://${server}.api.mailchimp.com/3.0/lists/${listId}/members`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}`,
+        },
+        body: JSON.stringify({
+          email_address: email,
+          status: 'subscribed',
+          merge_fields: { FNAME: firstName || '', LNAME: lastName || '', STATE: state || '' },
+          tags: ['waitlist'],
+        }),
+      }
+    );
+
+    const mcData = await mcResponse.json();
+    // "Member Exists" is fine — they're already on the list
+    if (!mcResponse.ok && mcData.title !== 'Member Exists') {
+      return response.status(400).json({ error: { error_message: mcData.detail || 'Could not add to waitlist' } });
+    }
+
+    response.json({ success: true });
+  } catch (err) { next(err); }
+});
+
 app.post('/api/info', function (request, response, next) {
   response.json({
     item_id: ITEM_ID,

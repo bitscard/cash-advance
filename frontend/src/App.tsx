@@ -107,7 +107,20 @@ interface BankSnapshot {
   auth: unknown;
 }
 
-const US_STATES = ["Georgia", "Utah"];
+const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+  "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+  "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
+  "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+  "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
+  "New Hampshire", "New Jersey", "New Mexico", "New York",
+  "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+  "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington",
+  "West Virginia", "Wisconsin", "Wyoming",
+];
+
+const ELIGIBLE_STATES = new Set(["Georgia", "Utah"]);
 
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
@@ -361,7 +374,10 @@ const CustomerApp = () => {
   });
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "signup">("landing");
+  const [view, setView] = useState<"landing" | "signup" | "waitlist">("landing");
+  const [waitlistState, setWaitlistState] = useState("");
+  const [waitlistBusy, setWaitlistBusy] = useState(false);
+  const [waitlistDone, setWaitlistDone] = useState(false);
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
   const [subBusy, setSubBusy] = useState(false);
@@ -692,6 +708,76 @@ const CustomerApp = () => {
       );
     }
 
+    // ── Waitlist ──────────────────────────────────────────────────────────────
+    if (view === "waitlist") {
+      const handleWaitlist = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setWaitlistBusy(true);
+        setError(null);
+        try {
+          const res = await fetch(apiUrl("/api/waitlist"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: form.name, email: form.email, state: waitlistState }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error?.error_message || "Something went wrong");
+          setWaitlistDone(true);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Something went wrong");
+        } finally {
+          setWaitlistBusy(false);
+        }
+      };
+
+      return (
+        <main className={styles.page}>
+          <NavBar />
+          <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
+            <div className={styles.signupCard} style={{ maxWidth: "48rem" }}>
+              <div className={styles.signupCardHeader}>
+                <p className={styles.kicker}>Coming soon</p>
+                <h1>We're not in {waitlistState} yet</h1>
+                <p>We currently operate in Georgia and Utah. Join our waitlist and we'll notify you when we launch in {waitlistState}.</p>
+              </div>
+              <div className={styles.signupCardBody}>
+                {waitlistDone ? (
+                  <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                    <p style={{ fontSize: "2rem" }}>✓</p>
+                    <p style={{ fontSize: "1.6rem", fontWeight: 600, marginBottom: "0.6rem" }}>You're on the list!</p>
+                    <p style={{ fontSize: "1.4rem", color: "var(--muted)" }}>We'll email you at <strong>{form.email}</strong> when we launch in {waitlistState}.</p>
+                  </div>
+                ) : (
+                  <form className={styles.intakeComposer} onSubmit={handleWaitlist}>
+                    <div className={styles.intakeGrid}>
+                      <label>
+                        Full name
+                        <input value={form.name} placeholder="Jane Smith"
+                          onChange={e => setForm({ ...form, name: e.target.value })} />
+                      </label>
+                      <label>
+                        Email address
+                        <input required type="email" value={form.email} placeholder="jane@example.com"
+                          onChange={e => setForm({ ...form, email: e.target.value })} />
+                      </label>
+                    </div>
+                    {error && <p className={styles.error}>{error}</p>}
+                    <button type="submit" disabled={waitlistBusy} className={styles.submitBtn}>
+                      {waitlistBusy ? "Joining…" : "Join waitlist"}
+                    </button>
+                    <button type="button" onClick={() => { setView("signup"); setForm({ ...form, state: "" }); }}
+                      style={{ background: "none", border: "none", color: "var(--muted)", fontSize: "1.3rem", cursor: "pointer", marginTop: "0.8rem" }}>
+                      ← Back to application
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </section>
+        </main>
+      );
+    }
+
     // ── Signup ────────────────────────────────────────────────────────────────
     return (
       <main className={styles.page}>
@@ -803,7 +889,15 @@ const CustomerApp = () => {
                     <select
                       required
                       value={form.state}
-                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm({ ...form, state: val });
+                        if (val && !ELIGIBLE_STATES.has(val)) {
+                          setWaitlistState(val);
+                          setWaitlistDone(false);
+                          setView("waitlist");
+                        }
+                      }}
                       style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: form.state ? "var(--ink)" : "var(--muted)", appearance: "auto" }}
                     >
                       <option value="" disabled>Select state…</option>
