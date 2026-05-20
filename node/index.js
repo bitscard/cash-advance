@@ -248,23 +248,91 @@ function payPeriodDays(frequency) {
   return 14;
 }
 
-function calcSourceAccrued(source, wageTxs) {
-  const words = source.employer.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  const sourceTxs = words.length > 0
-    ? wageTxs.filter(tx => words.some(w => tx.description.toLowerCase().includes(w)))
-    : wageTxs;
-  const sorted = [...sourceTxs].sort((a, b) => b.date.localeCompare(a.date));
+// Find paycheck transactions by timing pattern rather than employer-name matching.
+// Uses the declared payday as an anchor so we know *when* to look, then finds
+// the largest income transaction within a tolerance window around each expected date.
+function findPaychecksByPattern(incomeTxs, frequency, declaredNextPayday) {
+  const sorted = [...incomeTxs].sort((a, b) => b.date.localeCompare(a.date));
+  if (sorted.length === 0) return [];
 
-  if (sorted.length === 0) return { ...source, accrued_cents: null, error: 'no_transactions' };
-
-  const periodDays = payPeriodDays(source.pay_frequency);
-  const nextPayday = new Date(source.payday + 'T00:00:00');
+  const f = (frequency || '').toLowerCase();
   const today = new Date();
-  const daysUntilNext = Math.max(0, Math.round((nextPayday - today) / 86400000));
-  const daysElapsed = Math.max(0, periodDays - daysUntilNext);
+  const todayMs = today.getTime();
 
-  const recent = sorted.slice(0, 3);
-  const avgPaycheck = recent.reduce((sum, tx) => sum + tx.amount, 0) / recent.length;
+  // Daily: return all income so far this calendar month — caller sums them
+  if (f === 'daily') {
+    const thisMonth = today.toISOString().slice(0, 7);
+    return sorted.filter(tx => tx.date.startsWith(thisMonth));
+  }
+
+  // Monthly: for each of the last 3 months look for the biggest income tx
+  // within ±7 days of the declared pay-day-of-month
+  if (f === 'monthly') {
+    const nextPay = new Date(declaredNextPayday + 'T00:00:00');
+    const targetDay = nextPay.getDate();
+    const paychecks = [];
+    for (let mBack = 0; mBack < 6 && paychecks.length < 3; mBack++) {
+      const yr = today.getFullYear() + Math.floor((today.getMonth() - mBack) / 12);
+      const mo = ((today.getMonth() - mBack) % 12 + 12) % 12;
+      const refDate = new Date(yr, mo, targetDay);
+      if (refDate >= today) continue;
+      const candidates = sorted.filter(tx =>
+        Math.abs(new Date(tx.date + 'T00:00:00') - refDate) / 86400000 <= 7
+      );
+      if (candidates.length > 0) {
+        paychecks.push(candidates.reduce((a, b) => a.amount > b.amount ? a : b));
+      }
+    }
+    return paychecks;
+  }
+
+  // Periodic (weekly=7, biweekly=14, semimonthly=15): walk backwards from
+  // the most recent past expected payday in period_days steps and grab the
+  // largest income tx within the slack window at each step.
+  const periodDays = f === 'weekly' ? 7 : f === 'biweekly' ? 14 : 15;
+  const slack = f === 'weekly' ? 2 : f === 'biweekly' ? 3 : 4; // days tolerance
+
+  let expectedMs = new Date(declaredNextPayday + 'T00:00:00').getTime();
+  while (expectedMs > todayMs) expectedMs -= periodDays * 86400000;
+
+  const paychecks = [];
+  for (let i = 0; i < 8 && paychecks.length < 4; i++) {
+    const candidates = sorted.filter(tx =>
+      Math.abs(new Date(tx.date + 'T00:00:00').getTime() - expectedMs) / 86400000 <= slack
+    );
+    if (candidates.length > 0) {
+      paychecks.push(candidates.reduce((a, b) => a.amount > b.amount ? a : b));
+    }
+    expectedMs -= periodDays * 86400000;
+  }
+  return paychecks;
+}
+
+function calcSourceAccrued(source, incomeTxs) {
+  const f = (source.pay_frequency || '').toLowerCase();
+  const today = new Date();
+
+  const paychecks = findPaychecksByPattern(incomeTxs, f, source.payday);
+  if (paychecks.length === 0) return { ...source, accrued_cents: null, error: 'no_transactions' };
+
+  // Daily: already-accrued = sum of income this month
+  if (f === 'daily') {
+    const totalCents = paychecks.reduce((sum, tx) => sum + tx.amount, 0);
+    const impliedMonthly = Math.round(totalCents / Math.max(1, today.getDate()) * 30);
+    return {
+      ...source,
+      accrued_cents: Math.round(totalCents),
+      days_elapsed: today.getDate(),
+      period_days: 30,
+      avg_paycheck_cents: impliedMonthly,
+      matched_tx_count: paychecks.length,
+    };
+  }
+
+  const periodDays = payPeriodDays(f);
+  const avgPaycheck = paychecks.reduce((sum, tx) => sum + tx.amount, 0) / paychecks.length;
+  const lastPayday = new Date(paychecks[0].date + 'T00:00:00');
+  const daysElapsed = Math.min(periodDays, Math.round((today - lastPayday) / 86400000));
   const accrued_cents = Math.max(0, Math.round((avgPaycheck / periodDays) * daysElapsed));
 
   return {
@@ -273,7 +341,8 @@ function calcSourceAccrued(source, wageTxs) {
     days_elapsed: daysElapsed,
     period_days: periodDays,
     avg_paycheck_cents: Math.round(avgPaycheck),
-    matched_tx_count: sorted.length,
+    last_payday: paychecks[0].date,
+    matched_tx_count: paychecks.length,
   };
 }
 
@@ -809,15 +878,19 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
 
     const transactions = [...classified, ...outgoing].sort((a, b) => b.date.localeCompare(a.date));
 
-    // Compute per-source accrued wages
-    const wageTxs = classified.filter(tx => tx.status === 'wage_income');
+    // Compute per-source accrued wages.
+    // Include uncertain txs in the pool — employer names often don't match in
+    // Plaid, so we rely on timing patterns instead of name filtering.
+    const incomeCandidates = classified.filter(tx =>
+      tx.status === 'wage_income' || tx.status === 'uncertain'
+    );
     let incomeSources = await db.getIncomeSources(application.id);
     // Fall back to application row for pre-multi-source applications
     if (incomeSources.length === 0 && application.payday) {
       const fmtDate = v => v ? (typeof v === 'string' ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10)) : null;
       incomeSources = [{ id: null, employer: application.employer || '', payday: fmtDate(application.payday), pay_frequency: application.pay_frequency }];
     }
-    const sourcesWithAccrued = incomeSources.map(src => calcSourceAccrued(src, wageTxs));
+    const sourcesWithAccrued = incomeSources.map(src => calcSourceAccrued(src, incomeCandidates));
     const total_accrued_cents = sourcesWithAccrued.reduce((sum, s) => sum + (s.accrued_cents || 0), 0);
 
     response.json({ accounts, transactions, auth: null, income_sources: sourcesWithAccrued, total_accrued_cents });
