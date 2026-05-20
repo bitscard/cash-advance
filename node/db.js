@@ -33,6 +33,9 @@ pool.query(`
     pay_frequency TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
+`).catch(() => {});
+
+pool.query(`
   ALTER TABLE income_sources ALTER COLUMN application_id TYPE TEXT USING application_id::TEXT;
 `).catch(() => {});
 
