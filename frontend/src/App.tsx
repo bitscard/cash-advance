@@ -885,6 +885,39 @@ const CustomerApp = () => {
 
   }
 
+  // ── Waitlist screen (non-eligible state — cannot proceed) ────────────────
+  if (application.customer.state && !ELIGIBLE_STATES.has(application.customer.state)) {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <section className={styles.chatOnly} style={{ paddingTop: "4rem" }}>
+          <div className={styles.signupCard} style={{ maxWidth: "48rem", textAlign: "center" }}>
+            <div className={styles.signupCardHeader}>
+              <p className={styles.kicker} style={{ color: "#f59e0b" }}>Coming soon</p>
+              <h1>You're on the waitlist!</h1>
+              <p style={{ fontSize: "1.5rem", marginBottom: "0.4rem" }}>
+                We're not live in <strong>{application.customer.state}</strong> yet.
+              </p>
+              <p style={{ fontSize: "1.4rem", color: "var(--muted)" }}>
+                We'll email you at <strong>{application.customer.email}</strong> the moment we launch there. Your account is saved and ready to go.
+              </p>
+            </div>
+            <div className={styles.signupCardBody} style={{ textAlign: "left" }}>
+              <dl style={{ fontSize: "1.4rem" }}>
+                <dt>Name</dt><dd>{application.customer.name}</dd>
+                <dt>State</dt><dd>{application.customer.state}</dd>
+                <dt>Email</dt><dd>{application.customer.email}</dd>
+              </dl>
+              <p style={{ marginTop: "2rem", fontSize: "1.3rem", color: "var(--muted)", borderTop: "1px solid var(--border)", paddingTop: "1.2rem" }}>
+                In the meantime, share us with a friend in Georgia or Utah.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   // ── Benefits page (activate membership) ──────────────────────────────────
   if (!application.subscription_status) {
     return (
@@ -1002,14 +1035,6 @@ const CustomerApp = () => {
         </div>
       )}
 
-      {application.customer.state && !ELIGIBLE_STATES.has(application.customer.state) && (
-        <div style={{ background: "#fff8e1", border: "1.5px solid #ffe082", borderRadius: "var(--r-sm)", padding: "1.4rem 1.8rem", marginBottom: "1.6rem" }}>
-          <p style={{ fontWeight: 700, fontSize: "1.5rem", marginBottom: "0.4rem" }}>You're on the waitlist for {application.customer.state}!</p>
-          <p style={{ fontSize: "1.35rem", color: "var(--muted)", margin: 0 }}>
-            We'll email you at <strong>{application.customer.email}</strong> when we launch there. Your account is ready and waiting.
-          </p>
-        </div>
-      )}
       <div className={styles.appCard}>
         <div className={styles.appCardPanel}>
           <div className={styles.appCardHeader}>
