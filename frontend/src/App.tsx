@@ -374,10 +374,7 @@ const CustomerApp = () => {
   });
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "signup" | "waitlist">("landing");
-  const [waitlistState, setWaitlistState] = useState("");
-  const [waitlistBusy, setWaitlistBusy] = useState(false);
-  const [waitlistDone, setWaitlistDone] = useState(false);
+  const [view, setView] = useState<"landing" | "signup">("landing");
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
   const [subBusy, setSubBusy] = useState(false);
@@ -544,6 +541,14 @@ const CustomerApp = () => {
         setToken(data.token);
       }
       setApplication(data.application);
+      // Add to Mailchimp waitlist if state isn't live yet
+      if (form.state && !ELIGIBLE_STATES.has(form.state)) {
+        fetch(apiUrl("/api/waitlist"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: form.name, email: form.email, state: form.state }),
+        }).catch(() => {});
+      }
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Something went wrong");
     } finally {
@@ -708,76 +713,6 @@ const CustomerApp = () => {
       );
     }
 
-    // ── Waitlist ──────────────────────────────────────────────────────────────
-    if (view === "waitlist") {
-      const handleWaitlist = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setWaitlistBusy(true);
-        setError(null);
-        try {
-          const res = await fetch(apiUrl("/api/waitlist"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: form.name, email: form.email, state: waitlistState }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error?.error_message || "Something went wrong");
-          setWaitlistDone(true);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Something went wrong");
-        } finally {
-          setWaitlistBusy(false);
-        }
-      };
-
-      return (
-        <main className={styles.page}>
-          <NavBar />
-          <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
-            <div className={styles.signupCard} style={{ maxWidth: "48rem" }}>
-              <div className={styles.signupCardHeader}>
-                <p className={styles.kicker}>Coming soon</p>
-                <h1>We're not in {waitlistState} yet</h1>
-                <p>We currently operate in Georgia and Utah. Join our waitlist and we'll notify you when we launch in {waitlistState}.</p>
-              </div>
-              <div className={styles.signupCardBody}>
-                {waitlistDone ? (
-                  <div style={{ textAlign: "center", padding: "2rem 0" }}>
-                    <p style={{ fontSize: "2rem" }}>✓</p>
-                    <p style={{ fontSize: "1.6rem", fontWeight: 600, marginBottom: "0.6rem" }}>You're on the list!</p>
-                    <p style={{ fontSize: "1.4rem", color: "var(--muted)" }}>We'll email you at <strong>{form.email}</strong> when we launch in {waitlistState}.</p>
-                  </div>
-                ) : (
-                  <form className={styles.intakeComposer} onSubmit={handleWaitlist}>
-                    <div className={styles.intakeGrid}>
-                      <label>
-                        Full name
-                        <input value={form.name} placeholder="Jane Smith"
-                          onChange={e => setForm({ ...form, name: e.target.value })} />
-                      </label>
-                      <label>
-                        Email address
-                        <input required type="email" value={form.email} placeholder="jane@example.com"
-                          onChange={e => setForm({ ...form, email: e.target.value })} />
-                      </label>
-                    </div>
-                    {error && <p className={styles.error}>{error}</p>}
-                    <button type="submit" disabled={waitlistBusy} className={styles.submitBtn}>
-                      {waitlistBusy ? "Joining…" : "Join waitlist"}
-                    </button>
-                    <button type="button" onClick={() => { setView("signup"); setForm({ ...form, state: "" }); }}
-                      style={{ background: "none", border: "none", color: "var(--muted)", fontSize: "1.3rem", cursor: "pointer", marginTop: "0.8rem" }}>
-                      ← Back to application
-                    </button>
-                  </form>
-                )}
-              </div>
-            </div>
-          </section>
-        </main>
-      );
-    }
-
     // ── Signup ────────────────────────────────────────────────────────────────
     return (
       <main className={styles.page}>
@@ -889,15 +824,7 @@ const CustomerApp = () => {
                     <select
                       required
                       value={form.state}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm({ ...form, state: val });
-                        if (val && !ELIGIBLE_STATES.has(val)) {
-                          setWaitlistState(val);
-                          setWaitlistDone(false);
-                          setView("waitlist");
-                        }
-                      }}
+                      onChange={(e) => setForm({ ...form, state: e.target.value })}
                       style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: form.state ? "var(--ink)" : "var(--muted)", appearance: "auto" }}
                     >
                       <option value="" disabled>Select state…</option>
@@ -1075,6 +1002,14 @@ const CustomerApp = () => {
         </div>
       )}
 
+      {application.customer.state && !ELIGIBLE_STATES.has(application.customer.state) && (
+        <div style={{ background: "#fff8e1", border: "1.5px solid #ffe082", borderRadius: "var(--r-sm)", padding: "1.4rem 1.8rem", marginBottom: "1.6rem" }}>
+          <p style={{ fontWeight: 700, fontSize: "1.5rem", marginBottom: "0.4rem" }}>You're on the waitlist for {application.customer.state}!</p>
+          <p style={{ fontSize: "1.35rem", color: "var(--muted)", margin: 0 }}>
+            We'll email you at <strong>{application.customer.email}</strong> when we launch there. Your account is ready and waiting.
+          </p>
+        </div>
+      )}
       <div className={styles.appCard}>
         <div className={styles.appCardPanel}>
           <div className={styles.appCardHeader}>
