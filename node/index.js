@@ -321,9 +321,19 @@ const requireAuth = (request, response) => {
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, requested_amount, password, ssn, state, income_sources } = request.body;
+    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources } = request.body;
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
+    }
+    if (!dob) {
+      return response.status(400).json({ error: { error_message: 'Date of birth is required.' } });
+    }
+    const dobDate = new Date(dob);
+    const today = new Date();
+    const age = today.getFullYear() - dobDate.getFullYear() -
+      (today < new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate()) ? 1 : 0);
+    if (age < 18) {
+      return response.status(400).json({ error: { error_message: 'You must be at least 18 years old to apply.' } });
     }
     if (!Array.isArray(income_sources) || income_sources.length === 0) {
       return response.status(400).json({ error: { error_message: 'At least one income source is required.' } });
@@ -362,6 +372,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
       ssn: ssn || null,
       pay_frequency: primary.pay_frequency || null,
       state: state || null,
+      dob: dob || null,
     });
     await db.createIncomeSources(row.id, income_sources);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your $10 cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);

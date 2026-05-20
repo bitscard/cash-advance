@@ -22,6 +22,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS pay_frequency TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS dob DATE;
 `).catch(() => {});
 
 pool.query(`
@@ -55,6 +56,7 @@ const publicApp = (row) => ({
     ssn_last4: row.ssn ? row.ssn.slice(-4) : (row.ssn_last4 || null),
     pay_frequency: row.pay_frequency || null,
     state: row.state || null,
+    dob: fmtDate(row.dob) || null,
   },
   requested_amount: parseFloat(row.requested_amount),
   payday: fmtDate(row.payday),
@@ -101,13 +103,13 @@ async function getIncomeSources(application_id) {
   }));
 }
 
-async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state }) {
+async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob }) {
   const ssn_last4 = ssn ? ssn.replace(/-/g, '').slice(-4) : null;
   const ssn_clean = ssn ? ssn.replace(/-/g, '') : null;
   const { rows } = await pool.query(
-    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null],
+    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null],
   );
   return rows[0];
 }

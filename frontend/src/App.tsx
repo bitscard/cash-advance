@@ -45,6 +45,7 @@ interface Application {
     ssn_last4: string | null;
     pay_frequency: string | null;
     state: string | null;
+    dob: string | null;
   };
   requested_amount: number;
   payday: string;
@@ -351,6 +352,7 @@ const CustomerApp = () => {
     name: "",
     email: "",
     phone: "",
+    dob: "",
     income_sources: [{ employer: "", payday: "", pay_frequency: "", pay_frequency_other: "" }],
     ssn: "",
     state: "",
@@ -465,6 +467,19 @@ const CustomerApp = () => {
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!form.dob) {
+      setError("Please enter your date of birth");
+      return;
+    }
+    const dob = new Date(form.dob);
+    const today = new Date();
+    const age = today.getFullYear() - dob.getFullYear() - (
+      today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate()) ? 1 : 0
+    );
+    if (age < 18) {
+      setError("You must be at least 18 years old to apply.");
+      return;
+    }
     if (form.ssn.replace(/-/g, "").length !== 9) {
       setError("Please enter your full 9-digit Social Security Number");
       return;
@@ -723,6 +738,12 @@ const CustomerApp = () => {
                     Phone number
                     <input required value={form.phone} placeholder="(555) 000-0000"
                       onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                  </label>
+                  <label>
+                    Date of birth
+                    <input required type="date" value={form.dob}
+                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
+                      onChange={(event) => setForm({ ...form, dob: event.target.value })} />
                   </label>
                   <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "1rem" }}>
                     {form.income_sources.map((src, i) => (
@@ -1274,6 +1295,8 @@ const AdminApp = () => {
                         <span style={{ color: "var(--muted)" }}>—</span>
                       )}
                     </dd>
+                    <dt>Date of birth</dt>
+                    <dd>{selected.customer.dob || "—"}</dd>
                     <dt>SSN last 4</dt>
                     <dd>{selected.customer.ssn_last4 || "—"}</dd>
                     <dt>State</dt>
