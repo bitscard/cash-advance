@@ -947,23 +947,31 @@ const CustomerApp = () => {
   }
 
   // ── Waitlist screen (non-eligible state — cannot proceed past here) ─────────
-  if (application.customer.state && !ELIGIBLE_STATES.has(application.customer.state)) {
+  if (application.subscription_status === 'waitlisted') {
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
-        <section className={styles.chatOnly} style={{ paddingTop: "4rem" }}>
-          <div className={styles.signupCard} style={{ maxWidth: "48rem", textAlign: "center" }}>
-            <div style={{ fontSize: "3.2rem", marginBottom: "1.6rem" }}>📋</div>
-            <h2 style={{ fontSize: "2.4rem", fontWeight: 800, marginBottom: "0.8rem" }}>You're on the waitlist!</h2>
-            <p style={{ fontSize: "1.5rem", color: "var(--muted)", lineHeight: 1.7, marginBottom: "2rem" }}>
+        <section className={styles.chatOnly} style={{ paddingTop: "6rem" }}>
+          <div style={{ maxWidth: "52rem", margin: "0 auto", textAlign: "center", padding: "0 2rem" }}>
+            <div style={{ fontSize: "4.8rem", marginBottom: "2rem" }}>📋</div>
+            <h1 style={{ fontSize: "3.2rem", fontWeight: 800, marginBottom: "1.2rem", color: "var(--ink)" }}>
+              You're on the waitlist!
+            </h1>
+            <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.7, marginBottom: "1.6rem" }}>
               Advance is currently available in <strong>Georgia</strong> and <strong>Utah</strong> only.
               We're expanding fast — you'll be among the first to know when we launch in{" "}
-              <strong>{application.customer.state}</strong>.
+              <strong>{application.customer.state || "your state"}</strong>.
             </p>
-            <p style={{ fontSize: "1.4rem", color: "var(--muted)", lineHeight: 1.7 }}>
-              We've saved your information. You'll receive an email at{" "}
-              <strong>{application.customer.email}</strong> when Advance is available in your state.
+            <p style={{ fontSize: "1.5rem", color: "var(--muted)", lineHeight: 1.7, marginBottom: "3.2rem" }}>
+              We've saved your information and you'll receive an email at{" "}
+              <strong style={{ color: "var(--ink)" }}>{application.customer.email}</strong> the moment we go live in your area.
             </p>
+            <div style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r)", padding: "2.4rem", marginBottom: "3.2rem" }}>
+              <p style={{ fontSize: "1.4rem", color: "var(--muted)", marginBottom: "0" }}>
+                Questions? Email us at{" "}
+                <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
+              </p>
+            </div>
           </div>
         </section>
       </main>
