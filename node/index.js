@@ -204,17 +204,24 @@ Reply with ONLY one word: wage_income, excluded, or uncertain`,
 }
 
 function buildRefundSet(rawTxs) {
-  // Merchants that appear in outgoing transactions
-  const merchantsWithSpend = new Set(
-    rawTxs
-      .filter(tx => tx.amount < 0 && tx.description)
-      .map(tx => tx.description.toLowerCase().trim())
-      .filter(Boolean)
-  );
-  // Incoming transactions from those same merchants are likely refunds
+  // Group outgoing amounts by merchant
+  const spendByMerchant = {};
+  rawTxs.filter(tx => tx.amount < 0 && tx.description).forEach(tx => {
+    const key = tx.description.toLowerCase().trim();
+    if (!spendByMerchant[key]) spendByMerchant[key] = [];
+    spendByMerchant[key].push(Math.abs(tx.amount));
+  });
+
+  // Flag incoming transactions where merchant has a prior spend within 10% of the incoming amount
   return new Set(
     rawTxs
-      .filter(tx => tx.amount > 0 && merchantsWithSpend.has(tx.description.toLowerCase().trim()))
+      .filter(tx => {
+        if (tx.amount <= 0 || !tx.description) return false;
+        const key = tx.description.toLowerCase().trim();
+        const priorSpends = spendByMerchant[key];
+        if (!priorSpends) return false;
+        return priorSpends.some(spent => Math.abs(spent - tx.amount) / tx.amount <= 0.10);
+      })
       .map(tx => tx.id)
   );
 }
