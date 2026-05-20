@@ -1260,6 +1260,20 @@ const AdminApp = () => {
                         </div>
                       ))}
                     </dd>
+                    <dt>Est. accrued income</dt>
+                    <dd>
+                      {isSnapshotLoading ? (
+                        <span style={{ color: "var(--muted)" }}>Calculating…</span>
+                      ) : snapshot ? (
+                        <span style={{ fontSize: "1.6rem", fontWeight: 700 }}>
+                          {snapshot.total_accrued_cents > 0
+                            ? formatMoney(snapshot.total_accrued_cents / 100)
+                            : <span style={{ color: "var(--muted)", fontWeight: 400 }}>Insufficient data</span>}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--muted)" }}>—</span>
+                      )}
+                    </dd>
                     <dt>SSN last 4</dt>
                     <dd>{selected.customer.ssn_last4 || "—"}</dd>
                     <dt>State</dt>
