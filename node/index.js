@@ -792,6 +792,7 @@ app.post('/api/advance/applications/:id/payoff', async function (request, respon
   try {
     const updated = await db.markRepaymentPaid(request.params.id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    await db.incrementRepaymentCount(request.params.id);
     await db.addMessage(request.params.id, 'system', 'Customer has marked repayment as paid. Pending admin confirmation.');
     const messages = await db.getMessages(request.params.id);
     response.json({ application: db.publicApp(updated), messages });
@@ -1126,6 +1127,42 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
   } catch (err) { next(err); }
 });
 
+const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
+
+app.post('/api/advance/applications/:id/reapply', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // Active loans cannot reapply
+    if (['funded', 'repayment_scheduled'].includes(row.status)) {
+      return response.status(400).json({ error: { error_message: 'You have an active advance. Please repay it before reapplying.' } });
+    }
+
+    // Cooldown: if a repayment due date exists and we are before the day after it, block
+    // (expired and denied skip the cooldown entirely — no money was ever sent)
+    if (!['expired', 'denied'].includes(row.status) && row.repayment_due_date) {
+      const canReapplyAt = new Date(row.repayment_due_date);
+      canReapplyAt.setDate(canReapplyAt.getDate() + 1);
+      if (canReapplyAt > new Date()) {
+        const days = Math.ceil((canReapplyAt - new Date()) / 86400000);
+        return response.status(400).json({ error: { error_message: `You can reapply in ${days} day${days === 1 ? '' : 's'}.` } });
+      }
+    }
+
+    const repaymentCount = row.repayment_count || 0;
+    const nextAmount = ADVANCE_TIERS[Math.min(repaymentCount, ADVANCE_TIERS.length - 1)];
+    const updated = await db.resetForReapply(row.id, nextAmount);
+    await db.addMessage(row.id, 'system', `Application resubmitted for review. You are eligible for a $${nextAmount} advance based on your history.`);
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
 app.post('/api/advance/admin/applications/:id/repayment', async function (request, response, next) {
   if (!requireAdmin(request, response)) return;
   try {
@@ -1271,6 +1308,7 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
 
     if (paymentIntent.status === 'succeeded') {
       await db.markRepaymentPaid(row.id);
+      await db.incrementRepaymentCount(row.id);
       await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
     } else if (paymentIntent.status === 'processing') {
       await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);

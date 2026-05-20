@@ -59,6 +59,7 @@ interface Application {
   subscription_status: string | null;
   delivery_type: string | null;
   instant_fee_paid: boolean;
+  repayment_count: number;
   offer_expires_at: string | null;
   income_sources: Array<Pick<IncomeSource, "id" | "employer" | "payday" | "pay_frequency">>;
   repayment: null | {
@@ -123,6 +124,7 @@ const US_STATES = [
 ];
 
 const ELIGIBLE_STATES = new Set(["Georgia", "Utah"]);
+const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
@@ -386,6 +388,7 @@ const CustomerApp = () => {
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [trustScreenSeen, setTrustScreenSeen] = useState(false);
+  const [reapplyBusy, setReapplyBusy] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
@@ -480,6 +483,26 @@ const CustomerApp = () => {
       setDeliveryError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setDeliveryBusy(false);
+    }
+  };
+
+  const handleReapply = async () => {
+    if (!application) return;
+    setReapplyBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/reapply`), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not reapply");
+      setApplication(data.application);
+      setTrustScreenSeen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setReapplyBusy(false);
     }
   };
 
@@ -1084,74 +1107,21 @@ const CustomerApp = () => {
             ))}
           </div>
 
-          {/* Contact */}
+          {/* Reapply */}
+          <button
+            style={{ width: "100%", marginBottom: "1.6rem" }}
+            disabled={reapplyBusy}
+            onClick={handleReapply}
+          >
+            {reapplyBusy ? "Resubmitting…" : "Reapply →"}
+          </button>
+          {error && <p className={styles.error} style={{ textAlign: "center" }}>{error}</p>}
           <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "1.4rem" }}>
-            Questions about your application? Email{" "}
+            Questions? Email{" "}
             <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
           </div>
         </div>
 
-        <StatesFooter />
-      </main>
-    );
-  }
-
-  // ── Expired offer screen ──────────────────────────────────────────────────────
-  if (application.status === "expired") {
-    return (
-      <main className={styles.page}>
-        <NavBar onLogout={handleLogout} />
-        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Offer expired</p>
-              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                Your offer<br />has expired.
-              </h1>
-              <p className={styles.benefitsHeaderSub}>
-                Approved offers must be accepted by midnight on the day of approval. Yours wasn't claimed in time — but you can reapply.
-              </p>
-            </div>
-            <div style={{ flexShrink: 0, opacity: 0.92 }}>
-              <AlienMascot flag="usa" size={180} />
-            </div>
-          </div>
-        </div>
-        <div className={styles.benefitsBody}>
-          <div style={{
-            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "3.2rem",
-            display: "flex", alignItems: "center", gap: "1.6rem", flexWrap: "wrap",
-          }}>
-            <span style={{ fontSize: "2.4rem" }}>🔄</span>
-            <div>
-              <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>
-                Nothing was charged
-              </p>
-              <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: 0 }}>
-                No fees, no marks on your credit, no collections — your expired offer has no consequences.
-              </p>
-            </div>
-          </div>
-          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
-            {[
-              { icon: "📝", title: "Reapply anytime", sub: "Your account is still active. Email us and we'll re-open your application for a fresh review." },
-              { icon: "📈", title: "Your history is saved", sub: "Your bank connection and income history are still on file, so a second review will be faster." },
-              { icon: "🚫", title: "No credit impact", sub: "We never pulled your credit and never will. Your score is exactly where it was." },
-              { icon: "🛡️", title: "No collections, ever", sub: "There is nothing owed. We will never refer you to a debt collector or file any legal action." },
-            ].map(({ icon, title, sub }) => (
-              <div key={title} className={styles.benefitCard}>
-                <span className={styles.benefitIcon}>{icon}</span>
-                <p className={styles.benefitCardTitle}>{title}</p>
-                <p className={styles.benefitCardSub}>{sub}</p>
-              </div>
-            ))}
-          </div>
-          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "1.4rem" }}>
-            Ready to reapply? Email{" "}
-            <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)", fontWeight: 600 }}>usa@getbits.app</a>
-          </div>
-        </div>
         <StatesFooter />
       </main>
     );
@@ -1413,15 +1383,119 @@ const CustomerApp = () => {
               </div>
             )}
 
-            {application.status === "repaid" && (
-              <p className={styles.paidNote}>✓ Repayment collected — thank you!</p>
-            )}
+            {/* ── Post-setup dashboard ───────────────────────────────── */}
+            {!needsBank && !needsCard && (() => {
+              const now = new Date();
+              const dueDate = application.repayment?.due_date
+                ? new Date(application.repayment.due_date + "T00:00:00")
+                : null;
+              const daysUntilDue = dueDate
+                ? Math.max(0, Math.ceil((dueDate.getTime() - now.getTime()) / 86400000))
+                : null;
+              const canReapplyAt = (() => {
+                if (["expired", "denied"].includes(application.status)) return null;
+                if (dueDate) { const d = new Date(dueDate); d.setDate(d.getDate() + 1); return d; }
+                return null;
+              })();
+              const daysUntilReapply = canReapplyAt
+                ? Math.max(0, Math.ceil((canReapplyAt.getTime() - now.getTime()) / 86400000))
+                : 0;
+              const canReapplyNow = !canReapplyAt || canReapplyAt <= now;
+              const nextTierAmount = ADVANCE_TIERS[Math.min(application.repayment_count, ADVANCE_TIERS.length - 1)];
 
-            {!needsBank && !needsCard && application.status !== "repaid" && (
-              <div className={styles.appCardAction}>
-                <p>Your application is being reviewed. We'll update this page as soon as there's news — no action needed from you right now.</p>
-              </div>
-            )}
+              // Active loan
+              if (["funded", "repayment_scheduled"].includes(application.status)) {
+                return (
+                  <div style={{ marginTop: "1.6rem" }}>
+                    <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap" }}>
+                      <div style={{
+                        flex: "1 1 14rem", background: "var(--brand)", color: "white",
+                        borderRadius: "var(--r-lg)", padding: "2rem",
+                      }}>
+                        <p style={{ fontSize: "1.15rem", opacity: 0.75, marginBottom: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Due in</p>
+                        <p style={{ fontSize: "3.2rem", fontWeight: 800, margin: "0 0 0.2rem" }}>{daysUntilDue ?? "—"}</p>
+                        <p style={{ fontSize: "1.3rem", opacity: 0.8, margin: 0 }}>{dueDate ? `days · ${dueDate.toLocaleDateString([], { month: "short", day: "numeric" })}` : "days"}</p>
+                      </div>
+                      <div style={{
+                        flex: "1 1 14rem", background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                        borderRadius: "var(--r-lg)", padding: "2rem",
+                      }}>
+                        <p style={{ fontSize: "1.15rem", color: "var(--muted)", marginBottom: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Reapply in</p>
+                        <p style={{ fontSize: "3.2rem", fontWeight: 800, color: "var(--ink)", margin: "0 0 0.2rem" }}>{daysUntilReapply}</p>
+                        <p style={{ fontSize: "1.3rem", color: "var(--muted)", margin: 0 }}>days after repayment</p>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.2rem", lineHeight: 1.6 }}>
+                      Repay on time to unlock your next advance of <strong style={{ color: "var(--ink)" }}>${nextTierAmount}</strong>. No interest, no late fees, and we never report anything to credit bureaus.
+                    </p>
+                  </div>
+                );
+              }
+
+              // Cooldown — repaid but not yet eligible
+              if (!canReapplyNow) {
+                return (
+                  <div style={{ marginTop: "1.6rem" }}>
+                    <div style={{
+                      background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                      borderRadius: "var(--r-lg)", padding: "2rem", textAlign: "center",
+                    }}>
+                      <p style={{ fontSize: "1.15rem", color: "var(--muted)", marginBottom: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Next advance unlocks in</p>
+                      <p style={{ fontSize: "4rem", fontWeight: 800, color: "var(--ink)", margin: "0 0 0.4rem" }}>{daysUntilReapply}</p>
+                      <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: 0 }}>days · eligible for <strong style={{ color: "var(--ink)" }}>${nextTierAmount}</strong></p>
+                    </div>
+                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.2rem" }}>
+                      ✓ Repayment collected — thank you! Your next advance will be ready {canReapplyAt?.toLocaleDateString([], { month: "long", day: "numeric" })}.
+                    </p>
+                  </div>
+                );
+              }
+
+              // Can reapply now (expired, denied handled by full screens, repaid + cooldown over)
+              if (["reviewing", "intake", "bank_connected"].includes(application.status)) {
+                return (
+                  <div className={styles.appCardAction}>
+                    <p>Your application is being reviewed. We'll update this page as soon as there's news — no action needed from you right now.</p>
+                  </div>
+                );
+              }
+
+              // Expired or repaid + cooldown over → reapply
+              return (
+                <div style={{ marginTop: "1.6rem" }}>
+                  {application.status === "repaid" && (
+                    <p className={styles.paidNote}>✓ Repayment collected — thank you!</p>
+                  )}
+                  {application.status === "expired" && (
+                    <p style={{ fontSize: "1.4rem", color: "var(--muted)", marginBottom: "1.2rem", lineHeight: 1.6 }}>
+                      Your previous offer expired before you chose a delivery method. Nothing was charged — you can reapply right now.
+                    </p>
+                  )}
+                  <div style={{
+                    background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                    borderRadius: "var(--r-lg)", padding: "1.6rem 2rem", marginBottom: "1.6rem",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.2rem",
+                  }}>
+                    <div>
+                      <p style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>
+                        Ready for your next advance
+                      </p>
+                      <p style={{ fontSize: "1.35rem", color: "var(--muted)", margin: 0 }}>
+                        You're eligible for <strong style={{ color: "var(--brand)" }}>${nextTierAmount}</strong>
+                        {application.repayment_count > 0 && ` — up from your last advance`}
+                      </p>
+                    </div>
+                    <button
+                      disabled={reapplyBusy}
+                      onClick={handleReapply}
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      {reapplyBusy ? "Submitting…" : `Apply for $${nextTierAmount} →`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
 
             {error && <p className={styles.error}>{error}</p>}
           </div>

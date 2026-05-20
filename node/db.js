@@ -24,6 +24,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS dob DATE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_count INTEGER DEFAULT 0;
 `).catch(() => {});
 
 pool.query(`
@@ -78,6 +79,7 @@ const publicApp = (row) => ({
   subscription_status: row.subscription_status || null,
   delivery_type: row.delivery_type || null,
   instant_fee_paid: row.instant_fee_paid || false,
+  repayment_count: row.repayment_count || 0,
   offer_expires_at: row.offer_expires_at ? new Date(row.offer_expires_at).toISOString() : null,
   created_at: row.created_at,
   updated_at: row.updated_at,
@@ -273,6 +275,27 @@ async function saveStripeCharge(id, charge_id, charge_status) {
   return rows[0] || null;
 }
 
+async function incrementRepaymentCount(id) {
+  await pool.query(
+    'UPDATE applications SET repayment_count = COALESCE(repayment_count, 0) + 1, updated_at=NOW() WHERE id=$1',
+    [id],
+  );
+}
+
+async function resetForReapply(id, requested_amount) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET status='reviewing', delivery_type=NULL, instant_fee_paid=FALSE,
+         offer_expires_at=NULL, repayment_amount=NULL, repayment_due_date=NULL,
+         repayment_status=NULL, repayment_note=NULL,
+         stripe_charge_id=NULL, stripe_charge_status=NULL,
+         requested_amount=$2, updated_at=NOW()
+     WHERE id=$1 RETURNING *`,
+    [id, requested_amount],
+  );
+  return rows[0] || null;
+}
+
 async function saveOfferExpiry(id, offer_expires_at) {
   const { rows } = await pool.query(
     'UPDATE applications SET offer_expires_at=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
@@ -303,6 +326,8 @@ module.exports = {
   saveStripeCustomer,
   saveStripePaymentMethod,
   saveStripeCharge,
+  incrementRepaymentCount,
+  resetForReapply,
   saveOfferExpiry,
   getDueMemberships,
   getDueApplications,
