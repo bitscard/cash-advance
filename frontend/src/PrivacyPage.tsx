@@ -30,7 +30,7 @@ const PrivacyPage = () => (
               <li>Social Security number and date of birth</li>
               <li>Employment information, employer name, and pay schedule</li>
               <li>Bank account information, transaction history, and deposit patterns</li>
-              <li>Payment card information used for membership and repayment</li>
+              <li>Payment card information used for advance repayment</li>
               <li>State of residence</li>
             </ul>
             <p style={{ marginTop: "0.8rem" }}>We do <strong>not</strong> collect or use credit scores and we never pull your credit report.</p>
@@ -80,7 +80,7 @@ const PrivacyPage = () => (
         <li>Register for an account or apply for an advance</li>
         <li>Connect your bank account through our bank verification partner (Plaid)</li>
         <li>Provide your contact information, employer details, or government-issued ID</li>
-        <li>Add a payment method for membership or repayment</li>
+        <li>Add a payment method for advance repayment</li>
         <li>Communicate with us via email, chat, or in-app messaging</li>
       </ul>
       <p style={{ marginTop: "1.2rem" }}>We also collect information automatically when you use the Service, including device type, browser, IP address, and usage activity. We do not collect this information for marketing purposes.</p>
@@ -93,7 +93,7 @@ const PrivacyPage = () => (
         <li>Verify your identity and prevent duplicate accounts or fraud</li>
         <li>Assess your eligibility for an advance based on verified wage income</li>
         <li>Detect your pay deposit and initiate or schedule advance settlement</li>
-        <li>Process membership billing and advance repayment</li>
+        <li>Process advance repayment and instant delivery fees</li>
         <li>Communicate with you about your account, advances, and repayment</li>
         <li>Comply with applicable laws, regulations, and legal process</li>
       </ul>
@@ -138,7 +138,7 @@ const PrivacyPage = () => (
         <li>Correct inaccurate information in your account</li>
         <li>Request deletion of your personal information (subject to legal retention requirements)</li>
         <li>Revoke your bank connection authorization at any time by contacting us</li>
-        <li>Cancel your membership at any time</li>
+        <li>Close your account at any time</li>
       </ul>
       <p style={{ marginTop: "1.2rem" }}>To exercise any of these rights, contact us at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. We will respond within 30 days.</p>
     </Section>

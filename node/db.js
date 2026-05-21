@@ -25,6 +25,9 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS dob DATE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_count INTEGER DEFAULT 0;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS referred_by TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS limit_freeze_until DATE;
 `).catch(() => {});
 
 pool.query(`
@@ -81,6 +84,9 @@ const publicApp = (row) => ({
   instant_fee_paid: row.instant_fee_paid || false,
   repayment_count: row.repayment_count || 0,
   offer_expires_at: row.offer_expires_at ? new Date(row.offer_expires_at).toISOString() : null,
+  referral_code: row.referral_code || null,
+  referred_by: row.referred_by || null,
+  limit_freeze_until: fmtDate(row.limit_freeze_until) || null,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -107,13 +113,13 @@ async function getIncomeSources(application_id) {
   }));
 }
 
-async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob }) {
+async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob, referral_code, referred_by }) {
   const ssn_last4 = ssn ? ssn.replace(/-/g, '').slice(-4) : null;
   const ssn_clean = ssn ? ssn.replace(/-/g, '') : null;
   const { rows } = await pool.query(
-    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null],
+    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob, referral_code, referred_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null, referral_code || null, referred_by || null],
   );
   return rows[0];
 }
@@ -296,6 +302,38 @@ async function resetForReapply(id, requested_amount) {
   return rows[0] || null;
 }
 
+async function getApplicationByReferralCode(code) {
+  const { rows } = await pool.query(
+    'SELECT * FROM applications WHERE referral_code = $1 LIMIT 1', [code],
+  );
+  return rows[0] || null;
+}
+
+async function getReferredUsers(referral_code) {
+  if (!referral_code) return [];
+  const { rows } = await pool.query(
+    `SELECT id, name, email, status, repayment_count, delivery_type, created_at
+     FROM applications WHERE referred_by = $1 ORDER BY created_at DESC`,
+    [referral_code],
+  );
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    status: r.status,
+    repayment_count: r.repayment_count || 0,
+    got_advance: !!r.delivery_type,
+    created_at: r.created_at,
+  }));
+}
+
+async function saveLimitFreeze(id, freeze_until) {
+  await pool.query(
+    'UPDATE applications SET limit_freeze_until=$1, updated_at=NOW() WHERE id=$2',
+    [freeze_until, id],
+  );
+}
+
 async function saveOfferExpiry(id, offer_expires_at) {
   const { rows } = await pool.query(
     'UPDATE applications SET offer_expires_at=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
@@ -307,6 +345,9 @@ async function saveOfferExpiry(id, offer_expires_at) {
 module.exports = {
   publicApp,
   createApplication,
+  getApplicationByReferralCode,
+  getReferredUsers,
+  saveLimitFreeze,
   createIncomeSources,
   getIncomeSources,
   saveSubscription,

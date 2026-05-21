@@ -21,7 +21,8 @@ type Status =
   | "funded"
   | "repayment_scheduled"
   | "repaid"
-  | "repayment_failed";
+  | "repayment_failed"
+  | "written_off";
 
 interface IncomeSource {
   id: number | null;
@@ -61,6 +62,9 @@ interface Application {
   instant_fee_paid: boolean;
   repayment_count: number;
   offer_expires_at: string | null;
+  referral_code: string | null;
+  referred_by: string | null;
+  limit_freeze_until: string | null;
   income_sources: Array<Pick<IncomeSource, "id" | "employer" | "payday" | "pay_frequency">>;
   repayment: null | {
     amount: number;
@@ -141,6 +145,7 @@ const statusLabel: Record<Status, string> = {
   repayment_scheduled: "Repayment scheduled",
   repaid: "Repaid",
   repayment_failed: "Repayment failed",
+  written_off: "Written off",
 };
 
 const formatMoney = (amount: number | null | undefined) => {
@@ -376,19 +381,24 @@ const CustomerApp = () => {
     state: "",
     password: "",
     confirmPassword: "",
+    referralCode: "",
   });
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "signup">("landing");
+  const [view, setView] = useState<"landing" | "referral" | "signup">("landing");
+  const [gateCode, setGateCode] = useState("");
+  const [gateValid, setGateValid] = useState<boolean | null>(null);
+  const [gateReferrerName, setGateReferrerName] = useState<string | null>(null);
+  const [gateBusy, setGateBusy] = useState(false);
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
-  const [subBusy, setSubBusy] = useState(false);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [deliveryChoice, setDeliveryChoice] = useState<"instant" | "standard" | null>(null);
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [trustScreenSeen, setTrustScreenSeen] = useState(false);
   const [reapplyBusy, setReapplyBusy] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
@@ -434,6 +444,20 @@ const CustomerApp = () => {
   };
 
   useEffect(() => {
+    const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
+    if (!code) { setGateValid(null); setGateReferrerName(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
+        const data = await res.json();
+        setGateValid(data.valid);
+        setGateReferrerName(data.valid ? data.referrer_name : null);
+      } catch { setGateValid(null); }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [gateCode]);
+
+  useEffect(() => {
     if (
       application &&
       !application.delivery_type &&
@@ -446,24 +470,7 @@ const CustomerApp = () => {
     }
   }, [application?.delivery_type, application?.status, trustScreenSeen]);
 
-  const activateSubscription = async () => {
-    if (!application) return;
-    setSubBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/subscription/activate`), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.error_message || "Could not activate membership");
-      setApplication(data.application);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setSubBusy(false);
-    }
-  };
+
 
   const saveDelivery = async () => {
     if (!application || !deliveryChoice) { setDeliveryError("Please choose a delivery option"); return; }
@@ -546,7 +553,8 @@ const CustomerApp = () => {
     setIsBusy(true);
     setError(null);
     try {
-      const { confirmPassword, income_sources: rawSources, ssn, ...rest } = form;
+      const { confirmPassword, income_sources: rawSources, ssn, referralCode: _rc, ...rest } = form;
+      const normalizedGateCode = gateCode.trim().toLowerCase().replace(/\s+/g, '');
       const body = {
         ...rest,
         ssn: ssn.replace(/-/g, ""),
@@ -555,6 +563,7 @@ const CustomerApp = () => {
           pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
         })),
         requested_amount: 25,
+        ...(normalizedGateCode ? { referral_code: normalizedGateCode } : {}),
       };
       const response = await fetch(apiUrl("/api/advance/applications"), {
         method: "POST",
@@ -569,8 +578,8 @@ const CustomerApp = () => {
         setToken(data.token);
       }
       setApplication(data.application);
-      // Add to Mailchimp waitlist if state isn't live yet
-      if (form.state && !ELIGIBLE_STATES.has(form.state)) {
+      // Add to Mailchimp waitlist if state isn't live yet and no referral bypass
+      if (form.state && !ELIGIBLE_STATES.has(form.state) && !normalizedGateCode) {
         fetch(apiUrl("/api/waitlist"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -623,7 +632,7 @@ const CustomerApp = () => {
       return (
         <main className={styles.page}>
           <NavBar
-            onGetStarted={() => setView("signup")}
+            onGetStarted={() => setView("referral")}
             onSignIn={() => window.location.href = "/loan"}
           />
 
@@ -640,7 +649,7 @@ const CustomerApp = () => {
                   Connect your bank, get a decision today, and pay it back on your next payday. That's it.
                 </p>
                 <div className={styles.heroActions}>
-                  <button className={styles.btnWhite} onClick={() => setView("signup")}>
+                  <button className={styles.btnWhite} onClick={() => setView("referral")}>
                     Get started — it's free
                   </button>
                 </div>
@@ -737,6 +746,79 @@ const CustomerApp = () => {
               Stripe
             </div>
           </div>
+        </main>
+      );
+    }
+
+    // ── Referral gate ────────────────────────────────────────────────────────
+    if (view === "referral") {
+      return (
+        <main className={styles.page}>
+          <NavBar />
+          <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+                <p className={styles.benefitsHeaderKicker}>Invite-only early access</p>
+                <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                  You got the hook-up?
+                </h1>
+                <p className={styles.benefitsHeaderSub}>
+                  Advance is growing through word of mouth. Enter your invite code below to get started.
+                </p>
+              </div>
+              <div style={{ flexShrink: 0, opacity: 0.92 }}>
+                <AlienMascot flag="usa" size={160} />
+              </div>
+            </div>
+          </div>
+          <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+            <div style={{ marginBottom: "2rem" }}>
+              <label style={{ fontSize: "1.5rem", fontWeight: 600, display: "block", marginBottom: "0.8rem", color: "var(--ink)" }}>
+                Enter your invite code
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type="text"
+                  placeholder="e.g. New Orleans or a friend's name"
+                  autoComplete="off"
+                  value={gateCode}
+                  onChange={(e) => { setGateCode(e.target.value); setGateValid(null); }}
+                  style={{ width: "100%", fontSize: "1.6rem", padding: "1.2rem 1.4rem", borderRadius: "var(--r-sm)", border: `1.5px solid ${gateValid === false ? "#dc2626" : gateValid === true ? "#16a34a" : "var(--border)"}` }}
+                />
+                {gateValid === true && (
+                  <span style={{ position: "absolute", right: "1.2rem", top: "50%", transform: "translateY(-50%)", fontSize: "1.3rem", color: "#16a34a", fontWeight: 600 }}>
+                    ✓ {gateReferrerName ? `Referred by ${gateReferrerName}` : "Code accepted"}
+                  </span>
+                )}
+                {gateValid === false && (
+                  <span style={{ position: "absolute", right: "1.2rem", top: "50%", transform: "translateY(-50%)", fontSize: "1.3rem", color: "#dc2626", fontWeight: 600 }}>
+                    Not valid
+                  </span>
+                )}
+              </div>
+              {gateValid === false && (
+                <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "0.6rem" }}>
+                  That code isn't recognized. Check with whoever referred you and try again.
+                </p>
+              )}
+            </div>
+            {error && <p className={styles.error}>{error}</p>}
+            <button
+              style={{ width: "100%" }}
+              disabled={!gateValid || gateBusy}
+              onClick={() => {
+                setForm(f => ({ ...f, referralCode: gateCode.trim().toLowerCase().replace(/\s+/g, '') }));
+                setView("signup");
+              }}
+            >
+              Continue →
+            </button>
+            <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
+              Already have an account?{" "}
+              <a href="/loan" style={{ color: "var(--brand)", fontWeight: 600 }}>Sign in →</a>
+            </p>
+          </div>
+          <StatesFooter />
         </main>
       );
     }
@@ -911,67 +993,6 @@ const CustomerApp = () => {
       </main>
     );
 
-  }
-
-  // ── Benefits page (activate membership) ──────────────────────────────────
-  if (!application.subscription_status) {
-    return (
-      <main className={styles.page}>
-        <NavBar onLogout={handleLogout} />
-        <div className={styles.benefitsHeader}>
-          <p className={styles.benefitsHeaderKicker}>Advance Membership</p>
-          <h1 className={styles.benefitsHeaderTitle}>Here's what you get.</h1>
-          <p className={styles.benefitsHeaderSub}>A monthly cash advance with zero interest — and a lot more.</p>
-        </div>
-        <div className={styles.benefitsBody}>
-          <div className={styles.benefitsGrid}>
-            <div className={styles.benefitCard}>
-              <span className={styles.benefitIcon}>💸</span>
-              <p className={styles.benefitCardTitle}>Cash advance</p>
-              <p className={styles.benefitCardSub}>No interest. No fees on the advance itself. Just money when you need it.</p>
-            </div>
-            <div className={styles.benefitCard}>
-              <span className={styles.benefitIcon}>🚫</span>
-              <p className={styles.benefitCardTitle}>No credit check</p>
-              <p className={styles.benefitCardSub}>We never pull your credit. Zero impact on your credit score, ever.</p>
-            </div>
-            <div className={styles.benefitCard}>
-              <span className={styles.benefitIcon}>🔒</span>
-              <p className={styles.benefitCardTitle}>No bureau reporting</p>
-              <p className={styles.benefitCardSub}>Your advance activity stays completely private — never reported to credit bureaus.</p>
-            </div>
-            <div className={styles.benefitCard}>
-              <span className={styles.benefitIcon}>😌</span>
-              <p className={styles.benefitCardTitle}>No stress</p>
-              <p className={styles.benefitCardSub}>We don't chase you for repayment. Life happens — we get it.</p>
-            </div>
-            <div className={styles.benefitCard}>
-              <span className={styles.benefitIcon}>⭐</span>
-              <p className={styles.benefitCardTitle}>Earn points</p>
-              <p className={styles.benefitCardSub}>Pay on time and earn points. Redeem them for a surprise gift — our treat.</p>
-            </div>
-            <div className={styles.benefitCard}>
-              <span className={styles.benefitIcon}>🎰</span>
-              <p className={styles.benefitCardTitle}>Weekly $300 raffle</p>
-              <p className={styles.benefitCardSub}>Every on-time member is entered weekly. Miss or be late on a payment and you're frozen until you're back in good standing.</p>
-            </div>
-          </div>
-
-          <div className={styles.usageBox}>
-            <p className={styles.usageBoxTitle}>Usage limits · $1.99/month</p>
-            <p className={styles.usageBoxText}>
-              Your membership includes <strong>1 advance per month</strong> (12 per year). Need more? You can upgrade for unlimited access anytime.
-            </p>
-          </div>
-
-          {error && <p className={styles.error}>{error}</p>}
-          <button style={{ width: "100%" }} disabled={subBusy} onClick={activateSubscription}>
-            {subBusy ? "Activating…" : "Continue →"}
-          </button>
-        </div>
-        <StatesFooter />
-      </main>
-    );
   }
 
   // ── Waitlist screen (non-eligible state — cannot proceed past here) ─────────
@@ -1300,9 +1321,9 @@ const CustomerApp = () => {
                 className={`${styles.deliveryOption} ${deliveryChoice === "instant" ? styles.deliveryOptionSelected : ""}`}
                 onClick={() => setDeliveryChoice("instant")}
               >
-                <p className={styles.deliveryOptionBadge}>+$3 fee</p>
+                <p className={styles.deliveryOptionBadge}>+$5 fee</p>
                 <p className={styles.deliveryOptionTitle}>⚡ Instant</p>
-                <p className={styles.deliveryOptionSub}>Money sent within minutes to your PayPal, CashApp, or Zelle.</p>
+                <p className={styles.deliveryOptionSub}>Money sent within minutes to your PayPal, CashApp, or Zelle. $5 fee added to repayment — nothing charged now.</p>
               </button>
               <button
                 type="button"
@@ -1401,7 +1422,12 @@ const CustomerApp = () => {
                 ? Math.max(0, Math.ceil((canReapplyAt.getTime() - now.getTime()) / 86400000))
                 : 0;
               const canReapplyNow = !canReapplyAt || canReapplyAt <= now;
-              const nextTierAmount = ADVANCE_TIERS[Math.min(application.repayment_count, ADVANCE_TIERS.length - 1)];
+              const freezeDate = application.limit_freeze_until
+                ? new Date(application.limit_freeze_until + "T00:00:00") : null;
+              const isFrozen = !!(freezeDate && freezeDate > now);
+              const nextTierAmount = isFrozen
+                ? ADVANCE_TIERS[Math.max(0, application.repayment_count - 1)]
+                : ADVANCE_TIERS[Math.min(application.repayment_count, ADVANCE_TIERS.length - 1)];
 
               // Active loan
               if (["funded", "repayment_scheduled"].includes(application.status)) {
@@ -1497,6 +1523,60 @@ const CustomerApp = () => {
               );
             })()}
 
+            {/* ── Freeze warning ─────────────────────────────────────── */}
+            {application.limit_freeze_until && (() => {
+              const fd = new Date(application.limit_freeze_until + "T00:00:00");
+              if (fd <= new Date()) return null;
+              const frozenAmount = ADVANCE_TIERS[Math.max(0, application.repayment_count - 1)];
+              return (
+                <div style={{
+                  background: "#fef3c7", border: "1.5px solid #fcd34d",
+                  borderRadius: "var(--r-lg)", padding: "1.6rem 2rem", marginTop: "1.2rem",
+                }}>
+                  <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "#92400e", marginBottom: "0.4rem" }}>
+                    ⏸ Limit progression paused
+                  </p>
+                  <p style={{ fontSize: "1.35rem", color: "#92400e", margin: 0, lineHeight: 1.6 }}>
+                    A user you referred didn't repay their first advance. Your next advance stays at <strong>${frozenAmount}</strong> until <strong>{fd.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" })}</strong>.
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* ── Referral code card — shown only after first advance ── */}
+            {application.referral_code && application.delivery_type && (
+              <div style={{
+                background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                borderRadius: "var(--r-lg)", padding: "1.6rem 2rem", marginTop: "1.2rem",
+              }}>
+                <p style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.4rem" }}>
+                  Your referral code
+                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+                  <code style={{ fontSize: "2rem", fontWeight: 800, color: "var(--brand)", letterSpacing: "0.04em" }}>
+                    {application.referral_code}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(application.referral_code!);
+                      setCodeCopied(true);
+                      setTimeout(() => setCodeCopied(false), 2000);
+                    }}
+                    style={{ fontSize: "1.25rem", padding: "0.5rem 1.2rem" }}
+                  >
+                    {codeCopied ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+                <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.65 }}>
+                  Share this code with friends so they can get early access to Advance. Every person you refer who gets their first advance earns you <strong>an extra entry</strong> into the weekly $300 raffle.
+                </p>
+                <p style={{ fontSize: "1.25rem", color: "#b45309", marginTop: "0.8rem", lineHeight: 1.6, background: "#fffbeb", borderRadius: "var(--r-sm)", padding: "0.8rem 1rem" }}>
+                  Heads up: if someone you refer doesn't repay their first advance on time, it will make it harder for you to unlock higher credit limits going forward.
+                </p>
+              </div>
+            )}
+
             {error && <p className={styles.error}>{error}</p>}
           </div>
         </div>
@@ -1522,6 +1602,10 @@ const AdminApp = () => {
   const [repaymentDate, setRepaymentDate] = useState(thirtyDaysFromNow);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [referralStats, setReferralStats] = useState<{
+    total: number; got_advance: number; repaid: number; defaulted: number; active: number;
+    referred: Array<{ id: string; name: string; email: string; status: string; repayment_count: number; got_advance: boolean; created_at: string }>;
+  } | null>(null);
 
   const selected = applications.find((application) => application.id === selectedId) || null;
   const adminHeaders = useMemo<Record<string, string>>(
@@ -1584,9 +1668,15 @@ const AdminApp = () => {
     loadMessages(selectedId);
     setSnapshot(null);
     setPmDetails(null);
+    setReferralStats(null);
     loadBankSnapshot(selectedId);
     if (selected?.payday) setRepaymentDate(selected.payday);
-  }, [selectedId, loadMessages, loadBankSnapshot]);
+    // Load referral analytics for this applicant
+    fetch(apiUrl(`/api/advance/admin/applications/${selectedId}/referrals`), { headers: adminHeaders })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setReferralStats(data); })
+      .catch(() => {});
+  }, [selectedId, loadMessages, loadBankSnapshot, adminHeaders]);
 
   const sendAdminMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1754,6 +1844,10 @@ const AdminApp = () => {
                     <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
                     <dt>Backup card</dt>
                     <dd>{selected.stripe_card_saved ? "✓ On file" : "None"}</dd>
+                    <dt>Referral code</dt>
+                    <dd>{selected.referral_code || "—"}</dd>
+                    {selected.referred_by && <><dt>Referred by</dt><dd>{selected.referred_by}</dd></>}
+                    {selected.limit_freeze_until && <><dt>Limit freeze</dt><dd>Until {selected.limit_freeze_until}</dd></>}
                   </dl>
                   <div className={styles.actions}>
                     <button
@@ -1769,6 +1863,7 @@ const AdminApp = () => {
                     </button>
                     <button disabled={isBusy} onClick={() => setStatus("denied", "We are unable to approve this advance right now.")}>Deny</button>
                     <button disabled={isBusy} onClick={() => setStatus("funded", "Your advance has been sent.")}>Mark funded</button>
+                    <button disabled={isBusy} style={{ background: "#dc2626", borderColor: "#dc2626" }} onClick={() => { if (confirm("Write off this advance? If the user was referred and this is their first advance, the referrer's limit progression will be frozen for 3 months.")) setStatus("written_off"); }}>Write off</button>
                   </div>
                   {(selected.payout_methods || selected.payout_contact) && (
                     <div className={styles.repayment}>
@@ -1819,6 +1914,60 @@ const AdminApp = () => {
                     )}
                   </div>
                   {error && <p className={styles.error}>{error}</p>}
+                </section>
+                <section className={styles.panel}>
+                  <h3>Referral tree</h3>
+                  {!referralStats ? (
+                    <p className={styles.muted}>Loading…</p>
+                  ) : referralStats.total === 0 ? (
+                    <p className={styles.muted}>No referrals yet.{selected.referral_code ? ` Code: ${selected.referral_code}` : ''}</p>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.4rem" }}>
+                        {[
+                          { label: "Referred", value: referralStats.total, color: "var(--brand)" },
+                          { label: "Got advance", value: referralStats.got_advance, color: "#16a34a" },
+                          { label: "Repaid", value: referralStats.repaid, color: "#16a34a" },
+                          { label: "Active", value: referralStats.active, color: "#2563eb" },
+                          { label: "Defaulted", value: referralStats.defaulted, color: "#dc2626" },
+                        ].map(({ label, value, color }) => (
+                          <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.8rem 1.2rem", textAlign: "center", minWidth: "7rem" }}>
+                            <p style={{ fontSize: "2rem", fontWeight: 800, color, margin: 0 }}>{value}</p>
+                            <p style={{ fontSize: "1.15rem", color: "var(--muted)", margin: 0 }}>{label}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "1.3rem" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1.5px solid var(--border)" }}>
+                            <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Name</th>
+                            <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Status</th>
+                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Repayments</th>
+                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Advance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {referralStats.referred.map(r => (
+                            <tr key={r.id} style={{ borderBottom: "1px solid var(--border)", cursor: "pointer" }}
+                              onClick={() => setSelectedId(r.id)}>
+                              <td style={{ padding: "0.6rem", fontWeight: 500 }}>{r.name}</td>
+                              <td style={{ padding: "0.6rem" }}>
+                                <span style={{
+                                  fontSize: "1.15rem", fontWeight: 600, padding: "0.2rem 0.6rem", borderRadius: "999px",
+                                  background: r.status === 'repaid' ? '#dcfce7' : r.status === 'written_off' ? '#fee2e2' : r.status === 'funded' || r.status === 'repayment_scheduled' ? '#dbeafe' : '#f3f4f6',
+                                  color: r.status === 'repaid' ? '#166534' : r.status === 'written_off' ? '#991b1b' : r.status === 'funded' || r.status === 'repayment_scheduled' ? '#1e40af' : '#374151',
+                                }}>
+                                  {statusLabel[r.status as Status] ?? r.status}
+                                </span>
+                              </td>
+                              <td style={{ padding: "0.6rem", textAlign: "center" }}>{r.repayment_count}</td>
+                              <td style={{ padding: "0.6rem", textAlign: "center" }}>{r.got_advance ? "✓" : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
                 </section>
                 <section className={styles.panel}>
                   <h3>Bank snapshot</h3>

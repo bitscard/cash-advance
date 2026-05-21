@@ -48,6 +48,20 @@ function isPlausibleSSN(ssn) {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+function generateReferralSlug(name) {
+  return (name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
+}
+
+async function makeUniqueReferralCode(name) {
+  const base = generateReferralSlug(name);
+  if (!(await db.getApplicationByReferralCode(base))) return base;
+  for (let i = 2; i <= 99; i++) {
+    const code = `${base}${i}`;
+    if (!(await db.getApplicationByReferralCode(code))) return code;
+  }
+  return `${base}${Math.random().toString(36).slice(2, 6)}`;
+}
+
 // PLAID_PRODUCTS is a comma-separated list of products to use when initializing
 // Link. Note that this list must contain 'assets' in order for the app to be
 // able to create and retrieve asset reports.
@@ -430,9 +444,23 @@ const requireAuth = (request, response) => {
 
 // ── Advance application endpoints ─────────────────────────────────────────────
 
+app.get('/api/advance/referral/:code', async function (request, response, next) {
+  try {
+    const normalized = request.params.code.toLowerCase().replace(/\s+/g, '');
+    // Master invite code — always valid
+    if (normalized === 'neworleans') {
+      return response.json({ valid: true, referrer_name: null });
+    }
+    // Personal codes only activate after the referrer has gotten their first advance
+    const referrer = await db.getApplicationByReferralCode(normalized);
+    if (!referrer || !referrer.delivery_type) return response.json({ valid: false });
+    response.json({ valid: true, referrer_name: referrer.name.split(' ')[0] });
+  } catch (err) { next(err); }
+});
+
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources } = request.body;
+    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode } = request.body;
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
@@ -471,9 +499,27 @@ app.post('/api/advance/applications', async function (request, response, next) {
       }
     }
 
+    // Validate referral code if provided
+    let referredBy = null;
+    let earlyAccess = false;
+    if (usedCode) {
+      const normalized = usedCode.toLowerCase().replace(/\s+/g, '').trim();
+      if (normalized === 'neworleans') {
+        referredBy = 'neworleans';
+        earlyAccess = true;
+      } else {
+        const referrer = await db.getApplicationByReferralCode(normalized);
+        if (referrer && referrer.delivery_type) {
+          referredBy = normalized;
+          earlyAccess = true;
+        }
+      }
+    }
+
     // Store primary source fields on applications row for backwards compat
     const primary = income_sources[0];
     const password_hash = await bcrypt.hash(password, 10);
+    const newReferralCode = await makeUniqueReferralCode(name || '');
     const row = await db.createApplication({
       name: name || '', email: email || '', phone: phone || '',
       employer: primary.employer || '',
@@ -484,12 +530,18 @@ app.post('/api/advance/applications', async function (request, response, next) {
       pay_frequency: primary.pay_frequency || null,
       state: state || null,
       dob: dob || null,
+      referral_code: newReferralCode,
+      referred_by: referredBy,
     });
     await db.createIncomeSources(row.id, income_sources);
+    // Set eligibility: eligible state OR valid referral = active; otherwise waitlisted
+    const eligibleOnSignup = ELIGIBLE_STATES.has(state || '') || earlyAccess;
+    await db.saveSubscription(row.id, null, eligibleOnSignup ? 'active' : 'waitlisted', null);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
-    response.json({ application: db.publicApp(row), token });
+    const updatedRow = await db.getApplicationById(row.id);
+    response.json({ application: db.publicApp(updatedRow), token });
   } catch (err) {
     if (err.code === '23505') {
       return response.status(409).json({ error: { error_message: 'An application with this email already exists. Please log in.' } });
@@ -640,82 +692,6 @@ app.post('/api/advance/applications/:id/subscription/activate', async function (
   } catch (err) { next(err); }
 });
 
-app.post('/api/advance/applications/:id/subscription/setup', async function (request, response, next) {
-  const payload = requireAuth(request, response);
-  if (!payload) return;
-  if (payload.applicationId !== request.params.id) {
-    return response.status(403).json({ error: { error_message: 'Forbidden' } });
-  }
-  try {
-    const row = await db.getApplicationById(request.params.id);
-    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-
-    let customerId = row.stripe_customer_id;
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: row.email,
-        name: row.name,
-        metadata: { application_id: row.id },
-      });
-      customerId = customer.id;
-      await db.saveStripeCustomer(row.id, customerId);
-    }
-
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      usage: 'off_session',
-    });
-    response.json({ client_secret: setupIntent.client_secret });
-  } catch (err) { next(err); }
-});
-
-app.post('/api/advance/applications/:id/subscription/confirm', async function (request, response, next) {
-  const payload = requireAuth(request, response);
-  if (!payload) return;
-  if (payload.applicationId !== request.params.id) {
-    return response.status(403).json({ error: { error_message: 'Forbidden' } });
-  }
-  try {
-    const { payment_method_id } = request.body;
-    if (!payment_method_id) {
-      return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
-    }
-    const row = await db.getApplicationById(request.params.id);
-    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-
-    const customerId = row.stripe_customer_id;
-
-    await stripe.paymentMethods.attach(payment_method_id, { customer: customerId });
-    await stripe.customers.update(customerId, {
-      invoice_settings: { default_payment_method: payment_method_id },
-    });
-
-    // Charge first month's $1.99 via PaymentIntent, then track renewal ourselves
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: 199,
-      currency: 'usd',
-      customer: customerId,
-      payment_method: payment_method_id,
-      off_session: true,
-      confirm: true,
-      description: 'Advance Monthly Membership — Month 1',
-      metadata: { application_id: row.id },
-    });
-
-    if (paymentIntent.status !== 'succeeded') {
-      return response.status(402).json({ error: { error_message: 'Membership payment did not complete. Please try a different card.' } });
-    }
-
-    // Store subscription_next_billing so the monthly action knows when to charge again
-    const nextBilling = new Date();
-    nextBilling.setMonth(nextBilling.getMonth() + 1);
-    const updated = await db.saveSubscription(row.id, paymentIntent.id, 'active', nextBilling.toISOString().slice(0, 10));
-    await db.addMessage(row.id, 'system', 'Membership activated — $1.99/month. You can now request a cash advance each month.');
-    response.json({ application: db.publicApp(updated) });
-  } catch (err) { next(err); }
-});
-
 app.post('/api/advance/applications/:id/delivery', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
@@ -730,29 +706,11 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    let instant_fee_paid = false;
-    if (delivery_type === 'instant' && row.stripe_customer_id) {
-      const customer = await stripe.customers.retrieve(row.stripe_customer_id);
-      const pm = customer.invoice_settings?.default_payment_method;
-      if (pm) {
-        const pi = await stripe.paymentIntents.create({
-          amount: 100,
-          currency: 'usd',
-          customer: row.stripe_customer_id,
-          payment_method: typeof pm === 'string' ? pm : pm.id,
-          off_session: true,
-          confirm: true,
-          description: 'Instant delivery fee',
-          metadata: { application_id: row.id },
-        });
-        if (pi.status === 'succeeded') instant_fee_paid = true;
-      }
-    }
-
-    const updated = await db.saveDeliveryType(row.id, delivery_type, instant_fee_paid);
+    // $5 instant fee is collected at repayment, not upfront
+    const updated = await db.saveDeliveryType(row.id, delivery_type, false);
     const note = delivery_type === 'instant'
-      ? 'Instant delivery selected — funds will be sent within minutes of approval.'
-      : 'Standard delivery selected — funds will arrive within 2-3 business days of approval.';
+      ? 'Instant delivery selected — funds sent within minutes. A $5 fee will be added to your repayment.'
+      : 'Standard delivery selected — funds will arrive within 2-3 business days. No extra charge.';
     await db.addMessage(row.id, 'system', note);
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
@@ -1107,7 +1065,7 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
   if (!requireAdmin(request, response)) return;
   try {
     const status = request.body.status;
-    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed'];
+    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed', 'written_off'];
     if (!allowedStatuses.includes(status)) {
       return response.status(400).json({ error: { error_message: 'Unsupported status' } });
     }
@@ -1123,7 +1081,35 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
     if (status === 'denied') {
       addToMailchimp(updated.name, updated.email, updated.state, ['denied']).catch(() => {});
     }
+    // Referral penalty: if written off on first advance, freeze referrer's limit progression for 3 months
+    if (status === 'written_off' && (updated.repayment_count || 0) === 0 && updated.referred_by) {
+      const referrer = await db.getApplicationByReferralCode(updated.referred_by);
+      if (referrer) {
+        const freezeUntil = new Date();
+        freezeUntil.setMonth(freezeUntil.getMonth() + 3);
+        await db.saveLimitFreeze(referrer.id, freezeUntil.toISOString().slice(0, 10));
+        await db.addMessage(referrer.id, 'system', `A user you referred did not repay their first advance. Your limit progression is paused until ${freezeUntil.toISOString().slice(0, 10)}.`);
+      }
+    }
     response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/advance/admin/applications/:id/referrals', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    const referred = await db.getReferredUsers(row.referral_code || '');
+    const summary = {
+      total: referred.length,
+      got_advance: referred.filter(r => r.got_advance).length,
+      repaid: referred.filter(r => r.status === 'repaid').length,
+      defaulted: referred.filter(r => r.status === 'written_off').length,
+      active: referred.filter(r => ['funded', 'repayment_scheduled'].includes(r.status)).length,
+      referred,
+    };
+    response.json(summary);
   } catch (err) { next(err); }
 });
 
@@ -1156,9 +1142,14 @@ app.post('/api/advance/applications/:id/reapply', async function (request, respo
     }
 
     const repaymentCount = row.repayment_count || 0;
-    const nextAmount = ADVANCE_TIERS[Math.min(repaymentCount, ADVANCE_TIERS.length - 1)];
+    const isFrozen = row.limit_freeze_until && new Date(row.limit_freeze_until) > new Date();
+    const tierIndex = isFrozen
+      ? Math.max(0, repaymentCount - 1)
+      : Math.min(repaymentCount, ADVANCE_TIERS.length - 1);
+    const nextAmount = ADVANCE_TIERS[tierIndex];
     const updated = await db.resetForReapply(row.id, nextAmount);
-    await db.addMessage(row.id, 'system', `Application resubmitted for review. You are eligible for a $${nextAmount} advance based on your history.`);
+    const frozenNote = isFrozen ? ' (limit progression is paused due to a referral penalty)' : '';
+    await db.addMessage(row.id, 'system', `Application resubmitted for review. You are eligible for a $${nextAmount} advance${frozenNote}.`);
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -1168,12 +1159,15 @@ app.post('/api/advance/admin/applications/:id/repayment', async function (reques
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    const amount = Number(request.body.amount || row.requested_amount || 25);
+    const baseAmount = Number(request.body.amount || row.requested_amount || 25);
+    const instantFee = row.delivery_type === 'instant' ? 5 : 0;
+    const amount = baseAmount + instantFee;
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);
     const due_date = request.body.due_date || dueDate.toISOString().slice(0, 10);
+    const feeNote = instantFee > 0 ? ` (includes $${instantFee} instant delivery fee)` : '';
     const updated = await db.setRepayment(row.id, amount, due_date, 'Recorded for manual execution.');
-    await db.addMessage(row.id, 'system', `Repayment of $${amount.toFixed(2)} is due by ${due_date}. You have 30 days from funding to repay this advance.`);
+    await db.addMessage(row.id, 'system', `Repayment of $${amount.toFixed(2)}${feeNote} is due by ${due_date}.`);
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -1396,43 +1390,7 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
   } catch (err) { next(err); }
 });
 
-app.post('/api/advance/admin/run-due-memberships', async function (request, response, next) {
-  if (!requireAdmin(request, response)) return;
-  try {
-    const due = await db.getDueMemberships();
-    const results = [];
 
-    for (const row of due) {
-      const customer = await stripe.customers.retrieve(row.stripe_customer_id);
-      const pm = customer.invoice_settings?.default_payment_method;
-      if (!pm) {
-        results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No default payment method' });
-        continue;
-      }
-      try {
-        const pi = await stripe.paymentIntents.create({
-          amount: 199,
-          currency: 'usd',
-          customer: row.stripe_customer_id,
-          payment_method: typeof pm === 'string' ? pm : pm.id,
-          off_session: true,
-          confirm: true,
-          description: 'Advance Monthly Membership renewal',
-          metadata: { application_id: row.id },
-        });
-        const nextBilling = new Date();
-        nextBilling.setMonth(nextBilling.getMonth() + 1);
-        await db.saveSubscription(row.id, pi.id, 'active', nextBilling.toISOString().slice(0, 10));
-        results.push({ id: row.id, name: row.name, status: pi.status });
-      } catch (err) {
-        await db.saveSubscription(row.id, row.subscription_id, 'past_due', null);
-        results.push({ id: row.id, name: row.name, status: 'failed', error: err.message });
-      }
-    }
-
-    response.json({ processed: results.length, results });
-  } catch (err) { next(err); }
-});
 
 // Create a link token with configs which we can then use to initialize Plaid Link client-side.
 // See https://plaid.com/docs/#create-link-token
