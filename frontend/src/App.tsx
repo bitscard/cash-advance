@@ -406,6 +406,7 @@ const CustomerApp = () => {
   const [payoutSaved, setPayoutSaved] = useState(false);
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
+  const [cardSaved, setCardSaved] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
@@ -489,21 +490,15 @@ const CustomerApp = () => {
   };
 
   const togglePayoutMethod = (method: string) => {
-    if (method === "Bank transfer") {
-      setPayoutMethods(prev => prev.includes("Bank transfer") ? [] : ["Bank transfer"]);
-    } else {
-      setPayoutMethods(prev => {
-        const withoutBank = prev.filter(m => m !== "Bank transfer");
-        return withoutBank.includes(method) ? withoutBank.filter(m => m !== method) : [...withoutBank, method];
-      });
-    }
+    setPayoutMethods(prev =>
+      prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method]
+    );
     setPayoutSaved(false);
   };
 
   const submitPayoutPreference = async () => {
-    const isBankTransfer = payoutMethods.includes("Bank transfer");
     if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
-    if (!isBankTransfer && !payoutContact.trim()) { setPayoutError("Please enter your username, email, or phone number"); return; }
+    if (!payoutContact.trim()) { setPayoutError("Please enter your username, email, or phone number"); return; }
     setPayoutBusy(true);
     setPayoutError(null);
     try {
@@ -516,8 +511,6 @@ const CustomerApp = () => {
       if (!res.ok) throw new Error(data.error?.error_message || "Unable to save preference");
       setApplication(data.application);
       setPayoutSaved(true);
-      setShowPayoutStep(false);
-      setShowConfirmation(true);
     } catch (e) {
       setPayoutError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -1397,26 +1390,28 @@ const CustomerApp = () => {
           <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
             <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>💸</div>
             <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
-              Where should we send it?
+              Almost there!
             </h1>
             <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
-              Choose how you'd like to receive your{" "}
-              <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong>.
+              Tell us where to send your{" "}
+              <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong>{" "}
+              and add a card for repayment.
             </p>
           </div>
 
+          {/* Section 1: Payout method */}
           <div style={{
             background: "var(--white)", border: "1.5px solid var(--border)",
-            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "1.6rem",
           }}>
-            <p style={{ fontWeight: 700, fontSize: "1.5rem", color: "var(--ink)", marginBottom: "0.8rem" }}>
-              Select your payout method
+            <p style={{ fontWeight: 700, fontSize: "1.5rem", color: "var(--ink)", marginBottom: "0.4rem" }}>
+              Where should we send it?
             </p>
             <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1.6rem" }}>
-              Pick one or more options below.
+              Select one or more options.
             </p>
             <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.6rem" }}>
-              {["PayPal", "CashApp", "Zelle", "Bank transfer"].map(method => (
+              {["PayPal", "CashApp", "Zelle"].map(method => (
                 <button
                   key={method}
                   type="button"
@@ -1432,16 +1427,12 @@ const CustomerApp = () => {
                     cursor: "pointer",
                   }}
                 >
-                  {method === "Bank transfer" ? "🏦 Bank transfer" : method}
+                  {method}
                 </button>
               ))}
             </div>
 
-            {payoutMethods.includes("Bank transfer") ? (
-              <p style={{ fontSize: "1.35rem", color: "var(--brand)", fontWeight: 600, marginBottom: "1.6rem" }}>
-                ✓ We'll send funds directly to your connected bank account — no extra info needed.
-              </p>
-            ) : payoutMethods.length > 0 ? (
+            {payoutMethods.length > 0 && (
               <label style={{ display: "block", marginBottom: "1.6rem" }}>
                 <span style={{ fontSize: "1.35rem", fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: "0.4rem" }}>
                   {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
@@ -1452,17 +1443,60 @@ const CustomerApp = () => {
                   onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
                 />
               </label>
-            ) : null}
+            )}
 
             {payoutError && <p className={styles.error}>{payoutError}</p>}
-            <button
-              disabled={payoutBusy}
-              onClick={submitPayoutPreference}
-              style={{ width: "100%", marginTop: "0.8rem" }}
-            >
-              {payoutBusy ? "Saving…" : "Continue →"}
-            </button>
+            {payoutSaved ? (
+              <p className={styles.paidNote}>✓ Payout info saved!</p>
+            ) : (
+              <button disabled={payoutBusy} onClick={submitPayoutPreference} style={{ marginTop: "0.4rem" }}>
+                {payoutBusy ? "Saving…" : "Save payout info"}
+              </button>
+            )}
           </div>
+
+          {/* Section 2: Card for repayment */}
+          <div style={{
+            background: "var(--white)", border: "1.5px solid var(--border)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "2.4rem",
+          }}>
+            <p style={{ fontWeight: 700, fontSize: "1.5rem", color: "var(--ink)", marginBottom: "0.4rem" }}>
+              Add a card for repayment
+            </p>
+            <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1.6rem" }}>
+              We'll charge this card on your repayment date. Your card is never charged upfront.
+            </p>
+            {cardSaved ? (
+              <p className={styles.paidNote}>✓ Card saved — repayment will be collected automatically on your due date.</p>
+            ) : stripeKey ? (
+              <Elements stripe={stripePromise}>
+                <SaveCardForm
+                  applicationId={application.id}
+                  authToken={token}
+                  onSaved={() => {
+                    loadApplication(application.id);
+                    setCardSaved(true);
+                  }}
+                />
+              </Elements>
+            ) : (
+              <p className={styles.error}>Card payments are not configured.</p>
+            )}
+          </div>
+
+          {/* Continue — only when both are done */}
+          <button
+            disabled={!payoutSaved || !cardSaved}
+            style={{ width: "100%" }}
+            onClick={() => { setShowPayoutStep(false); setShowConfirmation(true); }}
+          >
+            Continue →
+          </button>
+          {(!payoutSaved || !cardSaved) && (
+            <p style={{ textAlign: "center", fontSize: "1.3rem", color: "var(--muted)", marginTop: "0.8rem" }}>
+              {!payoutSaved && !cardSaved ? "Save your payout info and card to continue." : !payoutSaved ? "Save your payout info to continue." : "Save your card to continue."}
+            </p>
+          )}
         </div>
       )}
 
