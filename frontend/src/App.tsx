@@ -1656,69 +1656,8 @@ const CustomerApp = () => {
                 ? Math.max(0, Math.ceil((canReapplyAt.getTime() - now.getTime()) / 86400000))
                 : 0;
               const canReapplyNow = !canReapplyAt || canReapplyAt <= now;
-              const freezeDate = application.limit_freeze_until
-                ? new Date(application.limit_freeze_until + "T00:00:00") : null;
-              const isFrozen = !!(freezeDate && freezeDate > now);
-              const nextTierAmount = isFrozen
-                ? ADVANCE_TIERS[Math.max(0, application.repayment_count - 1)]
-                : ADVANCE_TIERS[Math.min(application.repayment_count, ADVANCE_TIERS.length - 1)];
 
-              // ── Advance timeline (shown for all post-funded states) ──
-              const showTimeline = application.delivery_type && !["reviewing", "intake", "bank_connected", "expired", "denied"].includes(application.status);
-              const repaid = application.repayment?.status === "paid" || application.status === "repaid";
-              const TimelineStep = ({ done, active, label, sub }: { done: boolean; active: boolean; label: string; sub: string }) => (
-                <div style={{ flex: "1 1 0", textAlign: "center", position: "relative" }}>
-                  <div style={{
-                    width: "3.2rem", height: "3.2rem", borderRadius: "50%", margin: "0 auto 0.8rem",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: done ? "#16a34a" : active ? "var(--brand)" : "var(--border)",
-                    color: done || active ? "white" : "var(--muted)",
-                    fontSize: "1.5rem", fontWeight: 800, flexShrink: 0,
-                  }}>
-                    {done ? "✓" : active ? "●" : "○"}
-                  </div>
-                  <p style={{ fontSize: "1.3rem", fontWeight: 700, color: done ? "#16a34a" : active ? "var(--brand)" : "var(--muted)", margin: "0 0 0.2rem" }}>{label}</p>
-                  <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0, lineHeight: 1.4 }}>{sub}</p>
-                </div>
-              );
-
-              if (showTimeline && ["funded", "repayment_scheduled"].includes(application.status)) {
-                return (
-                  <div style={{ marginTop: "1.6rem" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 0, position: "relative", marginBottom: "2rem" }}>
-                      <div style={{ position: "absolute", top: "1.6rem", left: "16.67%", right: "16.67%", height: "2px", background: "var(--border)", zIndex: 0 }} />
-                      <TimelineStep done active={false} label="Advance sent" sub="Funds on the way" />
-                      <TimelineStep active={!repaid} done={repaid} label="Repayment due"
-                        sub={dueDate ? `${dueDate.toLocaleDateString([], { month: "short", day: "numeric" })} · ${daysUntilDue} day${daysUntilDue === 1 ? "" : "s"}` : "—"} />
-                      <TimelineStep done={false} active={false} label="Next advance"
-                        sub={canReapplyAt ? `Opens ${canReapplyAt.toLocaleDateString([], { month: "short", day: "numeric" })}` : "After repayment"} />
-                    </div>
-                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                      Repay on time and your next advance eligibility opens the following day. No interest, no late fees, and we never report anything to credit bureaus.
-                    </p>
-                  </div>
-                );
-              }
-
-              // Cooldown — repaid but not yet eligible
-              if (!canReapplyNow) {
-                return (
-                  <div style={{ marginTop: "1.6rem" }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 0, position: "relative", marginBottom: "2rem" }}>
-                      <div style={{ position: "absolute", top: "1.6rem", left: "16.67%", right: "16.67%", height: "2px", background: "var(--border)", zIndex: 0 }} />
-                      <TimelineStep done active={false} label="Advance sent" sub="Completed" />
-                      <TimelineStep done active={false} label="Repaid" sub="Thank you!" />
-                      <TimelineStep done={false} active={false} label="Next advance"
-                        sub={canReapplyAt ? `Opens ${canReapplyAt.toLocaleDateString([], { month: "short", day: "numeric" })} · ${daysUntilReapply} day${daysUntilReapply === 1 ? "" : "s"}` : "Coming soon"} />
-                    </div>
-                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                      Repayment collected — thank you! Your next advance opens on <strong style={{ color: "var(--ink)" }}>{canReapplyAt?.toLocaleDateString([], { month: "long", day: "numeric" })}</strong>.
-                    </p>
-                  </div>
-                );
-              }
-
-              // Can reapply now (expired, denied handled by full screens, repaid + cooldown over)
+              // ── 1. Still being reviewed (pre-approval) ──
               if (["reviewing", "intake", "bank_connected"].includes(application.status)) {
                 return (
                   <div className={styles.appCardAction}>
@@ -1727,46 +1666,97 @@ const CustomerApp = () => {
                 );
               }
 
-              // Expired or repaid + cooldown over → reapply
+              // ── 2. Approved but not yet funded — money is coming ──
+              if (application.status === "approved" && application.delivery_type) {
+                return (
+                  <div style={{ marginTop: "1.6rem" }}>
+                    <div style={{
+                      background: "linear-gradient(135deg, var(--brand) 0%, #7c3aed 100%)",
+                      borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", color: "white",
+                    }}>
+                      <p style={{ fontSize: "1.2rem", fontWeight: 700, opacity: 0.75, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.8rem" }}>
+                        Status update
+                      </p>
+                      <p style={{ fontSize: "2.2rem", fontWeight: 800, margin: "0 0 0.6rem" }}>
+                        Your money is on its way.
+                      </p>
+                      <p style={{ fontSize: "1.4rem", opacity: 0.85, margin: 0, lineHeight: 1.6 }}>
+                        {application.delivery_type === "instant"
+                          ? "You selected instant delivery — funds are usually sent within minutes once we process your request."
+                          : "You selected standard delivery — funds typically arrive within 2–3 business days."}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── 3. Funded — countdown to repayment due date ──
+              if (["funded", "repayment_scheduled"].includes(application.status)) {
+                return (
+                  <div style={{ marginTop: "1.6rem" }}>
+                    <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1.2rem" }}>
+                      <div style={{
+                        flex: "1 1 16rem", background: "var(--brand)", color: "white",
+                        borderRadius: "var(--r-lg)", padding: "2rem 2.4rem",
+                      }}>
+                        <p style={{ fontSize: "1.15rem", opacity: 0.75, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>Repayment due</p>
+                        <p style={{ fontSize: "4rem", fontWeight: 900, margin: "0 0 0.2rem", lineHeight: 1 }}>{daysUntilDue ?? "—"}</p>
+                        <p style={{ fontSize: "1.4rem", opacity: 0.85, margin: 0 }}>
+                          day{daysUntilDue === 1 ? "" : "s"}{dueDate ? ` · ${dueDate.toLocaleDateString([], { month: "long", day: "numeric" })}` : ""}
+                        </p>
+                      </div>
+                      <div style={{
+                        flex: "1 1 16rem", background: "var(--surface)", border: "1.5px solid var(--border)",
+                        borderRadius: "var(--r-lg)", padding: "2rem 2.4rem",
+                      }}>
+                        <p style={{ fontSize: "1.15rem", color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>Next advance</p>
+                        <p style={{ fontSize: "2rem", fontWeight: 800, color: "var(--ink)", margin: "0 0 0.2rem" }}>
+                          {canReapplyAt ? canReapplyAt.toLocaleDateString([], { month: "short", day: "numeric" }) : "—"}
+                        </p>
+                        <p style={{ fontSize: "1.3rem", color: "var(--muted)", margin: 0 }}>opens after repayment</p>
+                      </div>
+                    </div>
+                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.6 }}>
+                      Repay on time and your next advance eligibility opens the following day. No interest, no late fees — we never report anything to credit bureaus.
+                    </p>
+                  </div>
+                );
+              }
+
+              // ── 4. Repaid but cooldown not over — countdown to next advance ──
+              if (!canReapplyNow) {
+                return (
+                  <div style={{ marginTop: "1.6rem" }}>
+                    <div style={{
+                      background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                      borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", textAlign: "center",
+                    }}>
+                      <p style={{ fontSize: "1.15rem", color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>Next advance opens in</p>
+                      <p style={{ fontSize: "5rem", fontWeight: 900, color: "var(--ink)", margin: "0 0 0.4rem", lineHeight: 1 }}>{daysUntilReapply}</p>
+                      <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: "0 0 1.2rem" }}>
+                        day{daysUntilReapply === 1 ? "" : "s"} · {canReapplyAt?.toLocaleDateString([], { month: "long", day: "numeric" })}
+                      </p>
+                    </div>
+                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.6, marginTop: "1.2rem" }}>
+                      ✓ Repayment collected — thank you! Check back on{" "}
+                      <strong style={{ color: "var(--ink)" }}>{canReapplyAt?.toLocaleDateString([], { month: "long", day: "numeric" })}</strong>{" "}
+                      to apply for your next advance.
+                    </p>
+                  </div>
+                );
+              }
+
+              // ── 5. New month / cooldown over — offer to apply ──
               return (
                 <div style={{ marginTop: "1.6rem" }}>
                   {application.status === "expired" && (
                     <p style={{ fontSize: "1.4rem", color: "var(--muted)", marginBottom: "1.2rem", lineHeight: 1.6 }}>
-                      Your previous offer expired before you chose a delivery method. Nothing was charged — you can reapply right now.
+                      Your previous offer expired before you chose a delivery method. Nothing was charged — you can apply right now.
                     </p>
-                  )}
-                  {application.repayment_count > 0 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 0, position: "relative", marginBottom: "2rem" }}>
-                      <div style={{ position: "absolute", top: "1.6rem", left: "16.67%", right: "16.67%", height: "2px", background: "#bbf7d0", zIndex: 0 }} />
-                      {(() => {
-                        const TimelineStep = ({ done, active, label, sub }: { done: boolean; active: boolean; label: string; sub: string }) => (
-                          <div style={{ flex: "1 1 0", textAlign: "center", position: "relative" }}>
-                            <div style={{
-                              width: "3.2rem", height: "3.2rem", borderRadius: "50%", margin: "0 auto 0.8rem",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              background: done ? "#16a34a" : active ? "var(--brand)" : "var(--border)",
-                              color: done || active ? "white" : "var(--muted)",
-                              fontSize: "1.5rem", fontWeight: 800,
-                            }}>
-                              {done ? "✓" : active ? "●" : "○"}
-                            </div>
-                            <p style={{ fontSize: "1.3rem", fontWeight: 700, color: done ? "#16a34a" : active ? "var(--brand)" : "var(--muted)", margin: "0 0 0.2rem" }}>{label}</p>
-                            <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>{sub}</p>
-                          </div>
-                        );
-                        return (
-                          <>
-                            <TimelineStep done active={false} label="Advance sent" sub="Completed" />
-                            <TimelineStep done active={false} label="Repaid" sub="On time" />
-                            <TimelineStep done active={false} label="Ready to apply" sub="Now open" />
-                          </>
-                        );
-                      })()}
-                    </div>
                   )}
                   <div style={{
                     background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-                    borderRadius: "var(--r-lg)", padding: "1.6rem 2rem", marginBottom: "1.6rem",
+                    borderRadius: "var(--r-lg)", padding: "1.6rem 2rem",
                     display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1.2rem",
                   }}>
                     <div>
@@ -1777,11 +1767,7 @@ const CustomerApp = () => {
                         {application.repayment_count > 0 ? "Your repayment history unlocks your next offer." : "Apply now and we'll review your eligibility."}
                       </p>
                     </div>
-                    <button
-                      disabled={reapplyBusy}
-                      onClick={handleReapply}
-                      style={{ whiteSpace: "nowrap" }}
-                    >
+                    <button disabled={reapplyBusy} onClick={handleReapply} style={{ whiteSpace: "nowrap" }}>
                       {reapplyBusy ? "Submitting…" : "Apply now →"}
                     </button>
                   </div>
