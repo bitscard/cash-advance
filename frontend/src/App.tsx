@@ -1034,7 +1034,9 @@ const CustomerApp = () => {
   }
 
   // ── Waitlist screen (non-eligible state — cannot proceed past here) ─────────
-  const stateIsIneligible = !!application.customer.state && !ELIGIBLE_STATES.has(application.customer.state) && !application.referred_by;
+  // Backend sets subscription_status='waitlisted' for non-eligible states without a personal referral.
+  // neworleans (master gate key) grants signup access but does NOT bypass state eligibility.
+  const stateIsIneligible = application.subscription_status === 'waitlisted';
   if (stateIsIneligible) {
     const stateName = application.customer.state || "your state";
     return (

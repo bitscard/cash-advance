@@ -534,8 +534,10 @@ app.post('/api/advance/applications', async function (request, response, next) {
       referred_by: referredBy,
     });
     await db.createIncomeSources(row.id, income_sources);
-    // Set eligibility: eligible state OR valid referral = active; otherwise waitlisted
-    const eligibleOnSignup = ELIGIBLE_STATES.has(state || '') || earlyAccess;
+    // Set eligibility: eligible state OR PERSONAL referral = active; otherwise waitlisted
+    // neworleans is a master gate key — it grants signup access but does NOT bypass state eligibility
+    const isPersonalReferral = !!referredBy && referredBy !== 'neworleans';
+    const eligibleOnSignup = ELIGIBLE_STATES.has(state || '') || isPersonalReferral;
     await db.saveSubscription(row.id, null, eligibleOnSignup ? 'active' : 'waitlisted', null);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
