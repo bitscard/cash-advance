@@ -1034,7 +1034,8 @@ const CustomerApp = () => {
   }
 
   // ── Waitlist screen (non-eligible state — cannot proceed past here) ─────────
-  if (application.subscription_status === 'waitlisted') {
+  const stateIsIneligible = !!application.customer.state && !ELIGIBLE_STATES.has(application.customer.state) && !application.referred_by;
+  if (stateIsIneligible) {
     const stateName = application.customer.state || "your state";
     return (
       <main className={styles.page}>
