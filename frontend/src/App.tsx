@@ -2050,118 +2050,86 @@ const AdminApp = () => {
             <section className={styles.review}>
               <div className={styles.reviewHeader}>
                 <div>
-                  <p className={styles.kicker}>Manual decision</p>
                   <h2>{selected.customer.name}</h2>
-                  <p>
-                    {selected.customer.email} · {selected.customer.phone}
-                  </p>
+                  <p>{selected.customer.email} · {selected.customer.phone}</p>
                 </div>
-                <div className={styles.status}>{statusLabel[selected.status]}</div>
-              </div>
-              <div className={styles.reviewGrid}>
-                <section className={styles.panel}>
-                  <h3>Applicant</h3>
-                  <dl>
-                    <dt>Requested</dt>
-                    <dd>{formatMoney(selected.requested_amount)}</dd>
-                    <dt>Income sources</dt>
-                    <dd>
-                      {(selected.income_sources?.length > 0 ? selected.income_sources : [{ employer: selected.customer.employer, payday: selected.payday, pay_frequency: selected.customer.pay_frequency }]).map((src, i) => (
-                        <div key={i} style={{ marginBottom: "0.4rem" }}>
-                          <strong>{src.employer || "—"}</strong>
-                          <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}> · {src.payday} · {src.pay_frequency || "—"}</span>
-                        </div>
-                      ))}
-                    </dd>
-                    <dt>Est. accrued income</dt>
-                    <dd>
-                      {isSnapshotLoading ? (
-                        <span style={{ color: "var(--muted)" }}>Calculating…</span>
-                      ) : snapshot ? (
-                        <span style={{ fontSize: "1.6rem", fontWeight: 700 }}>
-                          {snapshot.total_accrued_cents > 0
-                            ? formatMoney(snapshot.total_accrued_cents / 100)
-                            : <span style={{ color: "var(--muted)", fontWeight: 400 }}>Insufficient data</span>}
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--muted)" }}>—</span>
-                      )}
-                    </dd>
-                    <dt>Date of birth</dt>
-                    <dd>{selected.customer.dob || "—"}</dd>
-                    <dt>SSN last 4</dt>
-                    <dd>{selected.customer.ssn_last4 || "—"}</dd>
-                    <dt>State</dt>
-                    <dd>{selected.customer.state || "—"}</dd>
-                    <dt>Bank / direct debit</dt>
-                    <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
-                    <dt>Backup card</dt>
-                    <dd>{selected.stripe_card_saved ? "✓ On file" : "None"}</dd>
-                    <dt>Referral code</dt>
-                    <dd>{selected.referral_code || "—"}</dd>
-                    {selected.referred_by && <><dt>Referred by</dt><dd>{selected.referred_by}</dd></>}
-                    {selected.limit_freeze_until && <><dt>Limit freeze</dt><dd>Until {selected.limit_freeze_until}</dd></>}
-                  </dl>
-                  <div className={styles.actions}>
-                    <button
-                      disabled={isBusy}
-                      onClick={() =>
-                        setStatus(
-                          "approved",
-                          "Congrats, you are approved for a cash advance. To send the funds manually, please reply with: routing number, account number, checking or savings, and the legal name on the account. Do not send your online banking password.",
-                        )
-                      }
-                    >
-                      Approve
-                    </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                  <div className={styles.actions} style={{ margin: 0 }}>
+                    <button disabled={isBusy} onClick={() => setStatus("approved", "Congrats, you are approved for a cash advance. To send the funds manually, please reply with: routing number, account number, checking or savings, and the legal name on the account. Do not send your online banking password.")}>Approve</button>
                     <button disabled={isBusy} onClick={() => setStatus("denied", "We are unable to approve this advance right now.")}>Deny</button>
                     <button disabled={isBusy} onClick={() => setStatus("funded", "Your advance has been sent.")}>Mark funded</button>
                     <button disabled={isBusy} style={{ background: "#dc2626", borderColor: "#dc2626" }} onClick={() => { if (confirm("Write off this advance? If the user was referred and this is their first advance, the referrer's limit progression will be frozen for 3 months.")) setStatus("written_off"); }}>Write off</button>
                   </div>
-                  {(selected.payout_methods || selected.payout_contact) && (
-                    <div className={styles.repayment}>
-                      <h4 style={{ margin: "0 0 0.8rem", fontSize: "1.4rem" }}>Payout preference</h4>
-                      {selected.payout_methods && (
-                        <p style={{ margin: "0 0 0.4rem", fontSize: "1.4rem" }}>
-                          <strong>Method:</strong> {selected.payout_methods}
-                        </p>
-                      )}
-                      {selected.payout_methods?.includes("Bank transfer") ? (
-                        pmDetails ? (
-                          <dl style={{ margin: "0.8rem 0 0", fontSize: "1.35rem" }}>
-                            <dt>Bank</dt><dd>{pmDetails.bank_name}</dd>
-                            <dt>Routing</dt><dd>{pmDetails.routing_number}</dd>
-                            <dt>Account</dt><dd>···{pmDetails.last4} ({pmDetails.account_type})</dd>
-                          </dl>
-                        ) : (
-                          <button disabled={isBusy} onClick={loadPaymentMethodDetails} style={{ marginTop: "0.6rem" }}>
-                            View routing details
-                          </button>
-                        )
-                      ) : (
-                        selected.payout_contact && (
-                          <p style={{ margin: 0, fontSize: "1.4rem" }}>
-                            <strong>Contact:</strong> {selected.payout_contact}
-                          </p>
-                        )
-                      )}
-                    </div>
-                  )}
+                  <div className={styles.status}>{statusLabel[selected.status]}</div>
+                </div>
+              </div>
+              <div className={styles.reviewGrid}>
+                {/* LEFT COLUMN — stacks vertically */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+                <section className={styles.panel}>
+                  <h3>Applicant</h3>
+                  {/* Two-column DL layout */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 1.6rem" }}>
+                    <dl className={styles.adminDl}>
+                      <dt>Requested</dt>
+                      <dd>{formatMoney(selected.requested_amount)}</dd>
+                      <dt>Income</dt>
+                      <dd>
+                        {(selected.income_sources?.length > 0 ? selected.income_sources : [{ employer: selected.customer.employer, payday: selected.payday, pay_frequency: selected.customer.pay_frequency }]).map((src, i) => (
+                          <div key={i} style={{ marginBottom: "0.2rem" }}>
+                            <span style={{ fontWeight: 700 }}>{src.employer || "—"}</span>
+                            <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {src.payday} · {src.pay_frequency || "—"}</span>
+                          </div>
+                        ))}
+                      </dd>
+                      <dt>Accrued est.</dt>
+                      <dd>
+                        {isSnapshotLoading ? <span style={{ color: "var(--muted)" }}>…</span>
+                          : snapshot ? (snapshot.total_accrued_cents > 0 ? formatMoney(snapshot.total_accrued_cents / 100) : <span style={{ color: "var(--muted)" }}>Insufficient</span>)
+                          : "—"}
+                      </dd>
+                      <dt>Payout to</dt>
+                      <dd>
+                        {selected.payout_methods
+                          ? <>{selected.payout_methods}{selected.payout_contact ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {selected.payout_contact}</span> : null}</>
+                          : "—"}
+                      </dd>
+                    </dl>
+                    <dl className={styles.adminDl}>
+                      <dt>DOB</dt>
+                      <dd>{selected.customer.dob || "—"}</dd>
+                      <dt>SSN last 4</dt>
+                      <dd>{selected.customer.ssn_last4 || "—"}</dd>
+                      <dt>State</dt>
+                      <dd>{selected.customer.state || "—"}</dd>
+                      <dt>Bank</dt>
+                      <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
+                      <dt>Card</dt>
+                      <dd>{selected.stripe_card_saved ? "✓ On file" : "None"}</dd>
+                      <dt>Referral code</dt>
+                      <dd>{selected.referral_code || "—"}</dd>
+                      {selected.referred_by && <><dt>Referred by</dt><dd>{selected.referred_by}</dd></>}
+                      {selected.limit_freeze_until && <><dt>Limit freeze</dt><dd style={{ color: "#b45309" }}>Until {selected.limit_freeze_until}</dd></>}
+                    </dl>
+                  </div>
+                  {/* Repayment section */}
                   <div className={styles.repayment}>
                     {selected.repayment && (
-                      <p style={{ fontSize: "1.35rem", marginBottom: "0.8rem" }}>
+                      <p style={{ fontSize: "1.3rem", margin: 0 }}>
                         Repayment of <strong>${selected.repayment.amount}</strong> due <strong>{selected.repayment.due_date}</strong> — auto-collected on due date.
                       </p>
                     )}
-                    {(selected.plaid_connected || selected.stripe_card_saved) ? (
-                      <button disabled={isBusy} onClick={chargeCard}>
-                        {isBusy ? "Processing…" : "Collect repayment now"}
-                      </button>
-                    ) : (
-                      <p className={styles.muted}>No payment method on file yet.</p>
-                    )}
+                    <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap" }}>
+                      {(selected.plaid_connected || selected.stripe_card_saved) ? (
+                        <button disabled={isBusy} onClick={chargeCard} style={{ fontSize: "1.3rem", padding: "0.7rem 1.2rem" }}>
+                          {isBusy ? "Processing…" : "Collect repayment now"}
+                        </button>
+                      ) : (
+                        <p className={styles.muted} style={{ margin: 0, fontSize: "1.3rem" }}>No payment method on file yet.</p>
+                      )}
+                      {error && <p className={styles.error} style={{ margin: 0, fontSize: "1.3rem" }}>{error}</p>}
+                    </div>
                   </div>
-                  {error && <p className={styles.error}>{error}</p>}
                 </section>
                 <section className={styles.panel}>
                   <h3>Borrowing history</h3>
@@ -2173,14 +2141,14 @@ const AdminApp = () => {
                     if (totalTaken === 0) return <p className={styles.muted}>No advances taken yet.</p>;
                     return (
                       <>
-                        <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.4rem" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.8rem" }}>
                           {[
                             { label: "Total advances", value: totalTaken, color: "var(--brand)" },
                             { label: "Repaid", value: selected.repayment_count, color: "#16a34a" },
                             { label: "Written off", value: isWrittenOff ? 1 : 0, color: "#dc2626" },
                           ].map(({ label, value, color }) => (
-                            <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.8rem 1.2rem", textAlign: "center", minWidth: "9rem" }}>
-                              <p style={{ fontSize: "2rem", fontWeight: 800, color, margin: 0 }}>{value}</p>
+                            <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.5rem 0.8rem", textAlign: "center", minWidth: "6rem" }}>
+                              <p style={{ fontSize: "1.6rem", fontWeight: 800, color, margin: 0 }}>{value}</p>
                               <p style={{ fontSize: "1.15rem", color: "var(--muted)", margin: 0 }}>{label}</p>
                             </div>
                           ))}
@@ -2227,6 +2195,8 @@ const AdminApp = () => {
                   })()}
                 </section>
 
+                {/* Borrowing history + Referral tree — side by side */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.2rem" }}>
                 <section className={styles.panel}>
                   <h3>Referral tree</h3>
                   {!referralStats ? (
@@ -2235,7 +2205,7 @@ const AdminApp = () => {
                     <p className={styles.muted}>No referrals yet.{selected.referral_code ? ` Code: ${selected.referral_code}` : ''}</p>
                   ) : (
                     <>
-                      <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.4rem" }}>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.8rem" }}>
                         {[
                           { label: "Referred", value: referralStats.total, color: "var(--brand)" },
                           { label: "Got advance", value: referralStats.got_advance, color: "#16a34a" },
@@ -2243,8 +2213,8 @@ const AdminApp = () => {
                           { label: "Active", value: referralStats.active, color: "#2563eb" },
                           { label: "Defaulted", value: referralStats.defaulted, color: "#dc2626" },
                         ].map(({ label, value, color }) => (
-                          <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.8rem 1.2rem", textAlign: "center", minWidth: "7rem" }}>
-                            <p style={{ fontSize: "2rem", fontWeight: 800, color, margin: 0 }}>{value}</p>
+                          <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.5rem 0.8rem", textAlign: "center", minWidth: "5rem" }}>
+                            <p style={{ fontSize: "1.6rem", fontWeight: 800, color, margin: 0 }}>{value}</p>
                             <p style={{ fontSize: "1.15rem", color: "var(--muted)", margin: 0 }}>{label}</p>
                           </div>
                         ))}
@@ -2291,6 +2261,11 @@ const AdminApp = () => {
                     </>
                   )}
                 </section>
+                </div>{/* end borrowing+referral sub-grid */}
+                </div>{/* end left column */}
+
+                {/* RIGHT COLUMN — Bank snapshot */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
                 <section className={styles.panel}>
                   <h3>Bank snapshot</h3>
                   {isSnapshotLoading ? (
@@ -2301,21 +2276,22 @@ const AdminApp = () => {
                     <BankSnapshotView snapshot={snapshot} />
                   )}
                 </section>
+                <section className={styles.chat}>
+                  <header>
+                    <h3>Chat</h3>
+                  </header>
+                  <MessageList messages={messages} />
+                  <form className={styles.composer} onSubmit={sendAdminMessage}>
+                    <input
+                      placeholder="Reply to applicant…"
+                      value={messageText}
+                      onChange={(event) => setMessageText(event.target.value)}
+                    />
+                    <button>Send</button>
+                  </form>
+                </section>
+                </div>{/* end right column */}
               </div>
-              <section className={styles.chat}>
-                <header>
-                  <h3>Chat</h3>
-                </header>
-                <MessageList messages={messages} />
-                <form className={styles.composer} onSubmit={sendAdminMessage}>
-                  <input
-                    placeholder="Reply to applicant…"
-                    value={messageText}
-                    onChange={(event) => setMessageText(event.target.value)}
-                  />
-                  <button>Send</button>
-                </form>
-              </section>
             </section>
           ) : (
             <section className={styles.empty}>No applications yet.</section>
