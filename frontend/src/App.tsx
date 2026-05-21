@@ -398,6 +398,7 @@ const CustomerApp = () => {
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [trustScreenSeen, setTrustScreenSeen] = useState(false);
   const [reapplyBusy, setReapplyBusy] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
@@ -473,6 +474,7 @@ const CustomerApp = () => {
       if (!res.ok) throw new Error(data.error?.error_message || "Could not save delivery preference");
       setApplication(data.application);
       setShowDeliveryModal(false);
+      setShowConfirmation(true);
     } catch (e) {
       setDeliveryError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -1347,7 +1349,88 @@ const CustomerApp = () => {
         </div>
       )}
 
-      <div className={styles.appCard}>
+      {showConfirmation && application.referral_code && (
+        <div style={{ maxWidth: "56rem", margin: "0 auto", padding: "4rem 2.4rem 8rem" }}>
+
+          {/* Hero */}
+          <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
+            <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
+            <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
+              You're all set!
+            </h1>
+            <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
+              Your <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong> is{" "}
+              {application.delivery_type === "instant" ? "on its way — usually within minutes." : "on its way — standard delivery takes 2–3 business days."}
+            </p>
+          </div>
+
+          {/* Referral code card */}
+          <div style={{
+            background: "var(--brand-tint)", border: "2px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "2rem",
+          }}>
+            <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.6rem" }}>
+              Your referral code
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1.4rem" }}>
+              <code style={{ fontSize: "2.6rem", fontWeight: 900, color: "var(--brand)", letterSpacing: "0.06em" }}>
+                {application.referral_code}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(application.referral_code!);
+                  setCodeCopied(true);
+                  setTimeout(() => setCodeCopied(false), 2000);
+                }}
+                style={{ fontSize: "1.3rem", padding: "0.6rem 1.4rem" }}
+              >
+                {codeCopied ? "Copied!" : "Copy code"}
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+              <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "2rem", flexShrink: 0 }}>🎰</span>
+                <div>
+                  <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Earn extra raffle entries</p>
+                  <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6 }}>
+                    Every friend who uses your code and gets their first advance earns you <strong>an extra entry</strong> into the weekly $300 cash raffle — on top of your automatic entry.
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
+                <span style={{ fontSize: "2rem", flexShrink: 0 }}>📈</span>
+                <div>
+                  <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Help them, help yourself</p>
+                  <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6 }}>
+                    Your referrals let friends skip the waitlist and get early access — even if Advance isn't live in their state yet.
+                  </p>
+                </div>
+              </div>
+              <div style={{
+                background: "#fffbeb", border: "1.5px solid #fcd34d",
+                borderRadius: "var(--r-sm)", padding: "1rem 1.2rem",
+                display: "flex", gap: "1rem", alignItems: "flex-start",
+              }}>
+                <span style={{ fontSize: "1.6rem", flexShrink: 0 }}>⚠️</span>
+                <p style={{ fontSize: "1.3rem", color: "#92400e", lineHeight: 1.6, margin: 0 }}>
+                  One thing to keep in mind: if someone you refer doesn't pay back their first advance on time, it will slow down your ability to unlock higher credit limits. Only share with people you trust.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            style={{ width: "100%" }}
+            onClick={() => setShowConfirmation(false)}
+          >
+            Go to my dashboard →
+          </button>
+        </div>
+      )}
+
+      {!showConfirmation && <div className={styles.appCard}>
         <div className={styles.appCardPanel}>
           <div className={styles.appCardHeader}>
             <p className={styles.appCardKicker}>Your advance</p>
@@ -1580,7 +1663,8 @@ const CustomerApp = () => {
             {error && <p className={styles.error}>{error}</p>}
           </div>
         </div>
-      </div>
+      </div>}
+
     </main>
   );
 };
