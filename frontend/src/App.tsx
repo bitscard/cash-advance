@@ -1353,16 +1353,45 @@ const CustomerApp = () => {
         <div style={{ maxWidth: "56rem", margin: "0 auto", padding: "4rem 2.4rem 8rem" }}>
 
           {/* Hero */}
-          <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
-            <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
-            <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
-              You're all set!
-            </h1>
-            <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
-              Your <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong> is{" "}
-              {application.delivery_type === "instant" ? "on its way — usually within minutes." : "on its way — standard delivery takes 2–3 business days."}
-            </p>
-          </div>
+          {(() => {
+            const isInstant = application.delivery_type === "instant";
+            const advanceAmt = application.requested_amount;
+            const totalDue = isInstant ? advanceAmt + 5 : advanceAmt;
+            return (
+              <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
+                <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
+                <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
+                  You're all set!
+                </h1>
+                <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.6rem" }}>
+                  Your <strong style={{ color: "var(--ink)" }}>${advanceAmt} advance</strong> is{" "}
+                  {isInstant ? "on its way — usually within minutes." : "on its way — standard delivery takes 2–3 business days."}
+                </p>
+                {/* Repayment summary */}
+                <div style={{
+                  display: "inline-flex", flexDirection: "column", gap: "0.6rem",
+                  background: "var(--surface)", border: "1.5px solid var(--border)",
+                  borderRadius: "var(--r-lg)", padding: "1.4rem 2.4rem", textAlign: "left",
+                }}>
+                  <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>What you'll repay on payday</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "3.2rem", fontSize: "1.4rem", color: "var(--ink-2)" }}>
+                      <span>Advance</span><span>${advanceAmt}.00</span>
+                    </div>
+                    {isInstant && (
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "3.2rem", fontSize: "1.4rem", color: "var(--ink-2)" }}>
+                        <span>Instant delivery fee</span><span>$5.00</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "3.2rem", fontSize: "1.6rem", fontWeight: 800, color: "var(--ink)", borderTop: "1.5px solid var(--border)", paddingTop: "0.4rem", marginTop: "0.2rem" }}>
+                      <span>Total due</span><span>${totalDue}.00</span>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>No interest · No late fees · Never reported to credit bureaus</p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Referral code card */}
           <div style={{
