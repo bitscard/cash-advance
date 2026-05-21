@@ -1663,30 +1663,38 @@ const CustomerApp = () => {
                 ? ADVANCE_TIERS[Math.max(0, application.repayment_count - 1)]
                 : ADVANCE_TIERS[Math.min(application.repayment_count, ADVANCE_TIERS.length - 1)];
 
-              // Active loan
-              if (["funded", "repayment_scheduled"].includes(application.status)) {
+              // ── Advance timeline (shown for all post-funded states) ──
+              const showTimeline = application.delivery_type && !["reviewing", "intake", "bank_connected", "expired", "denied"].includes(application.status);
+              const repaid = application.repayment?.status === "paid" || application.status === "repaid";
+              const TimelineStep = ({ done, active, label, sub }: { done: boolean; active: boolean; label: string; sub: string }) => (
+                <div style={{ flex: "1 1 0", textAlign: "center", position: "relative" }}>
+                  <div style={{
+                    width: "3.2rem", height: "3.2rem", borderRadius: "50%", margin: "0 auto 0.8rem",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: done ? "#16a34a" : active ? "var(--brand)" : "var(--border)",
+                    color: done || active ? "white" : "var(--muted)",
+                    fontSize: "1.5rem", fontWeight: 800, flexShrink: 0,
+                  }}>
+                    {done ? "✓" : active ? "●" : "○"}
+                  </div>
+                  <p style={{ fontSize: "1.3rem", fontWeight: 700, color: done ? "#16a34a" : active ? "var(--brand)" : "var(--muted)", margin: "0 0 0.2rem" }}>{label}</p>
+                  <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0, lineHeight: 1.4 }}>{sub}</p>
+                </div>
+              );
+
+              if (showTimeline && ["funded", "repayment_scheduled"].includes(application.status)) {
                 return (
                   <div style={{ marginTop: "1.6rem" }}>
-                    <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap" }}>
-                      <div style={{
-                        flex: "1 1 14rem", background: "var(--brand)", color: "white",
-                        borderRadius: "var(--r-lg)", padding: "2rem",
-                      }}>
-                        <p style={{ fontSize: "1.15rem", opacity: 0.75, marginBottom: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Due in</p>
-                        <p style={{ fontSize: "3.2rem", fontWeight: 800, margin: "0 0 0.2rem" }}>{daysUntilDue ?? "—"}</p>
-                        <p style={{ fontSize: "1.3rem", opacity: 0.8, margin: 0 }}>{dueDate ? `days · ${dueDate.toLocaleDateString([], { month: "short", day: "numeric" })}` : "days"}</p>
-                      </div>
-                      <div style={{
-                        flex: "1 1 14rem", background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-                        borderRadius: "var(--r-lg)", padding: "2rem",
-                      }}>
-                        <p style={{ fontSize: "1.15rem", color: "var(--muted)", marginBottom: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Reapply in</p>
-                        <p style={{ fontSize: "3.2rem", fontWeight: 800, color: "var(--ink)", margin: "0 0 0.2rem" }}>{daysUntilReapply}</p>
-                        <p style={{ fontSize: "1.3rem", color: "var(--muted)", margin: 0 }}>days after repayment</p>
-                      </div>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 0, position: "relative", marginBottom: "2rem" }}>
+                      <div style={{ position: "absolute", top: "1.6rem", left: "16.67%", right: "16.67%", height: "2px", background: "var(--border)", zIndex: 0 }} />
+                      <TimelineStep done active={false} label="Advance sent" sub="Funds on the way" />
+                      <TimelineStep active={!repaid} done={repaid} label="Repayment due"
+                        sub={dueDate ? `${dueDate.toLocaleDateString([], { month: "short", day: "numeric" })} · ${daysUntilDue} day${daysUntilDue === 1 ? "" : "s"}` : "—"} />
+                      <TimelineStep done={false} active={false} label="Next advance"
+                        sub={canReapplyAt ? `Opens ${canReapplyAt.toLocaleDateString([], { month: "short", day: "numeric" })}` : "After repayment"} />
                     </div>
-                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.2rem", lineHeight: 1.6 }}>
-                      Repay on time to unlock your next advance of <strong style={{ color: "var(--ink)" }}>${nextTierAmount}</strong>. No interest, no late fees, and we never report anything to credit bureaus.
+                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.6 }}>
+                      Repay on time and your next advance eligibility opens the following day. No interest, no late fees, and we never report anything to credit bureaus.
                     </p>
                   </div>
                 );
@@ -1696,16 +1704,15 @@ const CustomerApp = () => {
               if (!canReapplyNow) {
                 return (
                   <div style={{ marginTop: "1.6rem" }}>
-                    <div style={{
-                      background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-                      borderRadius: "var(--r-lg)", padding: "2rem", textAlign: "center",
-                    }}>
-                      <p style={{ fontSize: "1.15rem", color: "var(--muted)", marginBottom: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>Next advance unlocks in</p>
-                      <p style={{ fontSize: "4rem", fontWeight: 800, color: "var(--ink)", margin: "0 0 0.4rem" }}>{daysUntilReapply}</p>
-                      <p style={{ fontSize: "1.4rem", color: "var(--muted)", margin: 0 }}>days · eligible for <strong style={{ color: "var(--ink)" }}>${nextTierAmount}</strong></p>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 0, position: "relative", marginBottom: "2rem" }}>
+                      <div style={{ position: "absolute", top: "1.6rem", left: "16.67%", right: "16.67%", height: "2px", background: "var(--border)", zIndex: 0 }} />
+                      <TimelineStep done active={false} label="Advance sent" sub="Completed" />
+                      <TimelineStep done active={false} label="Repaid" sub="Thank you!" />
+                      <TimelineStep done={false} active={false} label="Next advance"
+                        sub={canReapplyAt ? `Opens ${canReapplyAt.toLocaleDateString([], { month: "short", day: "numeric" })} · ${daysUntilReapply} day${daysUntilReapply === 1 ? "" : "s"}` : "Coming soon"} />
                     </div>
-                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.2rem" }}>
-                      ✓ Repayment collected — thank you! Your next advance will be ready {canReapplyAt?.toLocaleDateString([], { month: "long", day: "numeric" })}.
+                    <p style={{ fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.6 }}>
+                      Repayment collected — thank you! Your next advance opens on <strong style={{ color: "var(--ink)" }}>{canReapplyAt?.toLocaleDateString([], { month: "long", day: "numeric" })}</strong>.
                     </p>
                   </div>
                 );
@@ -1723,13 +1730,39 @@ const CustomerApp = () => {
               // Expired or repaid + cooldown over → reapply
               return (
                 <div style={{ marginTop: "1.6rem" }}>
-                  {application.status === "repaid" && (
-                    <p className={styles.paidNote}>✓ Repayment collected — thank you!</p>
-                  )}
                   {application.status === "expired" && (
                     <p style={{ fontSize: "1.4rem", color: "var(--muted)", marginBottom: "1.2rem", lineHeight: 1.6 }}>
                       Your previous offer expired before you chose a delivery method. Nothing was charged — you can reapply right now.
                     </p>
+                  )}
+                  {application.repayment_count > 0 && (
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 0, position: "relative", marginBottom: "2rem" }}>
+                      <div style={{ position: "absolute", top: "1.6rem", left: "16.67%", right: "16.67%", height: "2px", background: "#bbf7d0", zIndex: 0 }} />
+                      {(() => {
+                        const TimelineStep = ({ done, active, label, sub }: { done: boolean; active: boolean; label: string; sub: string }) => (
+                          <div style={{ flex: "1 1 0", textAlign: "center", position: "relative" }}>
+                            <div style={{
+                              width: "3.2rem", height: "3.2rem", borderRadius: "50%", margin: "0 auto 0.8rem",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              background: done ? "#16a34a" : active ? "var(--brand)" : "var(--border)",
+                              color: done || active ? "white" : "var(--muted)",
+                              fontSize: "1.5rem", fontWeight: 800,
+                            }}>
+                              {done ? "✓" : active ? "●" : "○"}
+                            </div>
+                            <p style={{ fontSize: "1.3rem", fontWeight: 700, color: done ? "#16a34a" : active ? "var(--brand)" : "var(--muted)", margin: "0 0 0.2rem" }}>{label}</p>
+                            <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>{sub}</p>
+                          </div>
+                        );
+                        return (
+                          <>
+                            <TimelineStep done active={false} label="Advance sent" sub="Completed" />
+                            <TimelineStep done active={false} label="Repaid" sub="On time" />
+                            <TimelineStep done active={false} label="Ready to apply" sub="Now open" />
+                          </>
+                        );
+                      })()}
+                    </div>
                   )}
                   <div style={{
                     background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
@@ -1741,8 +1774,7 @@ const CustomerApp = () => {
                         Ready for your next advance
                       </p>
                       <p style={{ fontSize: "1.35rem", color: "var(--muted)", margin: 0 }}>
-                        You're eligible for <strong style={{ color: "var(--brand)" }}>${nextTierAmount}</strong>
-                        {application.repayment_count > 0 && ` — up from your last advance`}
+                        {application.repayment_count > 0 ? "Your repayment history unlocks your next offer." : "Apply now and we'll review your eligibility."}
                       </p>
                     </div>
                     <button
@@ -1750,7 +1782,7 @@ const CustomerApp = () => {
                       onClick={handleReapply}
                       style={{ whiteSpace: "nowrap" }}
                     >
-                      {reapplyBusy ? "Submitting…" : `Apply for $${nextTierAmount} →`}
+                      {reapplyBusy ? "Submitting…" : "Apply now →"}
                     </button>
                   </div>
                 </div>
@@ -2146,6 +2178,70 @@ const AdminApp = () => {
                   {error && <p className={styles.error}>{error}</p>}
                 </section>
                 <section className={styles.panel}>
+                  <h3>Borrowing history</h3>
+                  {(() => {
+                    const totalTaken = selected.repayment_count + (selected.delivery_type ? 1 : 0);
+                    const isActive = ["funded", "repayment_scheduled"].includes(selected.status);
+                    const isWrittenOff = selected.status === "written_off";
+                    const isRepaid = selected.status === "repaid" || selected.repayment?.status === "paid";
+                    if (totalTaken === 0) return <p className={styles.muted}>No advances taken yet.</p>;
+                    return (
+                      <>
+                        <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.4rem" }}>
+                          {[
+                            { label: "Total advances", value: totalTaken, color: "var(--brand)" },
+                            { label: "Repaid", value: selected.repayment_count, color: "#16a34a" },
+                            { label: "Written off", value: isWrittenOff ? 1 : 0, color: "#dc2626" },
+                          ].map(({ label, value, color }) => (
+                            <div key={label} style={{ background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.8rem 1.2rem", textAlign: "center", minWidth: "9rem" }}>
+                              <p style={{ fontSize: "2rem", fontWeight: 800, color, margin: 0 }}>{value}</p>
+                              <p style={{ fontSize: "1.15rem", color: "var(--muted)", margin: 0 }}>{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "1.3rem" }}>
+                          <thead>
+                            <tr style={{ borderBottom: "1.5px solid var(--border)" }}>
+                              <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>#</th>
+                              <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Outcome</th>
+                              <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Note</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: selected.repayment_count }, (_, i) => (
+                              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                                <td style={{ padding: "0.6rem", fontWeight: 600, color: "var(--muted)" }}>#{i + 1}</td>
+                                <td style={{ padding: "0.6rem" }}>
+                                  <span style={{ fontSize: "1.15rem", fontWeight: 600, padding: "0.2rem 0.6rem", borderRadius: "999px", background: "#dcfce7", color: "#166534" }}>Repaid ✓</span>
+                                </td>
+                                <td style={{ padding: "0.6rem", color: "var(--muted)", fontSize: "1.2rem" }}>On time</td>
+                              </tr>
+                            ))}
+                            {selected.delivery_type && (
+                              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                <td style={{ padding: "0.6rem", fontWeight: 600, color: "var(--muted)" }}>#{totalTaken}</td>
+                                <td style={{ padding: "0.6rem" }}>
+                                  <span style={{
+                                    fontSize: "1.15rem", fontWeight: 600, padding: "0.2rem 0.6rem", borderRadius: "999px",
+                                    background: isRepaid ? "#dcfce7" : isWrittenOff ? "#fee2e2" : isActive ? "#dbeafe" : "#f3f4f6",
+                                    color: isRepaid ? "#166534" : isWrittenOff ? "#991b1b" : isActive ? "#1e40af" : "#374151",
+                                  }}>
+                                    {isRepaid ? "Repaid ✓" : isWrittenOff ? "Written off" : isActive ? "Active" : statusLabel[selected.status]}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "0.6rem", color: "var(--muted)", fontSize: "1.2rem" }}>
+                                  {selected.repayment?.due_date ? `Due ${selected.repayment.due_date}` : selected.delivery_type === "instant" ? "Instant delivery" : "Standard delivery"}
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </>
+                    );
+                  })()}
+                </section>
+
+                <section className={styles.panel}>
                   <h3>Referral tree</h3>
                   {!referralStats ? (
                     <p className={styles.muted}>Loading…</p>
@@ -2172,28 +2268,38 @@ const AdminApp = () => {
                           <tr style={{ borderBottom: "1.5px solid var(--border)" }}>
                             <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Name</th>
                             <th style={{ textAlign: "left", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Status</th>
-                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Repayments</th>
-                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Advance</th>
+                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Got advance</th>
+                            <th style={{ textAlign: "center", padding: "0.4rem 0.6rem", color: "var(--muted)", fontWeight: 600 }}>Paid back</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {referralStats.referred.map(r => (
-                            <tr key={r.id} style={{ borderBottom: "1px solid var(--border)", cursor: "pointer" }}
-                              onClick={() => setSelectedId(r.id)}>
-                              <td style={{ padding: "0.6rem", fontWeight: 500 }}>{r.name}</td>
-                              <td style={{ padding: "0.6rem" }}>
-                                <span style={{
-                                  fontSize: "1.15rem", fontWeight: 600, padding: "0.2rem 0.6rem", borderRadius: "999px",
-                                  background: r.status === 'repaid' ? '#dcfce7' : r.status === 'written_off' ? '#fee2e2' : r.status === 'funded' || r.status === 'repayment_scheduled' ? '#dbeafe' : '#f3f4f6',
-                                  color: r.status === 'repaid' ? '#166534' : r.status === 'written_off' ? '#991b1b' : r.status === 'funded' || r.status === 'repayment_scheduled' ? '#1e40af' : '#374151',
-                                }}>
-                                  {statusLabel[r.status as Status] ?? r.status}
-                                </span>
-                              </td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>{r.repayment_count}</td>
-                              <td style={{ padding: "0.6rem", textAlign: "center" }}>{r.got_advance ? "✓" : "—"}</td>
-                            </tr>
-                          ))}
+                          {referralStats.referred.map(r => {
+                            const didDefault = r.got_advance && r.status === 'written_off' && r.repayment_count === 0;
+                            const paidBack = r.repayment_count > 0 || r.status === 'repaid';
+                            return (
+                              <tr key={r.id} style={{ borderBottom: "1px solid var(--border)", cursor: "pointer" }}
+                                onClick={() => setSelectedId(r.id)}>
+                                <td style={{ padding: "0.6rem", fontWeight: 500 }}>{r.name}</td>
+                                <td style={{ padding: "0.6rem" }}>
+                                  <span style={{
+                                    fontSize: "1.15rem", fontWeight: 600, padding: "0.2rem 0.6rem", borderRadius: "999px",
+                                    background: r.status === 'repaid' ? '#dcfce7' : r.status === 'written_off' ? '#fee2e2' : r.status === 'funded' || r.status === 'repayment_scheduled' ? '#dbeafe' : '#f3f4f6',
+                                    color: r.status === 'repaid' ? '#166534' : r.status === 'written_off' ? '#991b1b' : r.status === 'funded' || r.status === 'repayment_scheduled' ? '#1e40af' : '#374151',
+                                  }}>
+                                    {statusLabel[r.status as Status] ?? r.status}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "0.6rem", textAlign: "center" }}>{r.got_advance ? "✓" : "—"}</td>
+                                <td style={{ padding: "0.6rem", textAlign: "center" }}>
+                                  {!r.got_advance ? "—" : paidBack
+                                    ? <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ {r.repayment_count}x</span>
+                                    : didDefault
+                                      ? <span style={{ color: "#dc2626", fontWeight: 700 }}>✗ defaulted</span>
+                                      : <span style={{ color: "#92400e" }}>pending</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </>
