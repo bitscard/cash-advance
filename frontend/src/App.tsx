@@ -1978,22 +1978,17 @@ const AdminApp = () => {
                     </div>
                   )}
                   <div className={styles.repayment}>
-                    <label>
-                      Repayment due date (defaults to payday)
-                      <input
-                        type="date"
-                        min={today}
-                        value={repaymentDate}
-                        onChange={(event) => setRepaymentDate(event.target.value)}
-                      />
-                    </label>
-                    <button disabled={isBusy} onClick={scheduleRepayment}>Record repayment schedule</button>
+                    {selected.repayment && (
+                      <p style={{ fontSize: "1.35rem", marginBottom: "0.8rem" }}>
+                        Repayment of <strong>${selected.repayment.amount}</strong> due <strong>{selected.repayment.due_date}</strong> — auto-collected on due date.
+                      </p>
+                    )}
                     {(selected.plaid_connected || selected.stripe_card_saved) ? (
-                      <button disabled={isBusy} onClick={chargeCard} style={{ marginTop: "0.6rem" }}>
+                      <button disabled={isBusy} onClick={chargeCard}>
                         {isBusy ? "Processing…" : "Collect repayment now"}
                       </button>
                     ) : (
-                      <p className={styles.muted} style={{ marginTop: "0.6rem" }}>No payment method on file yet.</p>
+                      <p className={styles.muted}>No payment method on file yet.</p>
                     )}
                   </div>
                   {error && <p className={styles.error}>{error}</p>}

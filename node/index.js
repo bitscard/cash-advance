@@ -1075,6 +1075,17 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
       const expiresAt = getOfferExpiresAt(new Date(), updated.state);
       updated = await db.saveOfferExpiry(updated.id, expiresAt) || updated;
     }
+    if (status === 'funded') {
+      // Auto-schedule repayment: due on the user's payday, amount includes $5 instant fee if applicable
+      const baseAmount = parseFloat(updated.requested_amount) || 25;
+      const instantFee = updated.delivery_type === 'instant' ? 5 : 0;
+      const repayAmount = baseAmount + instantFee;
+      const dueDate = updated.payday
+        ? new Date(updated.payday).toISOString().slice(0, 10)
+        : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+      updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
+      await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
+    }
     if (request.body.note) {
       await db.addMessage(request.params.id, 'admin', request.body.note);
     }
