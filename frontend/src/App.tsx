@@ -443,19 +443,6 @@ const CustomerApp = () => {
     setToken("");
   };
 
-  useEffect(() => {
-    const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
-    if (!code) { setGateValid(null); setGateReferrerName(null); return; }
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
-        const data = await res.json();
-        setGateValid(data.valid);
-        setGateReferrerName(data.valid ? data.referrer_name : null);
-      } catch { setGateValid(null); }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [gateCode]);
 
   useEffect(() => {
     if (
@@ -779,39 +766,52 @@ const CustomerApp = () => {
               <div style={{ position: "relative" }}>
                 <input
                   type="text"
-                  placeholder="e.g. New Orleans or a friend's name"
+                  placeholder="Enter your code"
                   autoComplete="off"
                   value={gateCode}
-                  onChange={(e) => { setGateCode(e.target.value); setGateValid(null); }}
+                  onChange={(e) => { setGateCode(e.target.value); setGateValid(null); setError(null); }}
+                  onKeyDown={(e) => e.key === "Enter" && document.getElementById("gate-continue")?.click()}
                   style={{ width: "100%", fontSize: "1.6rem", padding: "1.2rem 1.4rem", borderRadius: "var(--r-sm)", border: `1.5px solid ${gateValid === false ? "#dc2626" : gateValid === true ? "#16a34a" : "var(--border)"}` }}
                 />
                 {gateValid === true && (
-                  <span style={{ position: "absolute", right: "1.2rem", top: "50%", transform: "translateY(-50%)", fontSize: "1.3rem", color: "#16a34a", fontWeight: 600 }}>
+                  <span style={{ position: "absolute", right: "1.2rem", top: "50%", transform: "translateY(-50%)", fontSize: "1.3rem", color: "#16a34a", fontWeight: 600, pointerEvents: "none" }}>
                     ✓ {gateReferrerName ? `Referred by ${gateReferrerName}` : "Code accepted"}
-                  </span>
-                )}
-                {gateValid === false && (
-                  <span style={{ position: "absolute", right: "1.2rem", top: "50%", transform: "translateY(-50%)", fontSize: "1.3rem", color: "#dc2626", fontWeight: 600 }}>
-                    Not valid
                   </span>
                 )}
               </div>
               {gateValid === false && (
-                <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "0.6rem" }}>
+                <p style={{ fontSize: "1.3rem", color: "#dc2626", marginTop: "0.6rem" }}>
                   That code isn't recognized. Check with whoever referred you and try again.
                 </p>
               )}
             </div>
             {error && <p className={styles.error}>{error}</p>}
             <button
+              id="gate-continue"
               style={{ width: "100%" }}
-              disabled={!gateValid || gateBusy}
-              onClick={() => {
-                setForm(f => ({ ...f, referralCode: gateCode.trim().toLowerCase().replace(/\s+/g, '') }));
-                setView("signup");
+              disabled={!gateCode.trim() || gateBusy}
+              onClick={async () => {
+                const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
+                if (!code) return;
+                setGateBusy(true);
+                setError(null);
+                try {
+                  const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
+                  const data = await res.json();
+                  setGateValid(data.valid);
+                  setGateReferrerName(data.valid ? data.referrer_name : null);
+                  if (data.valid) {
+                    setForm(f => ({ ...f, referralCode: code }));
+                    setView("signup");
+                  }
+                } catch {
+                  setError("Could not verify code. Please try again.");
+                } finally {
+                  setGateBusy(false);
+                }
               }}
             >
-              Continue →
+              {gateBusy ? "Checking…" : "Continue →"}
             </button>
             <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
               Already have an account?{" "}
