@@ -620,14 +620,11 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
       country_codes: ['US'],
       language: 'en',
     };
-    // Required for OAuth banks on web: tells Plaid where to send the user
-    // back after they authenticate at the bank, so they land in their
-    // original tab instead of a generic Plaid handoff page.
-    if (PLAID_REDIRECT_URI) linkTokenParams.redirect_uri = PLAID_REDIRECT_URI;
-    console.log('[plaid/link-token] creating link token', {
-      application_id: row.id,
-      redirect_uri: PLAID_REDIRECT_URI || '(none set)',
-    });
+    // Intentionally NOT setting redirect_uri. On mobile Safari, having one
+    // causes Plaid's cleanup race and strands users on about:blank. Without
+    // redirect_uri, Plaid uses its own hosted handoff page that reliably
+    // displays a "return to the original tab" message instead.
+    console.log('[plaid/link-token] creating link token', { application_id: row.id });
     const resp = await client.linkTokenCreate(linkTokenParams);
     console.log('[plaid/link-token] created', { application_id: row.id });
     response.json({ link_token: resp.data.link_token });
