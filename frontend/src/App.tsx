@@ -1379,7 +1379,7 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 1 of 2 · Repayment method</p>
+              <p className={styles.benefitsHeaderKicker}>Step 1 of 5 · Repayment method</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
                 Add a backup card.
               </h1>
@@ -1424,7 +1424,7 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 2 of 2 · Payout method</p>
+              <p className={styles.benefitsHeaderKicker}>Step 2 of 5 · Payout method</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
                 How should we send you the cash?
               </h1>
@@ -1482,8 +1482,230 @@ const CustomerApp = () => {
               if (application) await loadApplication(application.id);
             }}
           >
-            {payoutBusy ? "Saving…" : "Continue to bank connection →"}
+            {payoutBusy ? "Saving…" : "Continue →"}
           </button>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // Step 3 of 5: trust-building screen (milestone ladder + how-it-works)
+  if (preBankActive && !trustScreenSeen) {
+    const milestones = [
+      { amount: "$25", label: "1st advance", current: true },
+      { amount: "$50", label: "2nd advance", current: false },
+      { amount: "$75", label: "3rd advance", current: false },
+      { amount: "$100", label: "4th advance", current: false },
+      { amount: "$150", label: "5th advance", current: false },
+      { amount: "$200", label: "6th+", current: false },
+    ];
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 3 of 5 · How Advance works</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Your limit grows<br />with trust.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                You'll start at <strong>$25</strong>. Repay on time and your limit climbs — all the way up to $200.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={180} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody}>
+          <div style={{
+            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "3.2rem",
+          }}>
+            <p style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.8rem" }}>
+              How trust-building works
+            </p>
+            <p style={{ fontSize: "1.4rem", color: "var(--muted)", lineHeight: 1.7, margin: 0 }}>
+              Every on-time repayment earns you a higher limit on your next advance. We start small because we're just getting to know each other — but the more history we build together, the more we can offer you.
+            </p>
+          </div>
+          <p style={{ fontSize: "1.35rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1.6rem" }}>
+            Your advance limit roadmap
+          </p>
+          <div style={{ display: "flex", gap: "1rem", marginBottom: "3.2rem", overflowX: "auto", paddingBottom: "0.4rem" }}>
+            {milestones.map((m, i) => (
+              <div
+                key={m.amount}
+                style={{
+                  flex: "1 0 9rem",
+                  background: m.current ? "var(--brand)" : "var(--white)",
+                  border: m.current ? "none" : "1.5px solid var(--border)",
+                  borderRadius: "var(--r-lg)",
+                  padding: "1.8rem 1.2rem",
+                  textAlign: "center",
+                  position: "relative",
+                  opacity: m.current ? 1 : 0.55 + i * 0.07,
+                }}
+              >
+                {m.current && (
+                  <span style={{
+                    position: "absolute", top: "-1.2rem", left: "50%", transform: "translateX(-50%)",
+                    background: "#fbbf24", color: "#78350f", fontSize: "1.05rem", fontWeight: 700,
+                    padding: "0.2rem 0.8rem", borderRadius: "99px", whiteSpace: "nowrap",
+                  }}>
+                    You start here
+                  </span>
+                )}
+                <p style={{
+                  fontSize: "2rem", fontWeight: 800, margin: "0 0 0.4rem",
+                  color: m.current ? "white" : "var(--ink)",
+                }}>
+                  {m.amount}
+                </p>
+                <p style={{
+                  fontSize: "1.15rem", color: m.current ? "rgba(255,255,255,0.75)" : "var(--muted)",
+                  margin: 0,
+                }}>
+                  {m.label}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
+            {[
+              { icon: "📅", title: "Repay on payday", sub: "Your advance is automatically due on your next payday. Repay on time to unlock a higher limit." },
+              { icon: "🚫", title: "No credit bureau reporting", sub: "We never report anything to any credit bureau — good or bad. Your score is always safe." },
+              { icon: "🔄", title: "No rollover, no interest", sub: "This isn't a loan. There's zero interest and you can't roll over your balance. Just pay back what you got." },
+              { icon: "🛡️", title: "We never chase you", sub: "If repayment fails, we write it off. No collections, no lawsuits, no debt buyers — ever." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className={styles.benefitCard}>
+                <span className={styles.benefitIcon}>{icon}</span>
+                <p className={styles.benefitCardTitle}>{title}</p>
+                <p className={styles.benefitCardSub}>{sub}</p>
+              </div>
+            ))}
+          </div>
+          <button
+            style={{ width: "100%" }}
+            onClick={() => setTrustScreenSeen(true)}
+          >
+            Continue →
+          </button>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // Step 4 of 5: delivery speed (same-day vs 3-5 days)
+  if (preBankActive && !application.delivery_type) {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 4 of 5 · Delivery speed</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                How fast do<br />you need it?
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Same-day costs an extra <strong>$5</strong>, added to your repayment. 3–5 day delivery is free.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          <div className={styles.deliveryOptions}>
+            <button
+              type="button"
+              className={`${styles.deliveryOption} ${deliveryChoice === "instant" ? styles.deliveryOptionSelected : ""}`}
+              onClick={() => setDeliveryChoice("instant")}
+            >
+              <p className={styles.deliveryOptionBadge}>$5 fee</p>
+              <p className={styles.deliveryOptionTitle}>⚡ Same day</p>
+              <p className={styles.deliveryOptionSub}>Money sent the same day, straight to your PayPal, CashApp, or Zelle.</p>
+            </button>
+            <button
+              type="button"
+              className={`${styles.deliveryOption} ${deliveryChoice === "standard" ? styles.deliveryOptionSelected : ""}`}
+              onClick={() => setDeliveryChoice("standard")}
+            >
+              <p className={styles.deliveryOptionBadge}>Free</p>
+              <p className={styles.deliveryOptionTitle}>📬 3–5 days</p>
+              <p className={styles.deliveryOptionSub}>No extra charge. Funds arrive in 3–5 business days.</p>
+            </button>
+          </div>
+          {deliveryChoice && (() => {
+            const total = application.requested_amount + (deliveryChoice === "instant" ? 5 : 0);
+            return (
+              <div style={{ marginTop: "1.6rem", padding: "1.4rem 1.8rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "1.35rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay on payday</span>
+                <strong style={{ fontSize: "2rem", color: "var(--ink)" }}>${total}</strong>
+              </div>
+            );
+          })()}
+          {deliveryError && <p className={styles.error}>{deliveryError}</p>}
+          <button
+            disabled={deliveryBusy || !deliveryChoice}
+            onClick={saveDelivery}
+            style={{ width: "100%", marginTop: "2rem" }}
+          >
+            {deliveryBusy ? "Saving…" : "Continue →"}
+          </button>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // Step 5 of 5: bank connection (the final gate before review)
+  if (preBankActive) {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 5 of 5 · Bank verification</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Let's see if<br />you're approved.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Connect your bank so we can verify income and finish your application. We never share your login — Plaid handles it securely.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          {plaidLinkToken ? (
+            <PlaidConnectButton
+              linkToken={plaidLinkToken}
+              applicationId={application.id}
+              authToken={token}
+              onConnected={(app) => { setApplication(app); setPlaidLinkToken(null); loadMessages(app.id); }}
+              onError={(msg) => setError(msg)}
+            />
+          ) : plaidLinkError ? (
+            <div>
+              <p style={{ color: "var(--error, #c0392b)", marginBottom: "0.8rem", fontSize: "1.4rem" }}>{plaidLinkError}</p>
+              <button onClick={fetchPlaidLinkToken}>Retry →</button>
+            </div>
+          ) : (
+            <button disabled>Loading…</button>
+          )}
+          {error && <p className={styles.error} style={{ marginTop: "1.2rem" }}>{error}</p>}
+          <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
+            🔒 Bank-grade encryption · We never store your password · 256-bit TLS
+          </p>
         </div>
         <StatesFooter />
       </main>
@@ -1521,8 +1743,8 @@ const CustomerApp = () => {
                 onClick={() => setDeliveryChoice("instant")}
               >
                 <p className={styles.deliveryOptionBadge}>$5 fee</p>
-                <p className={styles.deliveryOptionTitle}>⚡ Instant</p>
-                <p className={styles.deliveryOptionSub}>Money sent within minutes to your PayPal, CashApp, or Zelle.</p>
+                <p className={styles.deliveryOptionTitle}>⚡ Same day</p>
+                <p className={styles.deliveryOptionSub}>Money sent the same day to your PayPal, CashApp, or Zelle.</p>
               </button>
               <button
                 type="button"
@@ -1530,8 +1752,8 @@ const CustomerApp = () => {
                 onClick={() => setDeliveryChoice("standard")}
               >
                 <p className={styles.deliveryOptionBadge}>Free</p>
-                <p className={styles.deliveryOptionTitle}>📬 Standard</p>
-                <p className={styles.deliveryOptionSub}>2–3 business days after approval. No extra charge.</p>
+                <p className={styles.deliveryOptionTitle}>📬 3–5 days</p>
+                <p className={styles.deliveryOptionSub}>No extra charge. Funds arrive in 3–5 business days.</p>
               </button>
             </div>
             {deliveryChoice && (() => {
@@ -1684,7 +1906,7 @@ const CustomerApp = () => {
                 </h1>
                 <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.6rem" }}>
                   Your <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong> is{" "}
-                  {application.delivery_type === "instant" ? "on its way — usually within minutes." : "on its way — standard delivery takes 2–3 business days."}
+                  {application.delivery_type === "instant" ? "on its way — same-day delivery." : "on its way — arriving in 3–5 business days."}
                 </p>
                 <div style={{ display: "inline-flex", gap: "1.2rem", alignItems: "baseline", padding: "1rem 2rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)" }}>
                   <span style={{ fontSize: "1.3rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay</span>
@@ -1776,7 +1998,7 @@ const CustomerApp = () => {
               <dt>Next payday</dt>
               <dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
               <dt>Delivery</dt>
-              <dd>{application.delivery_type === "instant" ? "⚡ Instant" : "📬 Standard (2-3 days)"}</dd>
+              <dd>{application.delivery_type === "instant" ? "⚡ Same day" : "📬 3–5 days"}</dd>
               <dt>Bank</dt>
               <dd>{application.plaid_connected ? "✓ Connected" : "Not connected"}</dd>
               {application.repayment ? (
@@ -1867,8 +2089,8 @@ const CustomerApp = () => {
                       </p>
                       <p style={{ fontSize: "1.4rem", opacity: 0.85, margin: 0, lineHeight: 1.6 }}>
                         {application.delivery_type === "instant"
-                          ? "You selected instant delivery — funds are usually sent within minutes once we process your request."
-                          : "You selected standard delivery — funds typically arrive within 2–3 business days."}
+                          ? "You selected same-day delivery — funds are sent the same day once we process your request."
+                          : "You selected 3–5 day delivery — funds typically arrive within 3–5 business days."}
                       </p>
                     </div>
                   </div>

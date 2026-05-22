@@ -734,8 +734,8 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
       }
     }
     const note = delivery_type === 'instant'
-      ? 'Instant delivery selected — funds sent within minutes. A $5 fee will be added to your repayment.'
-      : 'Standard delivery selected — funds will arrive within 2-3 business days. No extra charge.';
+      ? 'Same-day delivery selected — funds sent the same day. A $5 fee will be added to your repayment.'
+      : '3–5 day delivery selected — funds arrive within 3–5 business days. No extra charge.';
     await db.addMessage(row.id, 'system', note);
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
@@ -1201,7 +1201,7 @@ app.post('/api/advance/admin/applications/:id/repayment', async function (reques
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);
     const due_date = request.body.due_date || dueDate.toISOString().slice(0, 10);
-    const feeNote = instantFee > 0 ? ` (includes $${instantFee} instant delivery fee)` : '';
+    const feeNote = instantFee > 0 ? ` (includes $${instantFee} same-day delivery fee)` : '';
     const updated = await db.setRepayment(row.id, amount, due_date, 'Recorded for manual execution.');
     await db.addMessage(row.id, 'system', `Repayment of $${amount.toFixed(2)}${feeNote} is due by ${due_date}.`);
     response.json({ application: db.publicApp(updated) });
