@@ -401,6 +401,7 @@ const CustomerApp = () => {
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [trustScreenSeen, setTrustScreenSeen] = useState(false);
+  const [benefitsSeen, setBenefitsSeen] = useState(false);
   const [reapplyBusy, setReapplyBusy] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -1395,128 +1396,57 @@ const CustomerApp = () => {
   }
 
   // ── Pre-bank onboarding pages ─────────────────────────────────────────────
-  // After signup, before bank connection, the user must:
-  //   (1) save a backup repayment card (Stripe)
-  //   (2) tell us how they want to be paid (payout method + contact)
-  // Both gates live on the intake status only — once they connect a bank we
-  // move on to the regular dashboard.
+  // 6-step linear flow between signup and the main dashboard. Each step has
+  // its own gate; the order in this file determines the order users see.
+  //   1. Benefits        — pitch what they're signing up for
+  //   2. Receive money   — pick payout method (PayPal/Cash App/Zelle) + confirm
+  //   3. Trust           — milestone ladder, how trust-building works
+  //   4. Card            — backup repayment card (Stripe)
+  //   5. Delivery speed  — same-day ($5) vs 3-5 days (free)
+  //   6. Bank            — verify income via Plaid Hosted Link
   const preBankActive =
     application.status === "intake" &&
     application.subscription_status === "active" &&
     !application.plaid_connected;
 
-  // Step 1 of 2: payment method (backup card)
-  if (preBankActive && !application.stripe_card_saved) {
+  // Step 1 of 6: benefits pitch (reuses the landing-page benefit cards)
+  if (preBankActive && !benefitsSeen) {
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 1 of 5 · Repayment method</p>
+              <p className={styles.benefitsHeaderKicker}>Step 1 of 6 · What you get</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                Add a backup card.
+                Here's what makes<br />Advance different.
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                We'll charge this card on your payday to collect your repayment. You won't be charged until your advance is funded.
+                No credit check. No interest. No collections. Pay back on payday — that's it.
               </p>
             </div>
             <div style={{ flexShrink: 0, opacity: 0.92 }}>
-              <AlienMascot flag="usa" size={160} />
+              <AlienMascot flag="usa" size={180} />
             </div>
           </div>
         </div>
-        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-          {!stripeKey ? (
-            <p className={styles.error}>Card payments are not configured yet.</p>
-          ) : (
-            <Elements stripe={stripePromise}>
-              <SaveCardForm
-                applicationId={application.id}
-                authToken={token}
-                onSaved={() => loadApplication(application.id)}
-              />
-            </Elements>
-          )}
-          <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
-            🔒 Card details are encrypted and stored by Stripe — we never see them.
-          </p>
-        </div>
-        <StatesFooter />
-      </main>
-    );
-  }
-
-  // Step 2 of 2: payout preference (how they want to receive the advance)
-  const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
-  if (preBankActive && !payoutAlreadySaved) {
-    const methods = ["PayPal", "CashApp", "Zelle", "Bank transfer"];
-    const isBankTransferOnly = payoutMethods.length === 1 && payoutMethods[0] === "Bank transfer";
-    return (
-      <main className={styles.page}>
-        <NavBar onLogout={handleLogout} />
-        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 2 of 5 · Payout method</p>
-              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                How should we send you the cash?
-              </h1>
-              <p className={styles.benefitsHeaderSub}>
-                Pick one or more. If your bank transfer fails or takes too long, we'll fall back to one of these.
-              </p>
-            </div>
-            <div style={{ flexShrink: 0, opacity: 0.92 }}>
-              <AlienMascot flag="usa" size={160} />
-            </div>
-          </div>
-        </div>
-        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-          <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.6rem" }}>
-            {methods.map(method => (
-              <button
-                key={method}
-                type="button"
-                onClick={() => togglePayoutMethod(method)}
-                style={{
-                  padding: "0.8rem 1.6rem",
-                  borderRadius: "var(--pill)",
-                  border: `2px solid ${payoutMethods.includes(method) ? "var(--brand)" : "var(--border)"}`,
-                  background: payoutMethods.includes(method) ? "var(--brand-tint2)" : "var(--white)",
-                  color: payoutMethods.includes(method) ? "var(--brand)" : "var(--ink-2)",
-                  fontWeight: 600,
-                  fontSize: "1.4rem",
-                  cursor: "pointer",
-                }}
-              >
-                {method === "Bank transfer" ? "🏦 Bank transfer" : method}
-              </button>
+        <div className={styles.benefitsBody}>
+          <div className={styles.benefitsGrid} style={{ marginBottom: "3.2rem" }}>
+            {[
+              { icon: "🚫", title: "No credit check", sub: "We never pull your credit. Your score is safe with us — good or bad." },
+              { icon: "💸", title: "No interest, ever", sub: "Pay back exactly what you got. No interest, no late fees, no rollover." },
+              { icon: "🛡️", title: "No collections", sub: "If repayment fails, we write it off. No collections, no lawsuits, no debt buyers." },
+              { icon: "🎰", title: "Weekly $300 raffle", sub: "Every active borrower is entered automatically. Refer a friend, earn extra entries." },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className={styles.benefitCard}>
+                <span className={styles.benefitIcon}>{icon}</span>
+                <p className={styles.benefitCardTitle}>{title}</p>
+                <p className={styles.benefitCardSub}>{sub}</p>
+              </div>
             ))}
           </div>
-          {payoutMethods.length > 0 && !isBankTransferOnly && (
-            <div style={{ marginBottom: "1.6rem" }}>
-              <label style={{ fontSize: "1.35rem", fontWeight: 600, display: "block", marginBottom: "0.6rem", color: "var(--ink)" }}>
-                {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. $cashtag, you@email.com, or +15551234567"
-                value={payoutContact}
-                onChange={(e) => { setPayoutContact(e.target.value); setPayoutSaved(false); setPayoutError(null); }}
-                style={{ width: "100%", fontSize: "1.5rem", padding: "1.2rem 1.4rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)" }}
-              />
-            </div>
-          )}
-          {payoutError && <p className={styles.error}>{payoutError}</p>}
-          <button
-            style={{ width: "100%" }}
-            disabled={payoutBusy || payoutMethods.length === 0 || (!isBankTransferOnly && !payoutContact.trim())}
-            onClick={async () => {
-              await submitPayoutPreference();
-              if (application) await loadApplication(application.id);
-            }}
-          >
-            {payoutBusy ? "Saving…" : "Continue →"}
+          <button style={{ width: "100%" }} onClick={() => setBenefitsSeen(true)}>
+            Continue →
           </button>
         </div>
         <StatesFooter />
@@ -1524,7 +1454,150 @@ const CustomerApp = () => {
     );
   }
 
-  // Step 3 of 5: trust-building screen (milestone ladder + how-it-works)
+  // Step 2 of 6: receive money — single-select PayPal/Cash App/Zelle with logos + confirmation
+  const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
+  if (preBankActive && !payoutAlreadySaved) {
+    const methods: { id: string; name: string; logo: React.ReactNode; placeholder: string; label: string }[] = [
+      {
+        id: "PayPal",
+        name: "PayPal",
+        placeholder: "e.g. you@email.com",
+        label: "Your PayPal email or phone",
+        logo: (
+          <span style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: "3.6rem", height: "3.6rem", borderRadius: "50%",
+            background: "linear-gradient(135deg, #009cde 0%, #003087 100%)",
+            color: "white", fontSize: "1.8rem", fontWeight: 900, fontStyle: "italic",
+            flexShrink: 0,
+          }}>P</span>
+        ),
+      },
+      {
+        id: "CashApp",
+        name: "Cash App",
+        placeholder: "e.g. $cashtag",
+        label: "Your $cashtag",
+        logo: (
+          <span style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: "3.6rem", height: "3.6rem", borderRadius: "0.8rem",
+            background: "#00D632", color: "white", fontSize: "2rem", fontWeight: 900,
+            flexShrink: 0,
+          }}>$</span>
+        ),
+      },
+      {
+        id: "Zelle",
+        name: "Zelle",
+        placeholder: "e.g. you@email.com or phone",
+        label: "Your Zelle email or phone",
+        logo: (
+          <span style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: "3.6rem", height: "3.6rem", borderRadius: "50%",
+            background: "#6D1ED4", color: "white", fontSize: "1.8rem", fontWeight: 900,
+            flexShrink: 0,
+          }}>Z</span>
+        ),
+      },
+    ];
+    const selectedId = payoutMethods[0];
+    const selectedMethod = methods.find(m => m.id === selectedId);
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 2 of 6 · Receive money</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Where should we<br />send the cash?
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Pick one — we'll send your advance here once you're approved.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "2rem" }}>
+            {methods.map(m => {
+              const selected = selectedId === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setPayoutMethods([m.id]);
+                    setPayoutSaved(false);
+                    setPayoutError(null);
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "1.4rem",
+                    padding: "1.4rem 1.8rem",
+                    borderRadius: "var(--r-lg)",
+                    border: `2px solid ${selected ? "var(--brand)" : "var(--border)"}`,
+                    background: selected ? "var(--brand-tint)" : "var(--white)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  {m.logo}
+                  <span style={{ fontSize: "1.6rem", fontWeight: 700, color: "var(--ink)", flex: 1 }}>{m.name}</span>
+                  {selected && <span style={{ fontSize: "1.6rem", color: "var(--brand)", fontWeight: 800 }}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+          {selectedMethod && (
+            <div style={{ marginBottom: "1.6rem" }}>
+              <label style={{ fontSize: "1.35rem", fontWeight: 600, display: "block", marginBottom: "0.6rem", color: "var(--ink)" }}>
+                {selectedMethod.label}
+              </label>
+              <input
+                type="text"
+                placeholder={selectedMethod.placeholder}
+                value={payoutContact}
+                onChange={(e) => { setPayoutContact(e.target.value); setPayoutSaved(false); setPayoutError(null); }}
+                style={{ width: "100%", fontSize: "1.5rem", padding: "1.2rem 1.4rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)" }}
+              />
+            </div>
+          )}
+          {selectedMethod && payoutContact.trim() && (
+            <div style={{
+              background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+              borderRadius: "var(--r-lg)", padding: "1.6rem 1.8rem", marginBottom: "1.6rem",
+            }}>
+              <p style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--brand)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
+                Please confirm
+              </p>
+              <p style={{ fontSize: "1.5rem", color: "var(--ink)", margin: 0, lineHeight: 1.5 }}>
+                We'll send your advance to <strong>{selectedMethod.name}</strong> at <strong>{payoutContact.trim()}</strong>. Make sure this is correct — we can't recover funds sent to the wrong address.
+              </p>
+            </div>
+          )}
+          {payoutError && <p className={styles.error}>{payoutError}</p>}
+          <button
+            style={{ width: "100%" }}
+            disabled={payoutBusy || !selectedMethod || !payoutContact.trim()}
+            onClick={async () => {
+              await submitPayoutPreference();
+              if (application) await loadApplication(application.id);
+            }}
+          >
+            {payoutBusy ? "Saving…" : "Yes, this is correct →"}
+          </button>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // Step 3 of 6: trust-building screen (milestone ladder + how-it-works)
   if (preBankActive && !trustScreenSeen) {
     const milestones = [
       { amount: "$25", label: "1st advance", current: true },
@@ -1540,7 +1613,7 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 3 of 5 · How Advance works</p>
+              <p className={styles.benefitsHeaderKicker}>Step 3 of 6 · How Advance works</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
                 Your limit grows<br />with trust.
               </h1>
@@ -1633,7 +1706,57 @@ const CustomerApp = () => {
     );
   }
 
-  // Step 4 of 5: delivery speed (same-day vs 3-5 days)
+  // Step 4 of 6: backup repayment card (Stripe)
+  if (preBankActive && !application.stripe_card_saved) {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 4 of 6 · Repayment method</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Add a backup card.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                We'll charge this card on your payday to collect your repayment. You won't be charged until your advance is funded.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          {!stripeKey ? (
+            <p className={styles.error}>Card payments are not configured yet.</p>
+          ) : (
+            <Elements stripe={stripePromise}>
+              <SaveCardForm
+                applicationId={application.id}
+                authToken={token}
+                onSaved={() => loadApplication(application.id)}
+              />
+            </Elements>
+          )}
+          <div style={{
+            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+            borderRadius: "var(--r-lg)", padding: "1.4rem 1.8rem", marginTop: "2rem",
+          }}>
+            <p style={{ fontSize: "1.4rem", color: "var(--ink)", margin: 0, lineHeight: 1.6 }}>
+              ✅ <strong>As long as you receive regular income, you should be approved.</strong>
+            </p>
+          </div>
+          <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
+            🔒 Card details are encrypted and stored by Stripe — we never see them.
+          </p>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // Step 5 of 6: delivery speed (same-day vs 3-5 days)
   if (preBankActive && !application.delivery_type) {
     return (
       <main className={styles.page}>
@@ -1641,7 +1764,7 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 4 of 5 · Delivery speed</p>
+              <p className={styles.benefitsHeaderKicker}>Step 5 of 6 · Delivery speed</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
                 How fast do<br />you need it?
               </h1>
@@ -1698,7 +1821,7 @@ const CustomerApp = () => {
     );
   }
 
-  // Step 5 of 5: bank connection (the final gate before review)
+  // Step 6 of 6: bank connection (the final gate before review)
   if (preBankActive) {
     return (
       <main className={styles.page}>
@@ -1706,7 +1829,7 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 5 of 5 · Bank verification</p>
+              <p className={styles.benefitsHeaderKicker}>Step 6 of 6 · Bank verification</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
                 Let's see if<br />you're approved.
               </h1>
