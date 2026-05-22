@@ -613,24 +613,38 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // Hosted Link puts the entire Plaid flow on Plaid's domain via full-page
+    // redirect, sidestepping the popup/iframe behavior that strands mobile
+    // Safari on about:blank. After OAuth completes, Plaid redirects the user
+    // back to completion_redirect_uri with link_session_id in the query.
+    const origin = request.body && request.body.origin
+      ? request.body.origin
+      : (request.headers.origin || `https://${request.headers.host}`);
+    const completionRedirectUri = `${origin}/?plaid_complete=1`;
+
     const linkTokenParams = {
       user: { client_user_id: row.id },
       client_name: 'Advance',
       products: [Products.Transactions],
       country_codes: ['US'],
       language: 'en',
+      hosted_link: {
+        completion_redirect_uri: completionRedirectUri,
+      },
     };
-    // Intentionally NOT setting redirect_uri. On mobile Safari, having one
-    // causes Plaid's cleanup race and strands users on about:blank. Without
-    // redirect_uri, Plaid uses its own hosted handoff page that reliably
-    // displays a "return to the original tab" message instead.
-    console.log('[plaid/link-token] creating link token', { application_id: row.id });
+    console.log('[plaid/link-token] creating hosted link token', { application_id: row.id, completion_redirect_uri: completionRedirectUri });
     const resp = await client.linkTokenCreate(linkTokenParams);
-    console.log('[plaid/link-token] created', { application_id: row.id });
-    response.json({ link_token: resp.data.link_token });
+    console.log('[plaid/link-token] created', { application_id: row.id, has_hosted_link_url: !!resp.data.hosted_link_url });
+    response.json({
+      link_token: resp.data.link_token,
+      hosted_link_url: resp.data.hosted_link_url,
+    });
   } catch (err) { next(err); }
 });
 
+// Legacy iframe-based flow — exchange public_token directly. Kept for any
+// in-flight applications that still use the standard Link integration.
 app.post('/api/advance/applications/:id/plaid/exchange-token', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
@@ -650,6 +664,48 @@ app.post('/api/advance/applications/:id/plaid/exchange-token', async function (r
     await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
+});
+
+// Hosted Link completion: after Plaid redirects the user back, the frontend
+// posts the link_token here. We ask Plaid for the session results via
+// linkTokenGet, find the public_token, exchange it for an access_token, and
+// save it to the application.
+app.post('/api/advance/applications/:id/plaid/check-completion', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { link_token } = request.body;
+    if (!link_token) return response.status(400).json({ error: { error_message: 'link_token is required' } });
+    console.log('[plaid/check-completion] checking', { application_id: request.params.id });
+    const tokenResp = await client.linkTokenGet({ link_token });
+    const sessions = tokenResp.data.link_sessions || [];
+    console.log('[plaid/check-completion] sessions', { count: sessions.length });
+    // Find a completed session that produced a public_token via item_add.
+    let publicToken = null;
+    for (const session of sessions) {
+      const results = session.results || {};
+      const itemAdds = results.item_add_results || [];
+      const completed = itemAdds.find(r => r && r.public_token);
+      if (completed) { publicToken = completed.public_token; break; }
+    }
+    if (!publicToken) {
+      console.log('[plaid/check-completion] no public_token yet');
+      return response.json({ status: 'pending' });
+    }
+    console.log('[plaid/check-completion] exchanging public_token');
+    const exchangeResp = await client.itemPublicTokenExchange({ public_token: publicToken });
+    const updated = await db.setAccessToken(request.params.id, exchangeResp.data.access_token, exchangeResp.data.item_id);
+    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
+    console.log('[plaid/check-completion] connected', { application_id: request.params.id });
+    response.json({ status: 'connected', application: db.publicApp(updated) });
+  } catch (err) {
+    console.log('[plaid/check-completion] error', err.message);
+    next(err);
+  }
 });
 
 // ── Auth endpoints ─────────────────────────────────────────────────────────────

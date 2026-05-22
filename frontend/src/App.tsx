@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { usePlaidLink } from "react-plaid-link";
 
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
@@ -654,25 +653,60 @@ const CustomerApp = () => {
     setForm(f => ({ ...f, income_sources: f.income_sources.filter((_, idx) => idx !== i) }));
 
   const [plaidLinkToken, setPlaidLinkToken] = useState<string | null>(null);
+  const [hostedLinkUrl, setHostedLinkUrl] = useState<string | null>(null);
   const [plaidLinkError, setPlaidLinkError] = useState<string | null>(null);
+  const [plaidCheckingCompletion, setPlaidCheckingCompletion] = useState(false);
 
   const fetchPlaidLinkToken = () => {
     if (!application || application.plaid_connected) return;
     setPlaidLinkError(null);
     fetch(apiUrl(`/api/advance/applications/${application.id}/plaid/link-token`), {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ origin: window.location.origin }),
     })
       .then(r => r.json())
       .then(d => {
-        if (d.link_token) {
+        if (d.link_token && d.hosted_link_url) {
           setPlaidLinkToken(d.link_token);
+          setHostedLinkUrl(d.hosted_link_url);
         } else {
           setPlaidLinkError(d.error?.error_message || "Could not load bank connection. Please try again.");
         }
       })
       .catch(() => setPlaidLinkError("Could not load bank connection. Please try again."));
   };
+
+  // After Hosted Link completes, Plaid redirects the user back with
+  // ?plaid_complete=1. Detect that, ask the backend to exchange the
+  // public_token via linkTokenGet, and update the application.
+  useEffect(() => {
+    if (!application || application.plaid_connected || !token) return;
+    if (!window.location.search.includes("plaid_complete=1")) return;
+    const stashedLinkToken = localStorage.getItem("plaid_hosted_link_token");
+    if (!stashedLinkToken) {
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+    setPlaidCheckingCompletion(true);
+    fetch(apiUrl(`/api/advance/applications/${application.id}/plaid/check-completion`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ link_token: stashedLinkToken }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.status === "connected" && d.application) {
+          setApplication(d.application);
+          localStorage.removeItem("plaid_hosted_link_token");
+        } else if (d.error) {
+          setPlaidLinkError(d.error.error_message || "We couldn't finish your bank connection. Please try again.");
+        }
+        window.history.replaceState({}, "", window.location.pathname);
+      })
+      .catch(() => setPlaidLinkError("We couldn't finish your bank connection. Please try again."))
+      .finally(() => setPlaidCheckingCompletion(false));
+  }, [application?.id, application?.plaid_connected, token]);
 
   useEffect(() => {
     fetchPlaidLinkToken();
@@ -1686,13 +1720,12 @@ const CustomerApp = () => {
           </div>
         </div>
         <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-          {plaidLinkToken ? (
+          {plaidCheckingCompletion ? (
+            <button disabled>Finishing connection…</button>
+          ) : plaidLinkToken && hostedLinkUrl ? (
             <PlaidConnectButton
               linkToken={plaidLinkToken}
-              applicationId={application.id}
-              authToken={token}
-              onConnected={(app) => { setApplication(app); setPlaidLinkToken(null); loadMessages(app.id); }}
-              onError={(msg) => setError(msg)}
+              hostedLinkUrl={hostedLinkUrl}
             />
           ) : plaidLinkError ? (
             <div>
@@ -2017,13 +2050,12 @@ const CustomerApp = () => {
             {needsBank && (
               <div className={styles.appCardAction}>
                 <p><strong>Next step:</strong> connect your bank account via Plaid. This verifies your income so we can review your application.</p>
-                {plaidLinkToken ? (
+                {plaidCheckingCompletion ? (
+                  <button disabled>Finishing connection…</button>
+                ) : plaidLinkToken && hostedLinkUrl ? (
                   <PlaidConnectButton
                     linkToken={plaidLinkToken}
-                    applicationId={application.id}
-                    authToken={token}
-                    onConnected={(app) => { setApplication(app); setPlaidLinkToken(null); loadMessages(app.id); }}
-                    onError={(msg) => setError(msg)}
+                    hostedLinkUrl={hostedLinkUrl}
                   />
                 ) : plaidLinkError ? (
                   <div>
@@ -3258,52 +3290,21 @@ const SaveCardForm = ({
 
 const PlaidConnectButton = ({
   linkToken,
-  applicationId,
-  authToken,
-  onConnected,
-  onError,
+  hostedLinkUrl,
 }: {
   linkToken: string;
-  applicationId: string;
-  authToken: string;
-  onConnected: (app: Application) => void;
-  onError: (msg: string) => void;
+  hostedLinkUrl: string;
 }) => {
-  const [busy, setBusy] = useState(false);
-
-  const { open, ready } = usePlaidLink({
-    token: linkToken,
-    onSuccess: async (publicToken) => {
-      setBusy(true);
-      try {
-        const res = await fetch(apiUrl(`/api/advance/applications/${applicationId}/plaid/exchange-token`), {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ public_token: publicToken }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error?.error_message || "Could not save bank account");
-        try { localStorage.removeItem(oauthLinkTokenStorageKey); } catch {}
-        onConnected(data.application);
-      } catch (e) {
-        onError(e instanceof Error ? e.message : "Something went wrong");
-      } finally {
-        setBusy(false);
-      }
-    },
-    onExit: () => setBusy(false),
-  });
-
   const handleOpen = () => {
-    // Stash the link token so /oauth-return can resume this exact OAuth session
-    // after the bank redirect. Plaid rejects a fresh token for an in-progress flow.
-    try { localStorage.setItem(oauthLinkTokenStorageKey, linkToken); } catch {}
-    open();
+    // Stash the link_token so the check-completion call on return can
+    // identify the right session. localStorage survives the full-page
+    // redirect to Plaid and back.
+    try { localStorage.setItem("plaid_hosted_link_token", linkToken); } catch {}
+    window.location.href = hostedLinkUrl;
   };
-
   return (
-    <button disabled={!ready || busy} onClick={handleOpen}>
-      {busy ? "Connecting…" : "Connect bank account →"}
+    <button onClick={handleOpen}>
+      Connect bank account →
     </button>
   );
 };
