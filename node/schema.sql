@@ -58,3 +58,8 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_card_pm_id TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS ssn TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS pay_frequency TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS state TEXT;
+
+-- Tracks when we've sent the "2 days until due date" Mailchimp tag so the
+-- recurring cron doesn't double-send. Reset to NULL whenever a new
+-- repayment is scheduled (next advance cycle).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS due_date_reminder_sent_at TIMESTAMPTZ;

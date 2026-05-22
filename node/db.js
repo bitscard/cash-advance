@@ -169,7 +169,8 @@ async function setRepayment(id, amount, due_date, note) {
   const { rows } = await pool.query(
     `UPDATE applications
      SET repayment_amount=$1, repayment_due_date=$2, repayment_note=$3,
-         repayment_status='pending', status='repayment_scheduled', updated_at=NOW()
+         repayment_status='pending', status='repayment_scheduled',
+         due_date_reminder_sent_at=NULL, updated_at=NOW()
      WHERE id=$4 RETURNING *`,
     [amount, due_date, note || '', id],
   );
@@ -295,11 +296,33 @@ async function resetForReapply(id, requested_amount) {
          offer_expires_at=NULL, repayment_amount=NULL, repayment_due_date=NULL,
          repayment_status=NULL, repayment_note=NULL,
          stripe_charge_id=NULL, stripe_charge_status=NULL,
+         due_date_reminder_sent_at=NULL,
          requested_amount=$2, updated_at=NOW()
      WHERE id=$1 RETURNING *`,
     [id, requested_amount],
   );
   return rows[0] || null;
+}
+
+// Find applications whose repayment is due exactly 2 days from today and
+// who haven't yet received the reminder tag for this advance cycle.
+async function getApplicationsNeedingDueReminder() {
+  const { rows } = await pool.query(`
+    SELECT * FROM applications
+    WHERE status IN ('funded', 'repayment_scheduled')
+      AND repayment_due_date IS NOT NULL
+      AND repayment_due_date::date = CURRENT_DATE + INTERVAL '2 days'
+      AND due_date_reminder_sent_at IS NULL
+      AND email IS NOT NULL
+  `);
+  return rows;
+}
+
+async function markDueDateReminderSent(id) {
+  await pool.query(
+    `UPDATE applications SET due_date_reminder_sent_at = NOW() WHERE id = $1`,
+    [id],
+  );
 }
 
 async function getApplicationByReferralCode(code) {
@@ -372,4 +395,6 @@ module.exports = {
   saveOfferExpiry,
   getDueMemberships,
   getDueApplications,
+  getApplicationsNeedingDueReminder,
+  markDueDateReminderSent,
 };

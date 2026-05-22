@@ -404,6 +404,47 @@ async function addToMailchimp(name, email, state, tags = ['waitlist']) {
   }
 }
 
+// Find every application whose repayment is 2 days out and hasn't been
+// notified yet, tag them in Mailchimp, and record the send so we don't
+// duplicate. Idempotent — safe to run on every tick.
+async function sendDueDateReminders() {
+  try {
+    const apps = await db.getApplicationsNeedingDueReminder();
+    if (apps.length === 0) {
+      console.log('[reminders] none due');
+      return 0;
+    }
+    console.log('[reminders] sending', apps.length, 'due-date reminders');
+    for (const app of apps) {
+      try {
+        await addToMailchimp(app.name, app.email, app.state, ['due_date_reminder']);
+        await db.markDueDateReminderSent(app.id);
+        console.log('[reminders] sent', { application_id: app.id, email: app.email, due: app.repayment_due_date });
+      } catch (err) {
+        console.log('[reminders] per-app error', { application_id: app.id, error: err.message });
+      }
+    }
+    return apps.length;
+  } catch (err) {
+    console.log('[reminders] error', err.message);
+    return 0;
+  }
+}
+
+// External-cron-friendly endpoint. Hit from Render Cron Jobs daily (or
+// cron-job.org, etc.). Idempotent — the in-process timer also runs hourly.
+app.post('/api/cron/due-date-reminders', async function (request, response) {
+  if (!requireAdmin(request, response)) return;
+  const sent = await sendDueDateReminders();
+  response.json({ sent });
+});
+
+// In-process backup: check hourly. Won't fire while the app is asleep on
+// Render's free tier, so the admin endpoint above is the reliable path.
+setInterval(sendDueDateReminders, 60 * 60 * 1000);
+// Also run 30s after startup so a fresh deploy catches today's reminders.
+setTimeout(sendDueDateReminders, 30 * 1000);
+
 app.post('/api/waitlist', async function (request, response, next) {
   try {
     const { name, email, state } = request.body;
@@ -539,6 +580,10 @@ app.post('/api/advance/applications', async function (request, response, next) {
     await db.saveSubscription(row.id, null, eligibleOnSignup ? 'active' : 'waitlisted', null);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
+    // Fire the welcome email automation. Waitlisted users get both tags so
+    // Mailchimp can still target them separately if you set up a waitlist drip.
+    addToMailchimp(name, email, state, eligibleOnSignup ? ['welcome'] : ['welcome', 'waitlist'])
+      .catch(err => console.log('[mailchimp welcome] error:', err.message));
     const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
     const updatedRow = await db.getApplicationById(row.id);
     response.json({ application: db.publicApp(updatedRow), token });
@@ -662,6 +707,8 @@ app.post('/api/advance/applications/:id/plaid/exchange-token', async function (r
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     console.log('[plaid/exchange-token] success', { application_id: request.params.id, item_id });
     await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
+    addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
+      .catch(err => console.log('[mailchimp review] error:', err.message));
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -700,6 +747,8 @@ app.post('/api/advance/applications/:id/plaid/check-completion', async function 
     const updated = await db.setAccessToken(request.params.id, exchangeResp.data.access_token, exchangeResp.data.item_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
+    addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
+      .catch(err => console.log('[mailchimp review] error:', err.message));
     console.log('[plaid/check-completion] connected', { application_id: request.params.id });
     response.json({ status: 'connected', application: db.publicApp(updated) });
   } catch (err) {
@@ -1152,6 +1201,8 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
     if (status === 'approved') {
       const expiresAt = getOfferExpiresAt(new Date(), updated.state);
       updated = await db.saveOfferExpiry(updated.id, expiresAt) || updated;
+      addToMailchimp(updated.name, updated.email, updated.state, ['approved'])
+        .catch(err => console.log('[mailchimp approved] error:', err.message));
     }
     if (status === 'funded') {
       // Auto-schedule repayment: due on the user's payday, amount includes $5 instant fee if applicable
