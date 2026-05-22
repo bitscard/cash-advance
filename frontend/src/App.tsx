@@ -133,6 +133,10 @@ const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
 const adminTokenStorageKey = "advance_admin_token";
+// Stashed by PlaidConnectButton before Link opens so /oauth-return can pick the
+// same link_token back up and resume the OAuth flow (Plaid rejects a new token
+// for an in-progress OAuth session).
+const oauthLinkTokenStorageKey = "advance_plaid_oauth_link_token";
 
 const statusLabel: Record<Status, string> = {
   intake: "Intake",
@@ -363,6 +367,7 @@ const App = () => {
   if (path === "/loan") return <LoanApp />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/privacy") return <PrivacyPage />;
+  if (path === "/oauth-return") return <OauthReturn />;
   return <CustomerApp />;
 };
 
@@ -631,20 +636,6 @@ const CustomerApp = () => {
   const fetchPlaidLinkToken = () => {
     if (!application || application.plaid_connected) return;
     setPlaidLinkError(null);
-
-    // When the user returns from an OAuth bank, the URL contains ?oauth_state_id=...
-    // Plaid requires the SAME link token that started the session — fetching a
-    // new one will fail. Rehydrate from sessionStorage instead.
-    const cacheKey = `plaid_link_token_${application.id}`;
-    const isOauthReturn = window.location.search.includes("oauth_state_id=");
-    if (isOauthReturn) {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        setPlaidLinkToken(cached);
-        return;
-      }
-    }
-
     fetch(apiUrl(`/api/advance/applications/${application.id}/plaid/link-token`), {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -653,7 +644,6 @@ const CustomerApp = () => {
       .then(d => {
         if (d.link_token) {
           setPlaidLinkToken(d.link_token);
-          try { sessionStorage.setItem(cacheKey, d.link_token); } catch {}
         } else {
           setPlaidLinkError(d.error?.error_message || "Could not load bank connection. Please try again.");
         }
@@ -2881,10 +2871,8 @@ const PlaidConnectButton = ({
   onError: (msg: string) => void;
 }) => {
   const [busy, setBusy] = useState(false);
-  const isOauthReturn = typeof window !== "undefined"
-    && window.location.search.includes("oauth_state_id=");
 
-  const config: Parameters<typeof usePlaidLink>[0] = {
+  const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess: async (publicToken) => {
       setBusy(true);
@@ -2896,17 +2884,8 @@ const PlaidConnectButton = ({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error?.error_message || "Could not save bank account");
-        try { sessionStorage.removeItem(`plaid_link_token_${applicationId}`); } catch {}
-        const wasOauthReturn = window.location.search.includes("oauth_state_id=");
-        if (wasOauthReturn) {
-          window.history.replaceState({}, "", window.location.pathname);
-        }
+        try { localStorage.removeItem(oauthLinkTokenStorageKey); } catch {}
         onConnected(data.application);
-        // Mobile Safari leaves the OAuth popup on about:blank when Plaid Link
-        // can't close it. Force-navigate back so the user lands on the app.
-        if (wasOauthReturn) {
-          window.location.replace("/");
-        }
       } catch (e) {
         onError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
@@ -2914,41 +2893,163 @@ const PlaidConnectButton = ({
       }
     },
     onExit: () => setBusy(false),
-    // Plaid Link fires HANDOFF after it relays the OAuth state to the parent.
-    // On mobile Safari this is our cue to bail off the popup before Plaid Link
-    // navigates the page to about:blank as cleanup.
+  });
+
+  const handleOpen = () => {
+    // Stash the link token so /oauth-return can resume this exact OAuth session
+    // after the bank redirect. Plaid rejects a fresh token for an in-progress flow.
+    try { localStorage.setItem(oauthLinkTokenStorageKey, linkToken); } catch {}
+    open();
+  };
+
+  return (
+    <button disabled={!ready || busy} onClick={handleOpen}>
+      {busy ? "Connecting…" : "Connect bank account →"}
+    </button>
+  );
+};
+
+// ── Plaid OAuth return page ───────────────────────────────────────────────────
+// Dedicated route Plaid redirects back to after a bank OAuth login. Picks up
+// the link_token stashed by PlaidConnectButton, re-initializes Plaid Link with
+// receivedRedirectUri so the OAuth session can resume, then routes the user
+// back to / once the public_token has been exchanged.
+
+const OauthReturn = () => {
+  const [status, setStatus] = useState<"loading" | "exchanging" | "error">("loading");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const oauthStateId = new URLSearchParams(window.location.search).get("oauth_state_id");
+  const linkToken = (typeof window !== "undefined" && localStorage.getItem(oauthLinkTokenStorageKey)) || "";
+  const applicationId = (typeof window !== "undefined" && localStorage.getItem(applicationStorageKey)) || "";
+  const authToken = (typeof window !== "undefined" && localStorage.getItem(userTokenStorageKey)) || "";
+
+  console.log("[oauth-return] mount", {
+    oauthStateId,
+    receivedRedirectUri: window.location.href,
+    hasLinkToken: !!linkToken,
+    hasApplicationId: !!applicationId,
+    hasAuthToken: !!authToken,
+  });
+
+  const config: Parameters<typeof usePlaidLink>[0] = {
+    token: linkToken,
+    onSuccess: async (publicToken) => {
+      console.log("[oauth-return] onSuccess fired");
+      setStatus("exchanging");
+      if (!applicationId || !authToken) {
+        console.log("[oauth-return] missing applicationId or authToken — cannot exchange");
+        setStatus("error");
+        setErrorMsg("Session expired. Please return to the app and try again.");
+        return;
+      }
+      try {
+        const res = await fetch(apiUrl(`/api/advance/applications/${applicationId}/plaid/exchange-token`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ public_token: publicToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.error_message || "Could not save bank account");
+        console.log("[oauth-return] public_token exchange succeeded");
+        try { localStorage.removeItem(oauthLinkTokenStorageKey); } catch {}
+        window.location.replace("/");
+      } catch (e) {
+        console.log("[oauth-return] public_token exchange failed", e);
+        setStatus("error");
+        setErrorMsg(e instanceof Error ? e.message : "Something went wrong");
+      }
+    },
+    onExit: (err) => {
+      console.log("[oauth-return] onExit", err);
+      // Plaid closes silently after relaying OAuth state to a parent tab.
+      // Navigate back to the app so the user lands on the connected state.
+      if (!err) {
+        window.location.replace("/");
+      } else {
+        setStatus("error");
+        setErrorMsg(err.error_message || err.display_message || "Bank linking was cancelled");
+      }
+    },
     onEvent: (eventName) => {
-      if (isOauthReturn && (eventName === "HANDOFF" || eventName === "EXIT")) {
+      console.log("[oauth-return] Plaid event:", eventName);
+      // HANDOFF fires once Plaid has handed the OAuth state off. On mobile
+      // Safari this is our cue to leave before Plaid Link replaces the page
+      // with about:blank as cleanup.
+      if (eventName === "HANDOFF") {
         window.location.replace("/");
       }
     },
   };
-  if (isOauthReturn) {
-    // @ts-ignore — receivedRedirectUri is required by Plaid Link OAuth but missing from the TS types
-    config.receivedRedirectUri = window.location.href;
-  }
+  // @ts-ignore — receivedRedirectUri is required by Plaid Link OAuth but missing from the TS types
+  config.receivedRedirectUri = window.location.href;
 
   const { open, ready } = usePlaidLink(config);
 
-  // After an OAuth bank redirect, auto-resume Link so the user doesn't have to click again.
+  // Resume Link as soon as the SDK is ready and we have what we need.
   useEffect(() => {
-    if (isOauthReturn && ready) open();
-  }, [isOauthReturn, ready, open]);
+    if (ready && oauthStateId && linkToken) {
+      console.log("[oauth-return] reopening Plaid Link with receivedRedirectUri");
+      open();
+    }
+  }, [ready, open, oauthStateId, linkToken]);
 
-  // Race condition with Plaid Link's cleanup: it navigates the OAuth popup to
-  // about:blank ~2s after handoff on mobile Safari. Beat it to the punch and
-  // force-navigate to the main app. By 2s, Plaid has already messaged the
-  // parent tab with the OAuth result, so the bank connection still completes.
+  // Fallback: if Plaid Link finishes but no callback fires (mobile Safari
+  // sometimes kills the tab silently), navigate back to / after a few seconds
+  // so the user isn't stranded.
   useEffect(() => {
-    if (!isOauthReturn) return;
-    const timer = setTimeout(() => window.location.replace("/"), 2000);
-    return () => clearTimeout(timer);
-  }, [isOauthReturn]);
+    if (!oauthStateId || !linkToken) return;
+    const t = setTimeout(() => {
+      console.log("[oauth-return] fallback timer — navigating to /");
+      window.location.replace("/");
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [oauthStateId, linkToken]);
+
+  const wrap: React.CSSProperties = {
+    padding: "4rem 2rem",
+    textAlign: "center",
+    fontSize: "1.6rem",
+    maxWidth: "40rem",
+    margin: "0 auto",
+  };
+
+  if (!oauthStateId) {
+    return (
+      <main style={wrap}>
+        <p>This page completes a Plaid bank linking session.</p>
+        <p style={{ marginTop: "1rem" }}>
+          <a href="/">Return to the app →</a>
+        </p>
+      </main>
+    );
+  }
+  if (!linkToken) {
+    return (
+      <main style={wrap}>
+        <p>We couldn't find your bank linking session. Please start over.</p>
+        <button onClick={() => window.location.replace("/")} style={{ marginTop: "2rem" }}>
+          Return to the app →
+        </button>
+      </main>
+    );
+  }
+  if (status === "error") {
+    return (
+      <main style={wrap}>
+        <p style={{ color: "var(--error, #c0392b)" }}>{errorMsg}</p>
+        <button onClick={() => window.location.replace("/")} style={{ marginTop: "2rem" }}>
+          Return to the app →
+        </button>
+      </main>
+    );
+  }
 
   return (
-    <button disabled={!ready || busy} onClick={() => open()}>
-      {busy ? "Connecting…" : "Connect bank account →"}
-    </button>
+    <main style={wrap}>
+      <p>{status === "exchanging" ? "Saving your bank account…" : "Finishing your bank connection…"}</p>
+      <p style={{ marginTop: "1rem", opacity: 0.6 }}>You'll be redirected automatically.</p>
+    </main>
   );
 };
 

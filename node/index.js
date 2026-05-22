@@ -624,7 +624,12 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
     // back after they authenticate at the bank, so they land in their
     // original tab instead of a generic Plaid handoff page.
     if (PLAID_REDIRECT_URI) linkTokenParams.redirect_uri = PLAID_REDIRECT_URI;
+    console.log('[plaid/link-token] creating link token', {
+      application_id: row.id,
+      redirect_uri: PLAID_REDIRECT_URI || '(none set)',
+    });
     const resp = await client.linkTokenCreate(linkTokenParams);
+    console.log('[plaid/link-token] created', { application_id: row.id });
     response.json({ link_token: resp.data.link_token });
   } catch (err) { next(err); }
 });
@@ -638,11 +643,13 @@ app.post('/api/advance/applications/:id/plaid/exchange-token', async function (r
   try {
     const { public_token } = request.body;
     if (!public_token) return response.status(400).json({ error: { error_message: 'public_token is required' } });
+    console.log('[plaid/exchange-token] exchanging public_token', { application_id: request.params.id });
     const tokenResp = await client.itemPublicTokenExchange({ public_token });
     const access_token = tokenResp.data.access_token;
     const item_id = tokenResp.data.item_id;
     const updated = await db.setAccessToken(request.params.id, access_token, item_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    console.log('[plaid/exchange-token] success', { application_id: request.params.id, item_id });
     await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
