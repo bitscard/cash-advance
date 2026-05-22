@@ -2897,10 +2897,16 @@ const PlaidConnectButton = ({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error?.error_message || "Could not save bank account");
         try { sessionStorage.removeItem(`plaid_link_token_${applicationId}`); } catch {}
-        if (window.location.search.includes("oauth_state_id=")) {
+        const wasOauthReturn = window.location.search.includes("oauth_state_id=");
+        if (wasOauthReturn) {
           window.history.replaceState({}, "", window.location.pathname);
         }
         onConnected(data.application);
+        // Mobile Safari leaves the OAuth popup on about:blank when Plaid Link
+        // can't close it. Force-navigate back so the user lands on the app.
+        if (wasOauthReturn) {
+          window.location.replace("/");
+        }
       } catch (e) {
         onError(e instanceof Error ? e.message : "Something went wrong");
       } finally {
@@ -2920,6 +2926,19 @@ const PlaidConnectButton = ({
   useEffect(() => {
     if (isOauthReturn && ready) open();
   }, [isOauthReturn, ready, open]);
+
+  // Fallback for mobile Safari: if Plaid Link finishes the OAuth handoff but
+  // can't close the popup, force-navigate to the main app after a few seconds
+  // so the user isn't stranded on a tab full of ?oauth_state_id=.
+  useEffect(() => {
+    if (!isOauthReturn) return;
+    const timer = setTimeout(() => {
+      if (window.location.search.includes("oauth_state_id=")) {
+        window.location.replace("/");
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isOauthReturn]);
 
   return (
     <button disabled={!ready || busy} onClick={() => open()}>
