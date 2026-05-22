@@ -5,6 +5,10 @@
       "destination": "https://plaid-backend-gr01.onrender.com/api/$1"
     },
     {
+      "source": "/oauth-return",
+      "destination": "/oauth-return.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

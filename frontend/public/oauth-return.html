@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Plaid OAuth return landing.
+
+      This is intentionally a static HTML file, NOT the React SPA. When Plaid
+      redirects the popup back here on mobile Safari, the Plaid Link SDK runs
+      its cleanup which can navigate the tab to about:blank before any React
+      code can mount. By serving plain HTML, the meta refresh below fires the
+      instant the browser parses <head>, so we bounce out before Plaid Link
+      gets the chance to interfere.
+
+      We also try window.close() first — if this tab was opened by Plaid via
+      window.open(), the browser will close it and snap focus back to the
+      original Advance tab (where Plaid Link is showing "One more step /
+      Continue"). If close fails, the meta refresh + script-based fallback
+      send the user to / so they aren't stranded.
+    -->
+    <meta http-equiv="refresh" content="0; url=/" />
+    <title>Returning to Advance…</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+        padding: 4rem 1.5rem;
+        color: #1a1a1a;
+        max-width: 28rem;
+        margin: 0 auto;
+        line-height: 1.5;
+      }
+      h1 { font-size: 1.4rem; margin: 0 0 0.6rem; }
+      p { font-size: 1rem; color: #555; margin: 0.4rem 0; }
+      a { color: #6c47ff; font-weight: 600; }
+    </style>
+    <script>
+      (function () {
+        // Persistent debug log — visible via localStorage even if the tab
+        // ends up on about:blank. Check this on Render or in DevTools.
+        try {
+          var logs = JSON.parse(localStorage.getItem("plaid_oauth_debug") || "[]");
+          logs.push({ ts: Date.now(), href: location.href, ua: navigator.userAgent });
+          if (logs.length > 20) logs = logs.slice(-20);
+          localStorage.setItem("plaid_oauth_debug", JSON.stringify(logs));
+        } catch (e) {}
+
+        // First try to close — returns browser focus to the original tab.
+        try { window.close(); } catch (e) {}
+
+        // If still here after a beat, force-navigate to /. The <meta refresh>
+        // already fires immediately, but this is belt-and-braces.
+        setTimeout(function () {
+          try { window.location.replace("/"); } catch (e) {}
+        }, 100);
+      })();
+    </script>
+  </head>
+  <body>
+    <h1>Returning to Advance…</h1>
+    <p>Closing this tab and sending you back to the app to finish bank linking.</p>
+    <p style="margin-top: 1.4rem"><a href="/">Tap here if nothing happens →</a></p>
+  </body>
+</html>
