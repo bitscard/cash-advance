@@ -631,6 +631,20 @@ const CustomerApp = () => {
   const fetchPlaidLinkToken = () => {
     if (!application || application.plaid_connected) return;
     setPlaidLinkError(null);
+
+    // When the user returns from an OAuth bank, the URL contains ?oauth_state_id=...
+    // Plaid requires the SAME link token that started the session — fetching a
+    // new one will fail. Rehydrate from sessionStorage instead.
+    const cacheKey = `plaid_link_token_${application.id}`;
+    const isOauthReturn = window.location.search.includes("oauth_state_id=");
+    if (isOauthReturn) {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        setPlaidLinkToken(cached);
+        return;
+      }
+    }
+
     fetch(apiUrl(`/api/advance/applications/${application.id}/plaid/link-token`), {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -639,6 +653,7 @@ const CustomerApp = () => {
       .then(d => {
         if (d.link_token) {
           setPlaidLinkToken(d.link_token);
+          try { sessionStorage.setItem(cacheKey, d.link_token); } catch {}
         } else {
           setPlaidLinkError(d.error?.error_message || "Could not load bank connection. Please try again.");
         }
@@ -2866,7 +2881,10 @@ const PlaidConnectButton = ({
   onError: (msg: string) => void;
 }) => {
   const [busy, setBusy] = useState(false);
-  const { open, ready } = usePlaidLink({
+  const isOauthReturn = typeof window !== "undefined"
+    && window.location.search.includes("oauth_state_id=");
+
+  const config: Parameters<typeof usePlaidLink>[0] = {
     token: linkToken,
     onSuccess: async (publicToken) => {
       setBusy(true);
@@ -2878,6 +2896,10 @@ const PlaidConnectButton = ({
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error?.error_message || "Could not save bank account");
+        try { sessionStorage.removeItem(`plaid_link_token_${applicationId}`); } catch {}
+        if (window.location.search.includes("oauth_state_id=")) {
+          window.history.replaceState({}, "", window.location.pathname);
+        }
         onConnected(data.application);
       } catch (e) {
         onError(e instanceof Error ? e.message : "Something went wrong");
@@ -2886,7 +2908,19 @@ const PlaidConnectButton = ({
       }
     },
     onExit: () => setBusy(false),
-  });
+  };
+  if (isOauthReturn) {
+    // @ts-ignore — receivedRedirectUri is required by Plaid Link OAuth but missing from the TS types
+    config.receivedRedirectUri = window.location.href;
+  }
+
+  const { open, ready } = usePlaidLink(config);
+
+  // After an OAuth bank redirect, auto-resume Link so the user doesn't have to click again.
+  useEffect(() => {
+    if (isOauthReturn && ready) open();
+  }, [isOauthReturn, ready, open]);
+
   return (
     <button disabled={!ready || busy} onClick={() => open()}>
       {busy ? "Connecting…" : "Connect bank account →"}

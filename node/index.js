@@ -613,13 +613,18 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    const resp = await client.linkTokenCreate({
+    const linkTokenParams = {
       user: { client_user_id: row.id },
       client_name: 'Advance',
       products: [Products.Transactions],
       country_codes: ['US'],
       language: 'en',
-    });
+    };
+    // Required for OAuth banks on web: tells Plaid where to send the user
+    // back after they authenticate at the bank, so they land in their
+    // original tab instead of a generic Plaid handoff page.
+    if (PLAID_REDIRECT_URI) linkTokenParams.redirect_uri = PLAID_REDIRECT_URI;
+    const resp = await client.linkTokenCreate(linkTokenParams);
     response.json({ link_token: resp.data.link_token });
   } catch (err) { next(err); }
 });
