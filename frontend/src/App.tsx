@@ -1534,6 +1534,15 @@ const CustomerApp = () => {
                 <p className={styles.deliveryOptionSub}>2–3 business days after approval. No extra charge.</p>
               </button>
             </div>
+            {deliveryChoice && (() => {
+              const total = application.requested_amount + (deliveryChoice === "instant" ? 5 : 0);
+              return (
+                <div style={{ marginTop: "1.6rem", padding: "1.4rem 1.8rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "1.35rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay on payday</span>
+                  <strong style={{ fontSize: "2rem", color: "var(--ink)" }}>${total}</strong>
+                </div>
+              );
+            })()}
             {deliveryError && <p className={styles.error}>{deliveryError}</p>}
             <button
               disabled={deliveryBusy || !deliveryChoice}
@@ -1665,16 +1674,26 @@ const CustomerApp = () => {
         <div style={{ maxWidth: "56rem", margin: "0 auto", padding: "4rem 2.4rem 8rem" }}>
 
           {/* Hero */}
-          <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
-            <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
-            <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
-              You're all set!
-            </h1>
-            <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6 }}>
-              Your <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong> is{" "}
-              {application.delivery_type === "instant" ? "on its way — usually within minutes." : "on its way — standard delivery takes 2–3 business days."}
-            </p>
-          </div>
+          {(() => {
+            const totalToRepay = application.requested_amount + (application.delivery_type === "instant" ? 5 : 0);
+            return (
+              <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
+                <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
+                <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
+                  You're all set!
+                </h1>
+                <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.6rem" }}>
+                  Your <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong> is{" "}
+                  {application.delivery_type === "instant" ? "on its way — usually within minutes." : "on its way — standard delivery takes 2–3 business days."}
+                </p>
+                <div style={{ display: "inline-flex", gap: "1.2rem", alignItems: "baseline", padding: "1rem 2rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)" }}>
+                  <span style={{ fontSize: "1.3rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay</span>
+                  <strong style={{ fontSize: "2rem", color: "var(--ink)" }}>${totalToRepay}</strong>
+                  <span style={{ fontSize: "1.3rem", color: "var(--muted)" }}>on payday</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Referral code card */}
           <div style={{
@@ -1760,12 +1779,17 @@ const CustomerApp = () => {
               <dd>{application.delivery_type === "instant" ? "⚡ Instant" : "📬 Standard (2-3 days)"}</dd>
               <dt>Bank</dt>
               <dd>{application.plaid_connected ? "✓ Connected" : "Not connected"}</dd>
-              {application.repayment && (
+              {application.repayment ? (
                 <>
-                  <dt>Repay by</dt>
-                  <dd className={styles.dueDate}>{application.repayment.due_date}</dd>
+                  <dt>Repay</dt>
+                  <dd className={styles.dueDate}>${application.repayment.amount} on {application.repayment.due_date}</dd>
                 </>
-              )}
+              ) : application.delivery_type ? (
+                <>
+                  <dt>Repay</dt>
+                  <dd className={styles.dueDate}>${application.requested_amount + (application.delivery_type === "instant" ? 5 : 0)} on payday</dd>
+                </>
+              ) : null}
             </dl>
 
             {needsBank && (

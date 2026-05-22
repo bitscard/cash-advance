@@ -719,7 +719,20 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
     // $5 instant fee is collected at repayment, not upfront
-    const updated = await db.saveDeliveryType(row.id, delivery_type, false);
+    let updated = await db.saveDeliveryType(row.id, delivery_type, false);
+    // If a repayment was already scheduled (e.g. admin marked funded before the
+    // user picked delivery), recompute the amount so instant still adds $5.
+    if (updated && updated.repayment_amount != null) {
+      const baseAmount = parseFloat(updated.requested_amount) || 25;
+      const expectedAmount = baseAmount + (delivery_type === 'instant' ? 5 : 0);
+      if (parseFloat(updated.repayment_amount) !== expectedAmount) {
+        const dueDate = updated.repayment_due_date
+          ? new Date(updated.repayment_due_date).toISOString().slice(0, 10)
+          : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+        updated = await db.setRepayment(updated.id, expectedAmount, dueDate, updated.repayment_note || '') || updated;
+        console.log('[delivery] recomputed repayment after delivery change', { application_id: updated.id, delivery_type, repayment_amount: expectedAmount });
+      }
+    }
     const note = delivery_type === 'instant'
       ? 'Instant delivery selected — funds sent within minutes. A $5 fee will be added to your repayment.'
       : 'Standard delivery selected — funds will arrive within 2-3 business days. No extra charge.';
