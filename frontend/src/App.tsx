@@ -2914,6 +2914,14 @@ const PlaidConnectButton = ({
       }
     },
     onExit: () => setBusy(false),
+    // Plaid Link fires HANDOFF after it relays the OAuth state to the parent.
+    // On mobile Safari this is our cue to bail off the popup before Plaid Link
+    // navigates the page to about:blank as cleanup.
+    onEvent: (eventName) => {
+      if (isOauthReturn && (eventName === "HANDOFF" || eventName === "EXIT")) {
+        window.location.replace("/");
+      }
+    },
   };
   if (isOauthReturn) {
     // @ts-ignore — receivedRedirectUri is required by Plaid Link OAuth but missing from the TS types
@@ -2927,16 +2935,13 @@ const PlaidConnectButton = ({
     if (isOauthReturn && ready) open();
   }, [isOauthReturn, ready, open]);
 
-  // Fallback for mobile Safari: if Plaid Link finishes the OAuth handoff but
-  // can't close the popup, force-navigate to the main app after a few seconds
-  // so the user isn't stranded on a tab full of ?oauth_state_id=.
+  // Race condition with Plaid Link's cleanup: it navigates the OAuth popup to
+  // about:blank ~2s after handoff on mobile Safari. Beat it to the punch and
+  // force-navigate to the main app. By 2s, Plaid has already messaged the
+  // parent tab with the OAuth result, so the bank connection still completes.
   useEffect(() => {
     if (!isOauthReturn) return;
-    const timer = setTimeout(() => {
-      if (window.location.search.includes("oauth_state_id=")) {
-        window.location.replace("/");
-      }
-    }, 5000);
+    const timer = setTimeout(() => window.location.replace("/"), 2000);
     return () => clearTimeout(timer);
   }, [isOauthReturn]);
 
