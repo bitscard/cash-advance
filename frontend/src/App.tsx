@@ -470,6 +470,18 @@ const CustomerApp = () => {
     }
   }, [application?.delivery_type, application?.status, trustScreenSeen]);
 
+  // Hydrate card/payout local state from the application so the post-approval
+  // flow doesn't re-prompt for things the user already saved during pre-bank
+  // onboarding.
+  useEffect(() => {
+    if (application?.stripe_card_saved) setCardSaved(true);
+    if (application?.payout_methods && application?.payout_contact) {
+      setPayoutMethods(application.payout_methods.split(','));
+      setPayoutContact(application.payout_contact);
+      setPayoutSaved(true);
+    }
+  }, [application?.stripe_card_saved, application?.payout_methods, application?.payout_contact]);
+
 
 
   const saveDelivery = async () => {
@@ -486,7 +498,14 @@ const CustomerApp = () => {
       if (!res.ok) throw new Error(data.error?.error_message || "Could not save delivery preference");
       setApplication(data.application);
       setShowDeliveryModal(false);
-      setShowPayoutStep(true);
+      // Skip the post-approval payout/card step entirely if pre-bank onboarding
+      // already captured both — go straight to the confirmation screen.
+      const alreadyCaptured =
+        data.application.stripe_card_saved &&
+        data.application.payout_methods &&
+        data.application.payout_contact;
+      if (alreadyCaptured) setShowConfirmation(true);
+      else setShowPayoutStep(true);
     } catch (e) {
       setDeliveryError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -503,7 +522,11 @@ const CustomerApp = () => {
 
   const submitPayoutPreference = async () => {
     if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
-    if (!payoutContact.trim()) { setPayoutError("Please enter your username, email, or phone number"); return; }
+    const isBankTransferPayout = payoutMethods.includes("Bank transfer");
+    if (!isBankTransferPayout && !payoutContact.trim()) {
+      setPayoutError("Please enter your username, email, or phone number");
+      return;
+    }
     setPayoutBusy(true);
     setPayoutError(null);
     try {
@@ -1332,6 +1355,136 @@ const CustomerApp = () => {
           </button>
         </div>
 
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // ── Pre-bank onboarding pages ─────────────────────────────────────────────
+  // After signup, before bank connection, the user must:
+  //   (1) save a backup repayment card (Stripe)
+  //   (2) tell us how they want to be paid (payout method + contact)
+  // Both gates live on the intake status only — once they connect a bank we
+  // move on to the regular dashboard.
+  const preBankActive =
+    application.status === "intake" &&
+    application.subscription_status === "active" &&
+    !application.plaid_connected;
+
+  // Step 1 of 2: payment method (backup card)
+  if (preBankActive && !application.stripe_card_saved) {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 1 of 2 · Repayment method</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Add a backup card.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                We'll charge this card on your payday to collect your repayment. You won't be charged until your advance is funded.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          {!stripeKey ? (
+            <p className={styles.error}>Card payments are not configured yet.</p>
+          ) : (
+            <Elements stripe={stripePromise}>
+              <SaveCardForm
+                applicationId={application.id}
+                authToken={token}
+                onSaved={() => loadApplication(application.id)}
+              />
+            </Elements>
+          )}
+          <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
+            🔒 Card details are encrypted and stored by Stripe — we never see them.
+          </p>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
+  // Step 2 of 2: payout preference (how they want to receive the advance)
+  const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
+  if (preBankActive && !payoutAlreadySaved) {
+    const methods = ["PayPal", "CashApp", "Zelle", "Bank transfer"];
+    const isBankTransferOnly = payoutMethods.length === 1 && payoutMethods[0] === "Bank transfer";
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 2 of 2 · Payout method</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                How should we send you the cash?
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                Pick one or more. If your bank transfer fails or takes too long, we'll fall back to one of these.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.6rem" }}>
+            {methods.map(method => (
+              <button
+                key={method}
+                type="button"
+                onClick={() => togglePayoutMethod(method)}
+                style={{
+                  padding: "0.8rem 1.6rem",
+                  borderRadius: "var(--pill)",
+                  border: `2px solid ${payoutMethods.includes(method) ? "var(--brand)" : "var(--border)"}`,
+                  background: payoutMethods.includes(method) ? "var(--brand-tint2)" : "var(--white)",
+                  color: payoutMethods.includes(method) ? "var(--brand)" : "var(--ink-2)",
+                  fontWeight: 600,
+                  fontSize: "1.4rem",
+                  cursor: "pointer",
+                }}
+              >
+                {method === "Bank transfer" ? "🏦 Bank transfer" : method}
+              </button>
+            ))}
+          </div>
+          {payoutMethods.length > 0 && !isBankTransferOnly && (
+            <div style={{ marginBottom: "1.6rem" }}>
+              <label style={{ fontSize: "1.35rem", fontWeight: 600, display: "block", marginBottom: "0.6rem", color: "var(--ink)" }}>
+                {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. $cashtag, you@email.com, or +15551234567"
+                value={payoutContact}
+                onChange={(e) => { setPayoutContact(e.target.value); setPayoutSaved(false); setPayoutError(null); }}
+                style={{ width: "100%", fontSize: "1.5rem", padding: "1.2rem 1.4rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)" }}
+              />
+            </div>
+          )}
+          {payoutError && <p className={styles.error}>{payoutError}</p>}
+          <button
+            style={{ width: "100%" }}
+            disabled={payoutBusy || payoutMethods.length === 0 || (!isBankTransferOnly && !payoutContact.trim())}
+            onClick={async () => {
+              await submitPayoutPreference();
+              if (application) await loadApplication(application.id);
+            }}
+          >
+            {payoutBusy ? "Saving…" : "Continue to bank connection →"}
+          </button>
+        </div>
         <StatesFooter />
       </main>
     );
