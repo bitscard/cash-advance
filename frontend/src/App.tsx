@@ -3105,11 +3105,17 @@ const OauthReturn = () => {
   useEffect(() => {
     // Clean up the stashed link token — the original tab owns the flow now.
     try { localStorage.removeItem(oauthLinkTokenStorageKey); } catch {}
-    // Give the browser a beat to settle, then bounce.
+    // Try to close this popup tab so the browser returns the user to the
+    // original Advance tab (where Plaid Link is showing "One more step /
+    // Continue"). If close is refused (typically because the tab wasn't
+    // opened by JS), fall back to navigating to / so we at least don't
+    // strand the user on about:blank.
+    console.log("[oauth-return] attempting to close popup");
+    try { window.close(); } catch (e) { console.log("[oauth-return] close threw", e); }
     const t = setTimeout(() => {
-      console.log("[oauth-return] navigating back to /");
+      console.log("[oauth-return] still here — navigating back to /");
       window.location.replace("/");
-    }, 400);
+    }, 600);
     return () => clearTimeout(t);
   }, []);
 
@@ -3126,7 +3132,7 @@ const OauthReturn = () => {
       <p style={{ fontSize: "1.8rem", fontWeight: 700, marginBottom: "0.8rem" }}>Returning to Advance…</p>
       <p style={{ opacity: 0.7 }}>
         {oauthStateId
-          ? "Your bank login was received. If you don't see a connection update, tap Continue in your other Advance tab."
+          ? "Closing this tab and sending you back to the Advance app to finish bank linking."
           : "If you weren't expecting this page, head to the app:"}
       </p>
       <p style={{ marginTop: "1.6rem" }}>
