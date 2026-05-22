@@ -1281,6 +1281,19 @@ async function checkOverdraft(accessToken, amountCents) {
   }
 }
 
+// Charge amount in cents. Prefer repayment_amount (fee already baked in
+// at funded-time / admin setRepayment); fall back to requested_amount +
+// instant fee so a charge before the funded transition still collects $30
+// for instant delivery instead of dropping the $5.
+function computeChargeAmountCents(row) {
+  if (row.repayment_amount != null) {
+    return Math.round(parseFloat(row.repayment_amount) * 100);
+  }
+  const baseAmount = parseFloat(row.requested_amount) || 25;
+  const instantFee = row.delivery_type === 'instant' ? 5 : 0;
+  return Math.round((baseAmount + instantFee) * 100);
+}
+
 app.post('/api/advance/admin/applications/:id/charge', async function (request, response, next) {
   if (!requireAdmin(request, response)) return;
   try {
@@ -1296,7 +1309,8 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
       return response.status(400).json({ error: { error_message: 'No payment method on file for this application' } });
     }
 
-    const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
+    const amount = computeChargeAmountCents(row);
+    console.log('[charge] computed amount', { application_id: row.id, amount_cents: amount, repayment_amount: row.repayment_amount, requested_amount: row.requested_amount, delivery_type: row.delivery_type });
 
     // Overdraft check — uses FC balance if available
     const overdraft = await checkOverdraft(row.access_token, amount);
@@ -1364,7 +1378,7 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
     const results = [];
 
     for (const row of due) {
-      const amount = Math.round(parseFloat(row.repayment_amount || row.requested_amount) * 100);
+      const amount = computeChargeAmountCents(row);
       const bankPmId = row.stripe_payment_method_id;
       const cardPmId = row.stripe_card_pm_id;
       const primaryPmId = bankPmId || cardPmId;
