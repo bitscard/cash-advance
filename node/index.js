@@ -595,9 +595,51 @@ app.post('/api/advance/applications', async function (request, response, next) {
   }
 });
 
+// State → IANA timezone for "offer expires tonight" math. For states that
+// span multiple zones we pick the one covering the population center;
+// off by an hour is fine for an offer-expiry deadline.
+const STATE_TIMEZONES = {
+  Alabama: 'America/Chicago',
+  Alaska: 'America/Anchorage',
+  Arizona: 'America/Phoenix',
+  Colorado: 'America/Denver',
+  Delaware: 'America/New_York',
+  Florida: 'America/New_York',
+  Georgia: 'America/New_York',
+  Hawaii: 'Pacific/Honolulu',
+  Idaho: 'America/Denver',
+  Iowa: 'America/Chicago',
+  Kentucky: 'America/New_York',
+  Maine: 'America/New_York',
+  Michigan: 'America/New_York',
+  Minnesota: 'America/Chicago',
+  Mississippi: 'America/Chicago',
+  Montana: 'America/Denver',
+  Nebraska: 'America/Chicago',
+  'New Hampshire': 'America/New_York',
+  'New Jersey': 'America/New_York',
+  'New Mexico': 'America/Denver',
+  'North Carolina': 'America/New_York',
+  'North Dakota': 'America/Chicago',
+  Ohio: 'America/New_York',
+  Oklahoma: 'America/Chicago',
+  Oregon: 'America/Los_Angeles',
+  Pennsylvania: 'America/New_York',
+  'Rhode Island': 'America/New_York',
+  'South Dakota': 'America/Chicago',
+  Tennessee: 'America/Chicago',
+  Texas: 'America/Chicago',
+  Utah: 'America/Denver',
+  Vermont: 'America/New_York',
+  Virginia: 'America/New_York',
+  Washington: 'America/Los_Angeles',
+  'West Virginia': 'America/New_York',
+  Wyoming: 'America/Denver',
+};
+
 // Returns the UTC timestamp of midnight (23:59:59.999) on `date` in the user's state timezone.
 function getOfferExpiresAt(date, state) {
-  const tz = state === 'Utah' ? 'America/Denver' : 'America/New_York';
+  const tz = STATE_TIMEZONES[state] || 'America/New_York';
   const dateStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(date); // 'YYYY-MM-DD'
   const [year, month, day] = dateStr.split('-').map(Number);
   // Determine UTC offset for this timezone at noon on this date (handles DST)
@@ -785,7 +827,14 @@ app.get('/api/advance/auth/me', async function (request, response, next) {
 // ── Subscription endpoints ─────────────────────────────────────────────────────
 
 // Free activation — no Stripe required
-const ELIGIBLE_STATES = new Set(['Georgia', 'Utah']);
+const ELIGIBLE_STATES = new Set([
+  'Alabama', 'Alaska', 'Arizona', 'Colorado', 'Delaware', 'Florida', 'Georgia',
+  'Hawaii', 'Idaho', 'Iowa', 'Kentucky', 'Maine', 'Michigan', 'Minnesota',
+  'Mississippi', 'Montana', 'Nebraska', 'New Hampshire', 'New Jersey',
+  'New Mexico', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
+  'Pennsylvania', 'Rhode Island', 'South Dakota', 'Tennessee', 'Texas',
+  'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wyoming',
+]);
 
 app.post('/api/advance/applications/:id/subscription/activate', async function (request, response, next) {
   const payload = requireAuth(request, response);

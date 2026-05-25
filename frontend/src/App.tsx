@@ -126,7 +126,14 @@ const US_STATES = [
   "West Virginia", "Wisconsin", "Wyoming",
 ];
 
-const ELIGIBLE_STATES = new Set(["Georgia", "Utah"]);
+const ELIGIBLE_STATES = new Set([
+  "Alabama", "Alaska", "Arizona", "Colorado", "Delaware", "Florida", "Georgia",
+  "Hawaii", "Idaho", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
+  "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Jersey",
+  "New Mexico", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "Pennsylvania", "Rhode Island", "South Dakota", "Tennessee", "Texas",
+  "Vermont", "Virginia", "Washington", "West Virginia", "Wyoming",
+]);
 const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 
 const applicationStorageKey = "advance_application_id";
@@ -1115,7 +1122,7 @@ const CustomerApp = () => {
                 We're coming to<br />{stateName}!
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                Advance is live in Georgia and Utah today. We're expanding state by state — {stateName} is on the roadmap.
+                Advance is live in 35 states today. We're expanding fast — {stateName} is on the roadmap.
                 You'll get an email the moment we go live.
               </p>
             </div>
@@ -3492,8 +3499,10 @@ const OauthReturn = () => {
 
 const StatesFooter = () => (
   <div className={styles.statesFooter}>
-    <p className={styles.statesFooterTitle}>Available states only</p>
-    <p>Georgia · Utah</p>
+    <p className={styles.statesFooterTitle}>Available in 35 states</p>
+    <p style={{ fontSize: "1.2rem", maxWidth: "60rem", margin: "0 auto", lineHeight: 1.5 }}>
+      AL · AK · AZ · CO · DE · FL · GA · HI · ID · IA · KY · ME · MI · MN · MS · MT · NE · NH · NJ · NM · NC · ND · OH · OK · OR · PA · RI · SD · TN · TX · VT · VA · WA · WV · WY
+    </p>
     <p style={{ marginTop: "0.8rem", fontSize: "1.25rem" }}>
       <a href="/terms" style={{ color: "var(--muted)", textDecoration: "underline" }}>Terms &amp; Conditions</a>
       {" · "}
