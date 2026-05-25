@@ -759,28 +759,28 @@ const CustomerApp = () => {
           <section className={styles.raffleBanner}>
             <div className={styles.raffleBannerInner}>
               <div>
-                <p className={styles.raffleBadge}>🎰 Limited-time raffle</p>
-                <h2 className={styles.raffleHeading}>Win a free trip<br />to <em>Cancún.</em></h2>
+                <p className={styles.raffleBadge}>🎰 Weekly raffle</p>
+                <h2 className={styles.raffleHeading}>Win <em>$300 cash.</em><br />Every week.</h2>
                 <p className={styles.raffleSub}>
-                  Everyone who applies for a cash advance is automatically entered into our raffle to win an all-inclusive trip to Cancún, Mexico. No extra steps — just apply.
+                  Every active borrower in good standing is automatically entered into our weekly $300 cash raffle. No purchase, no extra steps — just stay current on your advances.
                 </p>
                 <div className={styles.rafflePerks}>
                   <div className={styles.rafflePerk}>
                     <div className={styles.rafflePerkDot} />
-                    One raffle entry per application — automatic
+                    Automatic entry — no signup form to fill
                   </div>
                   <div className={styles.rafflePerk}>
                     <div className={styles.rafflePerkDot} />
-                    Open to all U.S. applicants
+                    Refer a friend for an extra entry
                   </div>
                   <div className={styles.rafflePerk}>
                     <div className={styles.rafflePerkDot} />
-                    Winner announced monthly
+                    Winner drawn weekly · paid via PayPal, Cash App, or Zelle
                   </div>
                 </div>
               </div>
               <div className={styles.raffleMascot}>
-                <AlienMascot flag="mexico" size={220} />
+                <AlienMascot flag="usa" size={220} />
               </div>
             </div>
           </section>
