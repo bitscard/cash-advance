@@ -6,6 +6,7 @@ import { apiUrl } from "./api";
 import styles from "./App.module.css";
 import TermsPage from "./TermsPage";
 import PrivacyPage from "./PrivacyPage";
+import ConsentPage from "./ConsentPage";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -373,6 +374,7 @@ const App = () => {
   if (path === "/loan") return <LoanApp />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/privacy") return <PrivacyPage />;
+  if (path === "/consent") return <ConsentPage />;
   if (path === "/oauth-return") return <OauthReturn />;
   return <CustomerApp />;
 };
@@ -1089,9 +1091,13 @@ const CustomerApp = () => {
                   <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
                     Terms &amp; Conditions
                   </a>
-                  {" "}and{" "}
+                  ,{" "}
                   <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
                     Privacy Policy
+                  </a>
+                  , and{" "}
+                  <a href="/consent" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
+                    Consent to the Use of Electronic Documents and Signatures
                   </a>
                   , including the state-specific provisions that apply to your state of residence. We never pull your credit and we will never send your account to collections.
                 </p>
@@ -3511,6 +3517,8 @@ const StatesFooter = () => (
       <a href="/terms" style={{ color: "var(--muted)", textDecoration: "underline" }}>Terms &amp; Conditions</a>
       {" · "}
       <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "underline" }}>Privacy Policy</a>
+      {" · "}
+      <a href="/consent" style={{ color: "var(--muted)", textDecoration: "underline" }}>Electronic Consent</a>
       {" · "}
       <a href="mailto:usa@getbits.app" style={{ color: "var(--muted)", textDecoration: "underline" }}>usa@getbits.app</a>
     </p>
