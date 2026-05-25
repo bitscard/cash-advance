@@ -1085,11 +1085,15 @@ const CustomerApp = () => {
                 </div>
                 {error && <p className={styles.error}>{error}</p>}
                 <p style={{ fontSize: "1.25rem", color: "var(--muted)", margin: "1.2rem 0 0.8rem", lineHeight: 1.6 }}>
-                  By creating an account, you agree to our{" "}
+                  By submitting this form and creating an account, you confirm that you have read, understood, and agree to be bound by our{" "}
                   <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
                     Terms &amp; Conditions
                   </a>
-                  . We never pull your credit and we will never send your account to collections.
+                  {" "}and{" "}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
+                    Privacy Policy
+                  </a>
+                  , including the state-specific provisions that apply to your state of residence. We never pull your credit and we will never send your account to collections.
                 </p>
                 <div className={styles.intakeFooter}>
                   <button disabled={isBusy}>{isBusy ? "Creating account…" : "Continue →"}</button>

@@ -1,5 +1,16 @@
 import styles from "./App.module.css";
 
+// Eligible states — kept in sync with the backend ELIGIBLE_STATES set
+// in node/index.js and the Terms page STATE_PROVISIONS list.
+const ELIGIBLE_STATES = [
+  "Alabama", "Alaska", "Arizona", "Colorado", "Delaware", "Florida", "Georgia",
+  "Hawaii", "Idaho", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
+  "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Jersey",
+  "New Mexico", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "Pennsylvania", "Rhode Island", "South Dakota", "Tennessee", "Texas",
+  "Vermont", "Virginia", "Washington", "West Virginia", "Wyoming",
+];
+
 const PrivacyPage = () => (
   <main className={styles.page} style={{ maxWidth: "80rem", margin: "0 auto", padding: "4rem 2.4rem 8rem" }}>
     <div style={{ marginBottom: "3.2rem" }}>
@@ -7,7 +18,7 @@ const PrivacyPage = () => (
     </div>
     <h1 style={{ fontSize: "3.2rem", fontWeight: 800, marginBottom: "0.8rem" }}>Privacy Policy</h1>
     <p style={{ color: "var(--muted)", fontSize: "1.4rem", marginBottom: "4rem" }}>
-      Last Updated: May 19, 2026 · Bits, Inc. ·{" "}
+      Last Updated: May 25, 2026 · Bits, Inc. ·{" "}
       <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>
     </p>
 
@@ -143,10 +154,24 @@ const PrivacyPage = () => (
       <p style={{ marginTop: "1.2rem" }}>To exercise any of these rights, contact us at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. We will respond within 30 days.</p>
     </Section>
 
-    <Section title="State-Specific Rights">
-      <p><strong>California:</strong> In accordance with California law, we will not share information we collect about you with companies outside of Bits, Inc. unless the law allows. For example, we may share information with your consent or to service your account. California residents have additional rights under the California Consumer Privacy Act (CCPA), including the right to know what personal information is collected, the right to request deletion, and the right to opt out of the sale of personal information. We do not sell personal information. To submit a CCPA request, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "CCPA Request."</p>
+    <Section title="Where the Advance Service Is Available">
+      <p>Advance is currently available to residents of the following {ELIGIBLE_STATES.length} states: {ELIGIBLE_STATES.slice(0, -1).join(", ")}, and {ELIGIBLE_STATES[ELIGIBLE_STATES.length - 1]}. We comply with applicable state financial services, consumer protection, and data privacy requirements in each of these states. If you reside in any other state, you are not eligible to use the Service at this time; you may join our waitlist for future expansion. The list of eligible states may change over time — see the Terms &amp; Conditions for details on how state changes are noticed.</p>
+    </Section>
+
+    <Section title="State-Specific Privacy Rights">
+      <p>Residents of every state we operate in are entitled to all consumer privacy protections available under their state law, including those administered by the regulators listed in <strong>Section O</strong> of our <a href="/terms" style={{ color: "var(--brand)" }}>Terms &amp; Conditions</a>. Specific state frameworks called out below supplement the rights described elsewhere in this Policy.</p>
+
+      <p style={{ marginTop: "1.6rem" }}><strong>California (CCPA / CPRA):</strong> Although California is not currently in our eligible-states list, this Policy applies to any California resident who may interact with our website. Under the California Consumer Privacy Act, as amended by the California Privacy Rights Act, you have the right to know what personal information we collect about you, the right to request deletion (subject to legal retention requirements), the right to correct inaccurate information, the right to limit the use of sensitive personal information, and the right to opt out of the sale or sharing of personal information. We do not sell or share personal information for cross-context behavioral advertising. To submit a CCPA/CPRA request, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "CCPA Request."</p>
+
       <p style={{ marginTop: "1.2rem" }}><strong>Vermont:</strong> In accordance with Vermont law, we will not share information we collect about Vermont residents with companies outside of Bits, Inc., except as permitted by law. We will not share information about your creditworthiness except with your authorization or consent.</p>
-      <p style={{ marginTop: "1.2rem" }}><strong>Georgia and Utah:</strong> If you are a resident of Georgia or Utah, these are the states where the Advance service is currently available. We comply with applicable state financial services and data privacy requirements in both states.</p>
+
+      <p style={{ marginTop: "1.2rem" }}><strong>Virginia (VCDPA):</strong> Under the Virginia Consumer Data Protection Act, Virginia residents have the right to access, correct, delete, or obtain a copy of their personal data; to opt out of targeted advertising, sale of personal data, or profiling for decisions with legal effects; and to appeal a refused request. We do not sell personal data and do not engage in targeted advertising. To exercise any of these rights, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "VCDPA Request."</p>
+
+      <p style={{ marginTop: "1.2rem" }}><strong>Colorado (CPA):</strong> Colorado residents have rights under the Colorado Privacy Act substantially similar to Virginia residents above, including access, correction, deletion, portability, and the right to opt out of certain processing. Email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "CPA Request."</p>
+
+      <p style={{ marginTop: "1.2rem" }}><strong>Other state privacy laws:</strong> Where you reside in a state that has enacted a comprehensive consumer privacy statute (including but not limited to Texas, Oregon, Tennessee, and Montana), you are entitled to the rights afforded under that statute. To exercise rights under any state privacy law, contact <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> and reference the statute by name in your subject line.</p>
+
+      <p style={{ marginTop: "1.2rem" }}><strong>GLBA:</strong> As a financial institution under the Gramm-Leach-Bliley Act, we provide the FACTS notice at the top of this Policy. Federal law gives you the right to limit some — but not all — sharing of your nonpublic personal information. We have already elected not to share for most categories.</p>
     </Section>
 
     <Section title="Children's Privacy">
@@ -167,7 +192,7 @@ const PrivacyPage = () => (
     </Section>
 
     <p style={{ marginTop: "4rem", fontSize: "1.3rem", color: "var(--muted)", lineHeight: 1.7, borderTop: "1px solid var(--border)", paddingTop: "2.4rem" }}>
-      <strong>Legal notice:</strong> This Privacy Policy has not been reviewed by legal counsel and is provided as a framework. Before publishing, have a licensed attorney review this document with attention to GLBA, CCPA, Georgia and Utah privacy requirements, and CFPB EWA guidance.
+      <strong>Legal notice:</strong> This Privacy Policy has not been reviewed by legal counsel and is provided as a working framework only. Before publishing, retain a licensed attorney to review with attention to: (a) Gramm-Leach-Bliley Act and the FACTS notice format; (b) the {ELIGIBLE_STATES.length} state-specific privacy frameworks applicable to our eligible-states list, including but not limited to comprehensive privacy statutes in Colorado, Virginia, Texas, Oregon, Tennessee, and Montana, as well as state-specific financial services privacy obligations in each jurisdiction; (c) California CCPA/CPRA in case of cross-state user interactions; (d) CFPB earned-wage access guidance and supervisory expectations; and (e) deletion and retention obligations across overlapping federal and state regimes. Do not rely on this Policy as legal advice.
     </p>
   </main>
 );
