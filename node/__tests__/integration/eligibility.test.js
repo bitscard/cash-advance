@@ -42,23 +42,30 @@ function makeSignupPayload(overrides = {}) {
   };
 }
 
+// Eligible signups start in 'pending_payment' until they complete the
+// bundled-membership step (which happens when they save a Stripe payment
+// method during the Card onboarding step). Non-eligible states are
+// immediately 'waitlisted' and never see the rest of the flow.
+const ACTIVE_OR_PENDING = ['active', 'pending_payment'];
+
 describe('POST /api/advance/applications — eligibility gating', () => {
-  test('eligible state (Georgia) → subscription_status = active', async () => {
+  test('eligible state (Georgia) → subscription_status in pending_payment / active', async () => {
     const res = await request(app)
       .post('/api/advance/applications')
       .send(makeSignupPayload({ state: 'Georgia' }));
     expect(res.status).toBe(200);
     expect(res.body.application).toBeDefined();
-    expect(res.body.application.subscription_status).toBe('active');
+    expect(ACTIVE_OR_PENDING).toContain(res.body.application.subscription_status);
+    expect(res.body.application.subscription_status).not.toBe('waitlisted');
     expect(res.body.token).toBeDefined();
   });
 
-  test('eligible state (Texas) → subscription_status = active', async () => {
+  test('eligible state (Texas) → subscription_status not waitlisted', async () => {
     const res = await request(app)
       .post('/api/advance/applications')
       .send(makeSignupPayload({ state: 'Texas' }));
     expect(res.status).toBe(200);
-    expect(res.body.application.subscription_status).toBe('active');
+    expect(ACTIVE_OR_PENDING).toContain(res.body.application.subscription_status);
   });
 
   test('non-eligible state (California) → subscription_status = waitlisted', async () => {
@@ -117,9 +124,9 @@ describe('POST /api/advance/applications — eligibility gating', () => {
     const res = await request(app)
       .post('/api/advance/applications')
       .send(makeSignupPayload({ state: 'Wyoming' })); // eligible
-    expect(res.body.application.subscription_status).toBe('active');
+    expect(ACTIVE_OR_PENDING).toContain(res.body.application.subscription_status);
 
     const dbRow = await db.getApplicationById(res.body.application.id);
-    expect(dbRow.subscription_status).toBe('active');
+    expect(ACTIVE_OR_PENDING).toContain(dbRow.subscription_status);
   });
 });

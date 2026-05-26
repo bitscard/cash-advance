@@ -80,6 +80,8 @@ const publicApp = (row) => ({
   payout_methods: row.payout_methods || null,
   payout_contact: row.payout_contact || null,
   subscription_status: row.subscription_status || null,
+  subscription_id: row.subscription_id || null,
+  subscription_next_billing: fmtDate(row.subscription_next_billing) || null,
   delivery_type: row.delivery_type || null,
   instant_fee_paid: row.instant_fee_paid || false,
   repayment_count: row.repayment_count || 0,

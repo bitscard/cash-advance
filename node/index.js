@@ -1506,8 +1506,53 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
     if (!payment_method_id) {
       return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
     }
-    const updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
+    let updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // Bundled membership: the same card the user just saved is what we
+    // bill the $3.99/mo subscription against. Attach as the customer's
+    // default payment method, create the Stripe subscription, then flip
+    // subscription_status to 'active' so the next pre-bank step unlocks.
+    // Skipped when no Stripe customer exists (state-eligible users have
+    // one created during signup) or if subscription is already active.
+    const stripeCustomerId = updated.stripe_customer_id;
+    if (stripeCustomerId && updated.subscription_status !== 'active') {
+      try {
+        // Make the just-saved card the default for the customer so
+        // future invoices know what to charge.
+        await stripe.customers.update(stripeCustomerId, {
+          invoice_settings: { default_payment_method: payment_method_id },
+        });
+        const sub = await stripe.subscriptions.create({
+          customer: stripeCustomerId,
+          items: [{
+            price_data: {
+              currency: 'usd',
+              product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+              unit_amount: MEMBERSHIP_PRICE_CENTS,
+              recurring: { interval: 'month' },
+            },
+          }],
+          default_payment_method: payment_method_id,
+          metadata: { application_id: updated.id },
+          payment_behavior: 'default_incomplete',
+          payment_settings: { save_default_payment_method: 'on_subscription' },
+          expand: ['latest_invoice.payment_intent'],
+        });
+        const nextBilling = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+          : null;
+        // Even if the subscription is 'incomplete' (waiting for payment
+        // confirmation), we mark our local status active — Stripe will
+        // retry on its own schedule and the user can move on.
+        updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
+        await db.addMessage(updated.id, 'system', 'Membership activated — $3.99/month. Your card will be charged on this date each month.');
+        console.log('[stripe/save-payment-method] subscription created', { application_id: updated.id, subscription_id: sub.id, status: sub.status });
+      } catch (subErr) {
+        // Subscription failure shouldn't block card save — log and continue.
+        console.log('[stripe/save-payment-method] subscription create failed', { application_id: updated.id, error: subErr.message });
+      }
+    }
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
