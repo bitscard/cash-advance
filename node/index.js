@@ -363,6 +363,97 @@ function calcSourceAccrued(source, incomeTxs) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
+// Stripe webhook needs the raw request body to verify the signature.
+// Register it BEFORE the JSON body-parser so the body is still raw.
+app.post(
+  '/api/webhooks/stripe',
+  bodyParser.raw({ type: 'application/json' }),
+  async function (request, response) {
+    const sig = request.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    let event;
+    if (webhookSecret) {
+      try {
+        event = stripe.webhooks.constructEvent(request.body, sig, webhookSecret);
+      } catch (err) {
+        console.log('[stripe/webhook] signature verification failed', err.message);
+        return response.status(400).send(`Webhook signature error: ${err.message}`);
+      }
+    } else {
+      // No webhook secret configured — parse but log a warning. Useful
+      // during local dev with the Stripe CLI but unsafe in prod.
+      try {
+        event = JSON.parse(request.body.toString('utf8'));
+        console.log('[stripe/webhook] WARNING: webhook secret not configured — event accepted without verification');
+      } catch (err) {
+        return response.status(400).send('Invalid JSON');
+      }
+    }
+
+    try {
+      const obj = event.data?.object;
+      const appId = obj?.metadata?.application_id || obj?.subscription_metadata?.application_id;
+
+      switch (event.type) {
+        case 'invoice.payment_failed': {
+          // Membership charge failed → lock the user out of new advances
+          // until they resolve. The advance repayment is a separate
+          // PaymentIntent and is handled by the /charge endpoint, so we
+          // only react to subscription invoices here.
+          const subId = obj?.subscription;
+          if (subId) {
+            console.log('[stripe/webhook] subscription invoice failed', { subscription_id: subId });
+            // Find the application by subscription_id (no DB helper for
+            // this yet; do a direct query).
+            const { rows } = await db.pool.query(
+              `UPDATE applications SET status='subscription_failed', updated_at=NOW()
+               WHERE subscription_id=$1 RETURNING id`,
+              [subId],
+            );
+            if (rows[0]) {
+              await db.addMessage(rows[0].id, 'system', 'Your $3.99 membership charge failed. Please update your payment method to continue.');
+            }
+          }
+          break;
+        }
+        case 'invoice.payment_succeeded': {
+          // Update next billing date so the dashboard stays in sync.
+          const subId = obj?.subscription;
+          const nextBillingTs = obj?.lines?.data?.[0]?.period?.end;
+          if (subId && nextBillingTs) {
+            await db.pool.query(
+              `UPDATE applications SET subscription_next_billing=$1, updated_at=NOW()
+               WHERE subscription_id=$2`,
+              [new Date(nextBillingTs * 1000).toISOString().slice(0, 10), subId],
+            );
+          }
+          break;
+        }
+        case 'customer.subscription.deleted': {
+          // User (or system) cancelled — clear local state.
+          const subId = obj?.id;
+          if (subId) {
+            await db.pool.query(
+              `UPDATE applications SET subscription_status='cancelled', updated_at=NOW()
+               WHERE subscription_id=$1`,
+              [subId],
+            );
+          }
+          break;
+        }
+        default:
+          // Ignore all other event types
+          break;
+      }
+
+      response.json({ received: true });
+    } catch (err) {
+      console.log('[stripe/webhook] handler error', err.message);
+      response.status(500).json({ error: err.message });
+    }
+  },
+);
+
 app.use(
   bodyParser.urlencoded({
     extended: false,
@@ -441,9 +532,13 @@ app.post('/api/cron/due-date-reminders', async function (request, response) {
 
 // In-process backup: check hourly. Won't fire while the app is asleep on
 // Render's free tier, so the admin endpoint above is the reliable path.
-setInterval(sendDueDateReminders, 60 * 60 * 1000);
-// Also run 30s after startup so a fresh deploy catches today's reminders.
-setTimeout(sendDueDateReminders, 30 * 1000);
+// Guarded so tests that `require('./index.js')` don't accidentally start
+// a timer that keeps the test process alive (Jest would hang).
+if (require.main === module) {
+  setInterval(sendDueDateReminders, 60 * 60 * 1000);
+  // Also run 30s after startup so a fresh deploy catches today's reminders.
+  setTimeout(sendDueDateReminders, 30 * 1000);
+}
 
 app.post('/api/waitlist', async function (request, response, next) {
   try {
@@ -575,9 +670,11 @@ app.post('/api/advance/applications', async function (request, response, next) {
       referred_by: referredBy,
     });
     await db.createIncomeSources(row.id, income_sources);
-    // Eligibility is state-only: GA and UT are live; all other states are waitlisted regardless of referral code
+    // Eligibility is state-only: GA and UT are live; all other states are waitlisted regardless of referral code.
+    // Eligible users start in 'pending_payment' — they must subscribe to the $3.99/mo
+    // membership (after the benefits step) before continuing the onboarding flow.
     const eligibleOnSignup = ELIGIBLE_STATES.has(state || '');
-    await db.saveSubscription(row.id, null, eligibleOnSignup ? 'active' : 'waitlisted', null);
+    await db.saveSubscription(row.id, null, eligibleOnSignup ? 'pending_payment' : 'waitlisted', null);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     // Fire the welcome email automation. Waitlisted users get both tags so
@@ -851,6 +948,101 @@ app.post('/api/advance/applications/:id/subscription/activate', async function (
     if (isEligible) {
       await db.addMessage(row.id, 'system', 'Membership activated. You can now request a cash advance.');
     }
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
+// $3.99/month membership via Stripe Checkout (subscription mode).
+// Creates (or reuses) a Stripe Customer for the application, then returns a
+// Checkout Session URL the client redirects to. On success/cancel Stripe
+// sends the user back to the origin with a session_id query param the
+// /subscription/sync endpoint uses to confirm the subscription is live.
+const MEMBERSHIP_PRICE_CENTS = 399;
+const MEMBERSHIP_PRODUCT_NAME = 'Advance Membership';
+app.post('/api/advance/applications/:id/subscription/checkout-session', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!ELIGIBLE_STATES.has(row.state || '')) {
+      return response.status(400).json({ error: { error_message: 'Membership is not available in your state yet.' } });
+    }
+    if (row.subscription_status === 'active' && row.subscription_id) {
+      return response.json({ already_active: true });
+    }
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const origin = (request.body && request.body.origin) || request.headers.origin || `http://localhost:3000`;
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: MEMBERSHIP_PRICE_CENTS,
+          recurring: { interval: 'month' },
+          product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+        },
+      }],
+      success_url: `${origin}/?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/?subscription=cancel`,
+      metadata: { application_id: row.id },
+      subscription_data: { metadata: { application_id: row.id } },
+    });
+
+    response.json({ url: session.url, session_id: session.id });
+  } catch (err) { next(err); }
+});
+
+// Called by the client after the Stripe Checkout redirect. Confirms the
+// subscription is active and flips subscription_status to 'active' so the
+// pre-bank onboarding flow can advance past the membership step.
+app.post('/api/advance/applications/:id/subscription/sync', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { session_id } = request.body || {};
+    if (!session_id) {
+      return response.status(400).json({ error: { error_message: 'session_id is required' } });
+    }
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    const session = await stripe.checkout.sessions.retrieve(session_id, { expand: ['subscription'] });
+    if (!session || session.customer !== row.stripe_customer_id) {
+      return response.status(400).json({ error: { error_message: 'Checkout session does not match this application.' } });
+    }
+    const sub = session.subscription;
+    if (!sub || typeof sub === 'string') {
+      return response.status(400).json({ error: { error_message: 'Subscription is not ready yet. Please try again in a moment.' } });
+    }
+    if (!['active', 'trialing'].includes(sub.status)) {
+      return response.status(400).json({ error: { error_message: `Subscription is ${sub.status}. Payment may have failed.` } });
+    }
+    const nextBilling = sub.current_period_end
+      ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+      : null;
+    const updated = await db.saveSubscription(row.id, sub.id, 'active', nextBilling);
+    await db.addMessage(row.id, 'system', 'Membership activated — $3.99/month. You can now continue and request a cash advance.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -1241,7 +1433,7 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
   if (!requireAdmin(request, response)) return;
   try {
     const status = request.body.status;
-    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed', 'written_off'];
+    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed', 'subscription_failed', 'written_off'];
     if (!allowedStatuses.includes(status)) {
       return response.status(400).json({ error: { error_message: 'Unsupported status' } });
     }
@@ -1263,6 +1455,50 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
         : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
       updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
       await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
+
+      // First-advance subscription bootstrap: create the $3.99/mo Stripe
+      // subscription anchored to the repayment date so the first charge
+      // fires that day (as a SEPARATE Stripe transaction from the advance
+      // repayment), then monthly on the same calendar day thereafter.
+      // Only fires on the user's first funded transition — once
+      // subscription_id is set, we never recreate.
+      if (
+        !updated.subscription_id &&
+        updated.stripe_customer_id &&
+        (updated.stripe_payment_method_id || updated.stripe_card_pm_id)
+      ) {
+        try {
+          const paymentMethodId = updated.stripe_payment_method_id || updated.stripe_card_pm_id;
+          // billing_cycle_anchor is unix seconds. We anchor at the START of
+          // the repayment day in UTC (so any reasonable global TZ has the
+          // membership charge land on the right calendar date).
+          const anchor = Math.floor(new Date(`${dueDate}T00:00:00Z`).getTime() / 1000);
+          const sub = await stripe.subscriptions.create({
+            customer: updated.stripe_customer_id,
+            items: [{
+              price_data: {
+                currency: 'usd',
+                product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+                unit_amount: MEMBERSHIP_PRICE_CENTS,
+                recurring: { interval: 'month' },
+              },
+            }],
+            default_payment_method: paymentMethodId,
+            billing_cycle_anchor: anchor,
+            proration_behavior: 'none',
+            metadata: { application_id: updated.id },
+          });
+          const nextBilling = sub.current_period_end
+            ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+            : dueDate;
+          updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
+          await db.addMessage(updated.id, 'system', `Membership starts on ${dueDate} — $3.99/month, charged separately from your advance repayment.`);
+          console.log('[funded] subscription created', { application_id: updated.id, subscription_id: sub.id, anchor_date: dueDate });
+        } catch (subErr) {
+          console.log('[funded] subscription create failed', { application_id: updated.id, error: subErr.message });
+          await db.addMessage(updated.id, 'system', `Membership setup failed: ${subErr.message}. Contact us to resolve.`);
+        }
+      }
     }
     if (request.body.note) {
       await db.addMessage(request.params.id, 'admin', request.body.note);
@@ -1317,6 +1553,15 @@ app.post('/api/advance/applications/:id/reapply', async function (request, respo
     // Active loans cannot reapply
     if (['funded', 'repayment_scheduled'].includes(row.status)) {
       return response.status(400).json({ error: { error_message: 'You have an active advance. Please repay it before reapplying.' } });
+    }
+    // Lockout: failed advance repayment OR failed membership charge blocks
+    // any new advance until the user resolves it. Source of truth lives
+    // on the application row (status='repayment_failed') and on Stripe
+    // (subscription_status='subscription_failed', set by the webhook).
+    if (['repayment_failed', 'subscription_failed'].includes(row.status)) {
+      return response.status(400).json({
+        error: { error_message: 'Your previous repayment or membership charge failed. Please contact support to resolve before reapplying.' },
+      });
     }
 
     // Cooldown: if a repayment due date exists and we are before the day after it, block
@@ -1407,6 +1652,24 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
     }
     const updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    // We DO NOT create the Stripe subscription here. The first membership
+    // charge happens on the user's first repayment date — see the funded
+    // status transition in PATCH /admin/applications/:id/status. Until then
+    // the card sits on the customer and the user stays in 'pending_payment'.
+    // After the first repayment, Stripe handles all subsequent monthly
+    // charges on the same anchor day each month.
+    if (updated.stripe_customer_id) {
+      try {
+        // Make the just-saved card the default for the customer so the
+        // membership invoices (created later by funded transition) know
+        // what to charge.
+        await stripe.customers.update(updated.stripe_customer_id, {
+          invoice_settings: { default_payment_method: payment_method_id },
+        });
+      } catch (e) {
+        console.log('[stripe/save-payment-method] could not set default PM', { application_id: updated.id, error: e.message });
+      }
+    }
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -2118,9 +2381,15 @@ app.get('/api/income/verification/paystubs', function (request, response, next) 
     .catch(next);
 })
 
-const server = app.listen(APP_PORT, function () {
-  console.log('plaid-quickstart server listening on port ' + APP_PORT);
-});
+// Only bind the port when run directly (`node index.js`). When the file is
+// `require`d (Jest + supertest), we skip the listen so multiple test files
+// don't fight over the same port — supertest hits the in-memory app instead.
+let server;
+if (require.main === module) {
+  server = app.listen(APP_PORT, function () {
+    console.log('plaid-quickstart server listening on port ' + APP_PORT);
+  });
+}
 
 const prettyPrintResponse = (response) => {
   console.log(util.inspect(response.data, { colors: true, depth: 4 }));
@@ -2409,3 +2678,34 @@ app.use('/api', function (error, request, response, next) {
     response.status(500).json({ error: { error_message: error.message || 'Internal server error' } });
   }
 });
+
+// Test-only exports. Lets Jest import the Express app for supertest and
+// exercise the pure helper functions directly without booting the server
+// or any background timers. Adding to module.exports is harmless in prod —
+// nothing in the app depends on these names from outside.
+module.exports = {
+  app,
+  // Plaid + Stripe clients exposed so integration tests can swap them via jest.mock
+  client,
+  stripe,
+  // Pure functions — unit-testable
+  isPlausibleSSN,
+  payPeriodDays,
+  findPaychecksByPattern,
+  calcSourceAccrued,
+  buildRefundSet,
+  isExcludedByPFC,
+  isExcludedByKeyword,
+  classifyTransaction,
+  getOfferExpiresAt,
+  computeChargeAmountCents,
+  generateReferralSlug,
+  makeUniqueReferralCode,
+  // Tag dispatch helper (lets mailchimp tests assert on side effects)
+  addToMailchimp,
+  // Cron task body (callable directly without waiting for setInterval)
+  sendDueDateReminders,
+  // Eligibility data
+  ELIGIBLE_STATES,
+  STATE_TIMEZONES,
+};
