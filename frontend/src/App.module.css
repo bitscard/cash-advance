@@ -1853,3 +1853,1207 @@ dd {
   .chatOnly { width: calc(100vw - 2.8rem); }
   .appCard { padding: 1.2rem; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANDING V3 — bold modern consumer fintech
+   Confident emerald hero with phone mockup, warmer amber raffle accent.
+   All classes prefixed `ld` so they don't collide with the legacy app styles
+   above (still used by signup/dashboard/admin views). Uses px throughout
+   because html font-size: 62.5% makes 1rem == 10px and px is unambiguous.
+═══════════════════════════════════════════════════════════════════════════ */
+.ldPage {
+  --ld-ink:        #0a1410;
+  --ld-ink-2:      #1d2723;
+  --ld-muted:      #5a6b62;
+  --ld-line:       #e6ece8;
+  --ld-line-soft:  #f0f4f1;
+  --ld-bg:         #ffffff;
+  --ld-bg-warm:    #faf8f3;
+  --ld-bg-cream:   #f6f4ec;
+  --ld-bg-soft:    #f4f9f5;
+  --ld-brand:      #0d5234;
+  --ld-brand-dark: #07351f;
+  --ld-brand-deep: #052718;
+  --ld-brand-soft: #d7ece0;
+  --ld-amber:      #f59e0b;
+  --ld-amber-bg:   #fff7e0;
+  --ld-amber-deep: #b25e07;
+  --ld-r-sm:       10px;
+  --ld-r-md:       16px;
+  --ld-r-lg:       24px;
+  --ld-r-xl:       32px;
+  --ld-sh-sm:      0 2px 6px rgba(7,40,25,.06), 0 1px 2px rgba(7,40,25,.04);
+  --ld-sh-md:      0 8px 24px rgba(7,40,25,.08), 0 3px 8px rgba(7,40,25,.05);
+  --ld-sh-lg:      0 30px 70px rgba(7,40,25,.18), 0 12px 24px rgba(7,40,25,.08);
+
+  min-height: 100vh;
+  background: var(--ld-bg);
+  color: var(--ld-ink);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01', 'cv11';
+}
+.ldPage *,
+.ldPage *::before,
+.ldPage *::after { box-sizing: border-box; }
+.ldPage a { color: inherit; text-decoration: none; }
+.ldPage ul { list-style: none; padding: 0; margin: 0; }
+.ldPage h1, .ldPage h2, .ldPage h3, .ldPage h4, .ldPage p { margin: 0; }
+.ldPage strong { font-weight: 700; }
+
+/* Override the global `button` from line 195+ for our landing buttons.
+   NOTE: we don't set `transition: none` here because that would kill the
+   transitions on every .ldBtnXxx class (this selector has higher specificity).
+   Instead each landing button class declares its own transition. */
+.ldPage button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  min-height: 0;
+  border-radius: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: 0;
+  box-shadow: none;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ldContainer {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 40px;
+}
+@media (max-width: 768px) {
+  .ldContainer { padding: 0 20px; }
+}
+
+.ldKicker {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ld-brand);
+  margin-bottom: 18px;
+}
+.ldH1 {
+  font-size: clamp(44px, 7vw, 88px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  color: #fff;
+}
+.ldH1Accent {
+  background: linear-gradient(120deg, #c8f0d6 0%, #ffffff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ldH2 {
+  font-size: clamp(32px, 4.5vw, 56px);
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  line-height: 1.04;
+  color: var(--ld-ink);
+}
+.ldLead {
+  font-size: 18px;
+  color: var(--ld-muted);
+  margin-top: 18px;
+  max-width: 560px;
+  line-height: 1.6;
+}
+.ldSectionHeader { margin-bottom: 56px; max-width: 720px; }
+
+/* ── 1. Nav ─────────────────────────────────────────────────────────────── */
+.ldNav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border-bottom: 1px solid var(--ld-line);
+}
+.ldNavInner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 40px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.ldBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ld-ink);
+  letter-spacing: -0.035em;
+  flex-shrink: 0;
+}
+.ldBrandMark {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--ld-brand);
+  align-items: center;
+  justify-content: center;
+}
+.ldBrandDot { color: var(--ld-brand); }
+.ldNavLinks {
+  display: flex;
+  gap: 28px;
+  margin-left: 24px;
+}
+.ldNavLinks a {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ld-muted);
+  transition: color 0.15s;
+}
+.ldNavLinks a:hover { color: var(--ld-ink); }
+.ldNavCtas {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ldLinkBtn {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-ink);
+}
+.ldLinkBtn:hover { color: var(--ld-brand); }
+.ldBtnGreen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ld-ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 18px;
+  border-radius: 999px;
+  transition: transform 0.15s, background 0.15s;
+}
+.ldBtnGreen:hover {
+  background: var(--ld-brand);
+  transform: translateY(-1px);
+}
+@media (max-width: 860px) {
+  .ldNavLinks { display: none; }
+}
+@media (max-width: 520px) {
+  .ldLinkBtn { display: none; }
+  .ldNavInner { padding: 0 20px; }
+}
+
+/* ── 2. Hero ──────────────────────────────────────────────────────────── */
+.ldHero {
+  position: relative;
+  background: linear-gradient(180deg, var(--ld-brand-dark) 0%, var(--ld-brand) 60%, var(--ld-brand-deep) 100%);
+  color: #fff;
+  padding: 88px 0 120px;
+  overflow: hidden;
+}
+.ldHeroBgGrid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(ellipse at top, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at top, #000 30%, transparent 75%);
+  pointer-events: none;
+}
+.ldHeroBgGlow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  top: -200px;
+  right: -100px;
+  background: radial-gradient(circle, rgba(34,197,94,0.30) 0%, transparent 60%);
+  pointer-events: none;
+}
+.ldHeroInner {
+  position: relative;
+  z-index: 1;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 40px;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+@media (max-width: 980px) {
+  .ldHeroInner { grid-template-columns: 1fr; gap: 56px; }
+  .ldHero { padding: 64px 0 80px; }
+}
+@media (max-width: 768px) {
+  .ldHeroInner { padding: 0 20px; }
+}
+
+.ldEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(199,242,213,0.9);
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.18);
+  padding: 7px 14px;
+  border-radius: 999px;
+  margin-bottom: 28px;
+}
+.ldHeroSub {
+  margin-top: 24px;
+  font-size: 19px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.78);
+  max-width: 540px;
+}
+.ldHeroSub strong { color: #fff; font-weight: 600; }
+.ldHeroCtaRow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 36px;
+  flex-wrap: wrap;
+}
+.ldBtnWhiteLg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: var(--ld-brand-deep);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 17px 28px;
+  border-radius: 999px;
+  letter-spacing: -0.01em;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.08);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.ldBtnWhiteLg:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.12);
+}
+.ldHeroLink {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  border-bottom: 1px solid rgba(255,255,255,0.4);
+  padding-bottom: 2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ldHeroLink:hover { color: #fff; border-bottom-color: #fff; }
+.ldHeroProof {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 22px;
+  margin-top: 40px;
+}
+.ldHeroProof li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.72);
+  font-weight: 500;
+}
+.ldHeroProof li svg { color: rgba(199,242,213,0.95); }
+
+/* Phone mockup */
+.ldHeroPhoneWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ldHeroSparkle1, .ldHeroSparkle2 {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ldHeroSparkle1 { width: 280px; height: 280px; top: -40px; right: -20px; }
+.ldHeroSparkle2 { width: 200px; height: 200px; bottom: -30px; left: -40px; background: radial-gradient(circle, rgba(34,197,94,0.25) 0%, transparent 70%); }
+
+.ldPhone {
+  position: relative;
+  width: 320px;
+  background: #0a1410;
+  border-radius: 44px;
+  padding: 12px;
+  box-shadow: var(--ld-sh-lg), 0 0 0 1px rgba(255,255,255,0.05) inset;
+  transform: rotate(-3deg);
+  animation: ldPhoneFloat 6s ease-in-out infinite;
+}
+@keyframes ldPhoneFloat {
+  0%, 100% { transform: rotate(-3deg) translateY(0); }
+  50% { transform: rotate(-3deg) translateY(-8px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ldPhone { animation: none; }
+}
+.ldPhoneNotch {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 26px;
+  background: #0a1410;
+  border-radius: 14px;
+  z-index: 3;
+}
+.ldPhoneScreen {
+  background: #fafaf8;
+  border-radius: 34px;
+  padding: 50px 22px 28px;
+  color: var(--ld-ink);
+  position: relative;
+  overflow: hidden;
+}
+.ldPhoneTop {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  right: 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  z-index: 2;
+}
+.ldPhoneTopIcons {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ldPhoneAppHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.ldPhoneAppName {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ld-ink);
+  letter-spacing: -0.03em;
+}
+.ldPhoneAppName span { color: var(--ld-brand); }
+.ldPhoneAvatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--ld-brand-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ld-brand-dark);
+}
+.ldPhoneGreet {
+  font-size: 15px;
+  color: var(--ld-muted);
+  margin: 6px 0 14px;
+}
+.ldPhoneCard {
+  background: #fff;
+  border: 1px solid var(--ld-line);
+  border-radius: 20px;
+  padding: 18px 18px 16px;
+  box-shadow: 0 4px 14px rgba(7,40,25,0.05);
+}
+.ldPhonePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--ld-brand-soft);
+  color: var(--ld-brand-dark);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  margin-bottom: 10px;
+}
+.ldPhoneLabel {
+  font-size: 11px;
+  color: var(--ld-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.ldPhoneAmount {
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+.ldPhoneAmount span { font-size: 22px; color: var(--ld-muted); font-weight: 600; }
+.ldPhoneRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 7px 0;
+  border-top: 1px solid var(--ld-line-soft);
+  color: var(--ld-muted);
+}
+.ldPhoneRow strong { color: var(--ld-ink); font-weight: 600; }
+.ldPhoneFree { color: var(--ld-brand) !important; }
+.ldPhoneBtn {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--ld-ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: 12px;
+  cursor: default;
+}
+.ldPhoneFooter {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ld-muted);
+  margin-top: 14px;
+}
+@media (max-width: 980px) {
+  .ldPhone { transform: rotate(-2deg) scale(0.92); }
+}
+
+/* ── 3. Amounts ──────────────────────────────────────────────────────── */
+.ldAmounts {
+  padding: 96px 0;
+  background: var(--ld-bg);
+  text-align: center;
+}
+@media (max-width: 768px) { .ldAmounts { padding: 64px 0; } }
+.ldAmounts .ldH2 { margin: 0 auto; max-width: 760px; }
+.ldAmounts .ldKicker { justify-content: center; }
+.ldAmountChips {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 14px;
+  margin: 48px auto 28px;
+  flex-wrap: wrap;
+}
+.ldChip, .ldChipFeatured {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 22px 30px;
+  border-radius: 18px;
+  background: var(--ld-bg-soft);
+  border: 1.5px solid var(--ld-line);
+  color: var(--ld-ink-2);
+  min-width: 96px;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.ldChip:hover { transform: translateY(-2px); box-shadow: var(--ld-sh-sm); }
+.ldChipFeatured {
+  position: relative;
+  background: var(--ld-brand);
+  color: #fff;
+  border-color: var(--ld-brand);
+  font-size: 28px;
+  padding: 22px 36px;
+  box-shadow: 0 12px 30px rgba(13,82,52,0.32);
+}
+.ldChipBadge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background: var(--ld-amber);
+  color: #422300;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+}
+.ldAmountsNote {
+  font-size: 15px;
+  color: var(--ld-muted);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ── 4. How it works ─────────────────────────────────────────────────── */
+.ldHow {
+  padding: 110px 0;
+  background: var(--ld-bg-cream);
+  position: relative;
+}
+@media (max-width: 768px) { .ldHow { padding: 72px 0; } }
+.ldStepsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+@media (max-width: 860px) {
+  .ldStepsGrid { grid-template-columns: 1fr; }
+}
+.ldStep {
+  background: #fff;
+  border-radius: var(--ld-r-lg);
+  padding: 36px 32px;
+  border: 1px solid rgba(7,40,25,0.06);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.ldStep:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ld-sh-md);
+}
+.ldStepIconBox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--ld-brand-soft);
+  color: var(--ld-brand);
+  margin-bottom: 22px;
+}
+.ldStepLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ld-brand);
+  margin-bottom: 8px;
+}
+.ldStep h3 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ld-ink);
+  margin-bottom: 10px;
+}
+.ldStep p {
+  font-size: 15px;
+  color: var(--ld-muted);
+  line-height: 1.62;
+}
+
+/* ── 5. Why ──────────────────────────────────────────────────────────── */
+.ldWhy {
+  padding: 110px 0;
+  background: var(--ld-bg);
+}
+@media (max-width: 768px) { .ldWhy { padding: 72px 0; } }
+.ldFeatureGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+@media (max-width: 980px) {
+  .ldFeatureGrid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 540px) {
+  .ldFeatureGrid { grid-template-columns: 1fr; }
+}
+.ldFeature {
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  border-radius: var(--ld-r-lg);
+  padding: 32px 28px;
+  transition: border-color 0.18s, transform 0.18s;
+}
+.ldFeature:hover {
+  border-color: var(--ld-brand);
+  transform: translateY(-3px);
+}
+.ldFeatureNum {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--ld-brand);
+  line-height: 1;
+  margin-bottom: 18px;
+}
+.ldFeature h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.015em;
+  margin-bottom: 6px;
+}
+.ldFeature p {
+  font-size: 14.5px;
+  color: var(--ld-muted);
+  line-height: 1.6;
+}
+
+/* ── 6. Raffle ───────────────────────────────────────────────────────── */
+.ldRaffle {
+  padding: 110px 0;
+  background: linear-gradient(180deg, #fff9e6 0%, #fff3cf 100%);
+  position: relative;
+  overflow: hidden;
+}
+@media (max-width: 768px) { .ldRaffle { padding: 72px 0; } }
+.ldRaffleGrid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 72px;
+  align-items: center;
+}
+@media (max-width: 860px) {
+  .ldRaffleGrid { grid-template-columns: 1fr; gap: 48px; }
+}
+.ldRaffleKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ld-amber-deep);
+  background: rgba(245,158,11,0.15);
+  border: 1px solid rgba(245,158,11,0.30);
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 22px;
+}
+.ldRaffleHeadline {
+  font-size: clamp(40px, 5.5vw, 72px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  color: #2a1900;
+}
+.ldRaffleAccent {
+  background: linear-gradient(120deg, #b25e07 0%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ldRaffleSub {
+  font-size: 17px;
+  color: rgba(66,40,5,0.78);
+  line-height: 1.6;
+  margin-top: 20px;
+  max-width: 480px;
+}
+.ldRaffleBullets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 28px 0 32px;
+}
+.ldRaffleBullets li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: #422805;
+  font-weight: 500;
+}
+.ldRaffleCheck {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ld-amber);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.ldBtnDarkLg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #2a1900;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 17px 26px;
+  border-radius: 999px;
+  letter-spacing: -0.01em;
+  box-shadow: 0 10px 28px rgba(42,25,0,0.22);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.ldBtnDarkLg:hover {
+  background: #1a0f00;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(42,25,0,0.30);
+}
+
+/* Ticket card */
+.ldRaffleVisual {
+  display: flex;
+  justify-content: center;
+}
+.ldTicket {
+  position: relative;
+  background: #fff;
+  border-radius: 22px;
+  padding: 30px 28px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 30px 70px rgba(178,94,7,0.18), 0 10px 24px rgba(178,94,7,0.10);
+  transform: rotate(2deg);
+  border: 1px solid rgba(245,158,11,0.20);
+}
+.ldTicket::before, .ldTicket::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(180deg, #fff9e6 0%, #fff3cf 50%);
+  border-radius: 50%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.ldTicket::before { left: -12px; }
+.ldTicket::after { right: -12px; }
+.ldTicketTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.ldTicketBrand {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--ld-ink);
+}
+.ldTicketBrand span { color: var(--ld-brand); }
+.ldTicketSerial {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ld-muted);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+.ldTicketDivider {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 -28px 22px;
+  padding: 0 16px;
+}
+.ldTicketDivider span {
+  width: 6px;
+  height: 2px;
+  background: var(--ld-line);
+  border-radius: 1px;
+}
+.ldTicketLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ld-muted);
+  margin-bottom: 8px;
+}
+.ldTicketAmount {
+  font-size: 76px;
+  font-weight: 700;
+  color: var(--ld-amber-deep);
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.ldTicketCash {
+  font-size: 13px;
+  color: var(--ld-muted);
+  margin-bottom: 22px;
+}
+.ldTicketFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 18px;
+  border-top: 1px dashed var(--ld-line);
+  font-size: 13px;
+  color: var(--ld-muted);
+}
+.ldTicketFooter strong { color: var(--ld-ink); font-weight: 600; }
+
+/* ── 7. Trust ────────────────────────────────────────────────────────── */
+.ldTrust {
+  padding: 110px 0;
+  background: var(--ld-bg-warm);
+}
+@media (max-width: 768px) { .ldTrust { padding: 72px 0; } }
+.ldTrustGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-bottom: 28px;
+}
+@media (max-width: 860px) { .ldTrustGrid { grid-template-columns: 1fr; } }
+.ldTrustCard {
+  background: #fff;
+  border-radius: var(--ld-r-lg);
+  padding: 32px 28px;
+  border: 1px solid var(--ld-line);
+}
+.ldTrustLogo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--ld-ink);
+  margin-bottom: 14px;
+}
+.ldTrustLogoIcon {
+  width: 32px; height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ld-brand);
+  margin-bottom: 14px;
+}
+.ldTrustCard h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.ldTrustCard p {
+  font-size: 14px;
+  color: var(--ld-muted);
+  line-height: 1.6;
+}
+.ldComplianceRow {
+  background: #fff;
+  border: 1px solid var(--ld-line);
+  border-radius: 14px;
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 13px;
+  color: var(--ld-muted);
+  font-weight: 500;
+}
+.ldComplianceDot {
+  width: 3px;
+  height: 3px;
+  background: var(--ld-line);
+  border-radius: 50%;
+}
+
+/* ── 8. FAQ ──────────────────────────────────────────────────────────── */
+.ldFaq {
+  padding: 110px 0;
+  background: var(--ld-bg);
+  border-top: 1px solid var(--ld-line-soft);
+}
+@media (max-width: 768px) { .ldFaq { padding: 72px 0; } }
+.ldFaqGrid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 72px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .ldFaqGrid { grid-template-columns: 1fr; gap: 36px; }
+}
+.ldFaqList {
+  border-top: 1px solid var(--ld-line);
+}
+.ldFaqItem {
+  border-bottom: 1px solid var(--ld-line);
+}
+.ldFaqItem summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 4px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  cursor: pointer;
+  list-style: none;
+  gap: 16px;
+  letter-spacing: -0.01em;
+}
+.ldFaqItem summary::-webkit-details-marker { display: none; }
+.ldFaqItem summary:hover { color: var(--ld-brand); }
+.ldFaqPlus {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.ldFaqPlus span {
+  position: absolute;
+  background: var(--ld-ink);
+  border-radius: 1px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.ldFaqPlus span:first-child {
+  top: 8px; left: 0;
+  width: 18px;
+  height: 2px;
+}
+.ldFaqPlus span:last-child {
+  top: 0; left: 8px;
+  width: 2px;
+  height: 18px;
+}
+.ldFaqItem[open] .ldFaqPlus span:last-child { transform: scaleY(0); }
+.ldFaqItem[open] .ldFaqPlus span:first-child { background: var(--ld-brand); }
+.ldFaqItem p {
+  font-size: 15.5px;
+  color: var(--ld-muted);
+  line-height: 1.65;
+  padding: 0 4px 24px;
+  max-width: 580px;
+}
+
+/* ── 9. CTA band ─────────────────────────────────────────────────────── */
+.ldCta {
+  position: relative;
+  background: linear-gradient(180deg, var(--ld-brand) 0%, var(--ld-brand-deep) 100%);
+  color: #fff;
+  padding: 110px 0;
+  text-align: center;
+  overflow: hidden;
+}
+@media (max-width: 768px) { .ldCta { padding: 80px 0; } }
+.ldCtaBgGlow {
+  position: absolute;
+  width: 800px; height: 600px;
+  top: -200px; left: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, rgba(34,197,94,0.20) 0%, transparent 60%);
+  pointer-events: none;
+}
+.ldCtaHeadline {
+  position: relative;
+  font-size: clamp(36px, 5.5vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  color: #fff;
+  margin-bottom: 18px;
+}
+.ldCtaSub {
+  position: relative;
+  font-size: 18px;
+  color: rgba(255,255,255,0.78);
+  margin-bottom: 38px;
+}
+.ldCtaBtnRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.ldCtaGhost {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  padding: 17px 26px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255,255,255,0.30);
+  transition: border-color 0.15s, background 0.15s;
+}
+.ldCtaGhost:hover {
+  border-color: rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.08);
+}
+.ldCtaNote {
+  position: relative;
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+}
+
+/* ── 10. Footer ──────────────────────────────────────────────────────── */
+.ldFooter {
+  background: #050d09;
+  color: rgba(255,255,255,0.7);
+  padding: 80px 0 36px;
+}
+.ldFooterTop {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 60px;
+  margin-bottom: 48px;
+}
+@media (max-width: 768px) {
+  .ldFooterTop { grid-template-columns: 1fr; gap: 36px; }
+}
+.ldFooterBrand .ldBrand { color: #fff; font-size: 26px; }
+.ldFooterBrand .ldBrandDot { color: var(--ld-amber); }
+.ldFooterBrand p {
+  font-size: 14px;
+  color: rgba(255,255,255,0.5);
+  max-width: 280px;
+  line-height: 1.65;
+  margin-top: 14px;
+}
+.ldFooterCols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+@media (max-width: 480px) { .ldFooterCols { grid-template-columns: repeat(2, 1fr); } }
+.ldFooterColTitle {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 16px;
+}
+.ldFooterCols ul { display: flex; flex-direction: column; gap: 10px; }
+.ldFooterCols a {
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  transition: color 0.15s;
+}
+.ldFooterCols a:hover { color: #fff; }
+.ldStates {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  padding: 18px 22px;
+  margin-bottom: 32px;
+}
+.ldStatesLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 10px;
+}
+.ldStatesList {
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.85;
+  letter-spacing: 0.02em;
+}
+.ldFooterBottom {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+}
+.ldFooterBottom p {
+  max-width: 680px;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.35);
+  font-size: 11.5px;
+  text-align: right;
+}
+@media (max-width: 768px) {
+  .ldFooterBottom p { text-align: left; }
+}
+
+/* ── Landing button :hover overrides ─────────────────────────────────────
+   The legacy global `button:hover:not(:disabled)` rule earlier in this file
+   paints every button green with a green box-shadow on hover. These rules
+   bump specificity (.ldPage .ldX:hover = 3 class-level matches > the global
+   button:hover:not(:disabled) at 2-class+1-element) and explicitly redeclare
+   background, box-shadow, and transform so the legacy rule cannot leak in.
+*/
+.ldPage .ldBtnWhiteLg:hover:not(:disabled),
+.ldPage .ldBtnWhiteLg:focus-visible {
+  background: #fff;
+  color: var(--ld-brand-deep);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.12);
+  outline: none;
+}
+.ldPage .ldBtnWhiteLg:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+}
+
+.ldPage .ldBtnGreen:hover:not(:disabled),
+.ldPage .ldBtnGreen:focus-visible {
+  background: #1d2723;
+  color: #fff;
+  transform: none;
+  box-shadow: none;
+  outline: none;
+}
+.ldPage .ldBtnGreen:active:not(:disabled) {
+  background: #0a1410;
+  transform: none;
+  box-shadow: none;
+}
+
+.ldPage .ldBtnDarkLg:hover:not(:disabled),
+.ldPage .ldBtnDarkLg:focus-visible {
+  background: #1a0f00;
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 14px 36px rgba(42,25,0,0.30);
+  outline: none;
+}
+.ldPage .ldBtnDarkLg:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 12px rgba(42,25,0,0.22);
+}
+
+.ldPage .ldLinkBtn:hover:not(:disabled),
+.ldPage .ldLinkBtn:focus-visible {
+  background: none;
+  color: var(--ld-brand);
+  transform: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* Decorative phone button — never gets a hover effect */
+.ldPage .ldPhoneBtn:hover:not(:disabled),
+.ldPage .ldPhoneBtn:active:not(:disabled),
+.ldPage .ldPhoneBtn:focus-visible {
+  background: var(--ld-ink);
+  color: #fff;
+  transform: none;
+  box-shadow: none;
+  outline: none;
+}
