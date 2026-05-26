@@ -1052,10 +1052,10 @@ const CustomerApp = () => {
                     </h2>
                     <div className="mt-6">
         <p className={styles.ldLead}>
-                      We flew over with no clue how anything works. Met hundreds of people in diners, gas stations, and dollar stores. You said you needed cash before payday — without the loan-shark nonsense. So we built it.
+                      We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
                     </p>
                     </div>
-            
+
                     <p className={styles.ldLead} style={{ marginTop: "16px" }}>
                       If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.ldInlineLink}>email us</a> and tell us off.
                     </p>
@@ -1065,11 +1065,11 @@ const CustomerApp = () => {
                   </div>
                   <div className={styles.ldBritishPhotoWrap}>
                     <div className={styles.ldBritishPhotoFrame}>
-                      <img src="/founder-1.jpeg" alt="One of the advance founders on a trip across the US" className={styles.ldBritishPhoto} />
+                      <img src="/founder-1.jpeg" alt="One of the advance founders." className={styles.ldBritishPhoto} />
                     </div>
                     <div className={styles.ldBritishPhotoTag}>
-                      <strong>USA road trip</strong>
-                      <span>Meeting members across the country</span>
+                      <strong>Made in England</strong>
+                      <span>Built for America</span>
                     </div>
                   </div>
                 </div>
