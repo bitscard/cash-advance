@@ -84,10 +84,17 @@ describe('POST /api/advance/applications', () => {
   });
 
   test('duplicate active SSN returns 409', async () => {
-    await request(app).post('/api/advance/applications').send(basePayload);
+    // Use an SSN that's plausible per SSA rules but NOT in TEST_SSNS, so the
+    // dupe check actually runs. TEST_SSNS bypasses both format validation
+    // and the dupe check (see node/index.js: "SSNs that bypass [...] for
+    // testing"), which is exactly the wrong behavior for this regression.
+    const nonTestPlausibleSsn = '147258369';
+    await request(app)
+      .post('/api/advance/applications')
+      .send({ ...basePayload, ssn: nonTestPlausibleSsn });
     const res = await request(app)
       .post('/api/advance/applications')
-      .send({ ...basePayload, email: 'different@example.com' });
+      .send({ ...basePayload, email: 'different@example.com', ssn: nonTestPlausibleSsn });
     expect(res.status).toBe(409);
   });
 });
