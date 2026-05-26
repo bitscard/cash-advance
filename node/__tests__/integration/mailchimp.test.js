@@ -54,13 +54,17 @@ function payload(overrides = {}) {
 }
 
 function assertMailchimpCalledWithTag(tag) {
-  // addToMailchimp posts to a Mailchimp API endpoint with the tag list
-  // in the JSON body. We just confirm at least one call's body included `tag`.
+  // addToMailchimp now hits two Mailchimp endpoints per call:
+  //   1. PUT /lists/{id}/members/{hash}    — upsert the member
+  //   2. POST /lists/{id}/members/{hash}/tags — add tags additively
+  // The tags endpoint sends [{ name, status: 'active' }, ...].
   const hit = fetchSpy.mock.calls.some(([url, options]) => {
     if (!url || !/api\.mailchimp\.com/.test(String(url))) return false;
     try {
       const body = JSON.parse(options?.body || '{}');
-      return Array.isArray(body.tags) && body.tags.includes(tag);
+      if (!Array.isArray(body.tags)) return false;
+      // New shape: [{name, status}]. Old shape (back-compat): ['tag1', 'tag2'].
+      return body.tags.some(t => t === tag || (t && t.name === tag));
     } catch {
       return false;
     }
