@@ -363,6 +363,97 @@ function calcSourceAccrued(source, incomeTxs) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
+// Stripe webhook needs the raw request body to verify the signature.
+// Register it BEFORE the JSON body-parser so the body is still raw.
+app.post(
+  '/api/webhooks/stripe',
+  bodyParser.raw({ type: 'application/json' }),
+  async function (request, response) {
+    const sig = request.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    let event;
+    if (webhookSecret) {
+      try {
+        event = stripe.webhooks.constructEvent(request.body, sig, webhookSecret);
+      } catch (err) {
+        console.log('[stripe/webhook] signature verification failed', err.message);
+        return response.status(400).send(`Webhook signature error: ${err.message}`);
+      }
+    } else {
+      // No webhook secret configured — parse but log a warning. Useful
+      // during local dev with the Stripe CLI but unsafe in prod.
+      try {
+        event = JSON.parse(request.body.toString('utf8'));
+        console.log('[stripe/webhook] WARNING: webhook secret not configured — event accepted without verification');
+      } catch (err) {
+        return response.status(400).send('Invalid JSON');
+      }
+    }
+
+    try {
+      const obj = event.data?.object;
+      const appId = obj?.metadata?.application_id || obj?.subscription_metadata?.application_id;
+
+      switch (event.type) {
+        case 'invoice.payment_failed': {
+          // Membership charge failed → lock the user out of new advances
+          // until they resolve. The advance repayment is a separate
+          // PaymentIntent and is handled by the /charge endpoint, so we
+          // only react to subscription invoices here.
+          const subId = obj?.subscription;
+          if (subId) {
+            console.log('[stripe/webhook] subscription invoice failed', { subscription_id: subId });
+            // Find the application by subscription_id (no DB helper for
+            // this yet; do a direct query).
+            const { rows } = await db.pool.query(
+              `UPDATE applications SET status='subscription_failed', updated_at=NOW()
+               WHERE subscription_id=$1 RETURNING id`,
+              [subId],
+            );
+            if (rows[0]) {
+              await db.addMessage(rows[0].id, 'system', 'Your $3.99 membership charge failed. Please update your payment method to continue.');
+            }
+          }
+          break;
+        }
+        case 'invoice.payment_succeeded': {
+          // Update next billing date so the dashboard stays in sync.
+          const subId = obj?.subscription;
+          const nextBillingTs = obj?.lines?.data?.[0]?.period?.end;
+          if (subId && nextBillingTs) {
+            await db.pool.query(
+              `UPDATE applications SET subscription_next_billing=$1, updated_at=NOW()
+               WHERE subscription_id=$2`,
+              [new Date(nextBillingTs * 1000).toISOString().slice(0, 10), subId],
+            );
+          }
+          break;
+        }
+        case 'customer.subscription.deleted': {
+          // User (or system) cancelled — clear local state.
+          const subId = obj?.id;
+          if (subId) {
+            await db.pool.query(
+              `UPDATE applications SET subscription_status='cancelled', updated_at=NOW()
+               WHERE subscription_id=$1`,
+              [subId],
+            );
+          }
+          break;
+        }
+        default:
+          // Ignore all other event types
+          break;
+      }
+
+      response.json({ received: true });
+    } catch (err) {
+      console.log('[stripe/webhook] handler error', err.message);
+      response.status(500).json({ error: err.message });
+    }
+  },
+);
+
 app.use(
   bodyParser.urlencoded({
     extended: false,
@@ -1342,7 +1433,7 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
   if (!requireAdmin(request, response)) return;
   try {
     const status = request.body.status;
-    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed', 'written_off'];
+    const allowedStatuses = ['intake', 'bank_connected', 'reviewing', 'approved', 'denied', 'expired', 'funded', 'repayment_scheduled', 'repaid', 'repayment_failed', 'subscription_failed', 'written_off'];
     if (!allowedStatuses.includes(status)) {
       return response.status(400).json({ error: { error_message: 'Unsupported status' } });
     }
@@ -1364,6 +1455,50 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
         : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
       updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
       await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
+
+      // First-advance subscription bootstrap: create the $3.99/mo Stripe
+      // subscription anchored to the repayment date so the first charge
+      // fires that day (as a SEPARATE Stripe transaction from the advance
+      // repayment), then monthly on the same calendar day thereafter.
+      // Only fires on the user's first funded transition — once
+      // subscription_id is set, we never recreate.
+      if (
+        !updated.subscription_id &&
+        updated.stripe_customer_id &&
+        (updated.stripe_payment_method_id || updated.stripe_card_pm_id)
+      ) {
+        try {
+          const paymentMethodId = updated.stripe_payment_method_id || updated.stripe_card_pm_id;
+          // billing_cycle_anchor is unix seconds. We anchor at the START of
+          // the repayment day in UTC (so any reasonable global TZ has the
+          // membership charge land on the right calendar date).
+          const anchor = Math.floor(new Date(`${dueDate}T00:00:00Z`).getTime() / 1000);
+          const sub = await stripe.subscriptions.create({
+            customer: updated.stripe_customer_id,
+            items: [{
+              price_data: {
+                currency: 'usd',
+                product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+                unit_amount: MEMBERSHIP_PRICE_CENTS,
+                recurring: { interval: 'month' },
+              },
+            }],
+            default_payment_method: paymentMethodId,
+            billing_cycle_anchor: anchor,
+            proration_behavior: 'none',
+            metadata: { application_id: updated.id },
+          });
+          const nextBilling = sub.current_period_end
+            ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+            : dueDate;
+          updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
+          await db.addMessage(updated.id, 'system', `Membership starts on ${dueDate} — $3.99/month, charged separately from your advance repayment.`);
+          console.log('[funded] subscription created', { application_id: updated.id, subscription_id: sub.id, anchor_date: dueDate });
+        } catch (subErr) {
+          console.log('[funded] subscription create failed', { application_id: updated.id, error: subErr.message });
+          await db.addMessage(updated.id, 'system', `Membership setup failed: ${subErr.message}. Contact us to resolve.`);
+        }
+      }
     }
     if (request.body.note) {
       await db.addMessage(request.params.id, 'admin', request.body.note);
@@ -1418,6 +1553,15 @@ app.post('/api/advance/applications/:id/reapply', async function (request, respo
     // Active loans cannot reapply
     if (['funded', 'repayment_scheduled'].includes(row.status)) {
       return response.status(400).json({ error: { error_message: 'You have an active advance. Please repay it before reapplying.' } });
+    }
+    // Lockout: failed advance repayment OR failed membership charge blocks
+    // any new advance until the user resolves it. Source of truth lives
+    // on the application row (status='repayment_failed') and on Stripe
+    // (subscription_status='subscription_failed', set by the webhook).
+    if (['repayment_failed', 'subscription_failed'].includes(row.status)) {
+      return response.status(400).json({
+        error: { error_message: 'Your previous repayment or membership charge failed. Please contact support to resolve before reapplying.' },
+      });
     }
 
     // Cooldown: if a repayment due date exists and we are before the day after it, block
@@ -1506,51 +1650,24 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
     if (!payment_method_id) {
       return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
     }
-    let updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
+    const updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
-
-    // Bundled membership: the same card the user just saved is what we
-    // bill the $3.99/mo subscription against. Attach as the customer's
-    // default payment method, create the Stripe subscription, then flip
-    // subscription_status to 'active' so the next pre-bank step unlocks.
-    // Skipped when no Stripe customer exists (state-eligible users have
-    // one created during signup) or if subscription is already active.
-    const stripeCustomerId = updated.stripe_customer_id;
-    if (stripeCustomerId && updated.subscription_status !== 'active') {
+    // We DO NOT create the Stripe subscription here. The first membership
+    // charge happens on the user's first repayment date — see the funded
+    // status transition in PATCH /admin/applications/:id/status. Until then
+    // the card sits on the customer and the user stays in 'pending_payment'.
+    // After the first repayment, Stripe handles all subsequent monthly
+    // charges on the same anchor day each month.
+    if (updated.stripe_customer_id) {
       try {
-        // Make the just-saved card the default for the customer so
-        // future invoices know what to charge.
-        await stripe.customers.update(stripeCustomerId, {
+        // Make the just-saved card the default for the customer so the
+        // membership invoices (created later by funded transition) know
+        // what to charge.
+        await stripe.customers.update(updated.stripe_customer_id, {
           invoice_settings: { default_payment_method: payment_method_id },
         });
-        const sub = await stripe.subscriptions.create({
-          customer: stripeCustomerId,
-          items: [{
-            price_data: {
-              currency: 'usd',
-              product_data: { name: MEMBERSHIP_PRODUCT_NAME },
-              unit_amount: MEMBERSHIP_PRICE_CENTS,
-              recurring: { interval: 'month' },
-            },
-          }],
-          default_payment_method: payment_method_id,
-          metadata: { application_id: updated.id },
-          payment_behavior: 'default_incomplete',
-          payment_settings: { save_default_payment_method: 'on_subscription' },
-          expand: ['latest_invoice.payment_intent'],
-        });
-        const nextBilling = sub.current_period_end
-          ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
-          : null;
-        // Even if the subscription is 'incomplete' (waiting for payment
-        // confirmation), we mark our local status active — Stripe will
-        // retry on its own schedule and the user can move on.
-        updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
-        await db.addMessage(updated.id, 'system', 'Membership activated — $3.99/month. Your card will be charged on this date each month.');
-        console.log('[stripe/save-payment-method] subscription created', { application_id: updated.id, subscription_id: sub.id, status: sub.status });
-      } catch (subErr) {
-        // Subscription failure shouldn't block card save — log and continue.
-        console.log('[stripe/save-payment-method] subscription create failed', { application_id: updated.id, error: subErr.message });
+      } catch (e) {
+        console.log('[stripe/save-payment-method] could not set default PM', { application_id: updated.id, error: e.message });
       }
     }
     response.json({ application: db.publicApp(updated) });

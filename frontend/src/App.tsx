@@ -23,6 +23,7 @@ type Status =
   | "repayment_scheduled"
   | "repaid"
   | "repayment_failed"
+  | "subscription_failed"
   | "written_off";
 
 interface IncomeSource {
@@ -159,6 +160,7 @@ const statusLabel: Record<Status, string> = {
   repayment_scheduled: "Repayment scheduled",
   repaid: "Repaid",
   repayment_failed: "Repayment failed",
+  subscription_failed: "Membership payment failed",
   written_off: "Written off",
 };
 
@@ -1772,16 +1774,16 @@ const CustomerApp = () => {
             </p>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
               <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
-                <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts today, cancel anytime)</span></span>
-                <strong style={{ color: "var(--ink)" }}>$3.99/mo</strong>
+                <span>Each advance repayment <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(on your payday)</span></span>
+                <strong style={{ color: "var(--ink)" }}>$25–$30</strong>
               </li>
               <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
-                <span>Each advance repayment <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(only when you take one)</span></span>
-                <strong style={{ color: "var(--ink)" }}>$25–$30</strong>
+                <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts on your first repayment day, then monthly)</span></span>
+                <strong style={{ color: "var(--ink)" }}>$3.99/mo</strong>
               </li>
             </ul>
             <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: "1rem 0 0", lineHeight: 1.5 }}>
-              We never charge interest, late fees, or hidden fees. Cancel your membership any time from your dashboard.
+              Membership and advance repayments are two separate charges on the same card. Cancel membership any time from your dashboard. We never charge interest, late fees, or hidden fees.
             </p>
           </div>
 
@@ -2265,7 +2267,16 @@ const CustomerApp = () => {
                 </>
               ) : null}
               <dt>Membership</dt>
-              <dd>$3.99/mo {application.subscription_id ? "· active" : ""}</dd>
+              <dd>
+                $3.99/mo{" "}
+                {application.status === "subscription_failed"
+                  ? "· payment failed"
+                  : application.subscription_id
+                    ? `· active${application.subscription_next_billing ? ` · next: ${application.subscription_next_billing}` : ""}`
+                    : application.stripe_card_saved
+                      ? "· starts on first repayment"
+                      : "· card needed"}
+              </dd>
             </dl>
 
             {needsBank && (
