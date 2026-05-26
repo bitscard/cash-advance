@@ -1,0 +1,36 @@
+name: Send due-date reminders
+
+# Pings the backend's /api/cron/due-date-reminders endpoint once a day so
+# customers whose advance repayment is 2 days out get the Mailchimp
+# 'due_date_reminder' tag (which triggers the email Customer Journey).
+#
+# Scheduled at 14:00 UTC = 10:00 AM ET / 7:00 AM PT, which is a reasonable
+# morning hit across the eligible-states timezones. The endpoint is
+# idempotent (it sets due_date_reminder_sent_at on each row it tags), so a
+# missed day just means tomorrow's run catches the same set again. Safe.
+#
+# Manual trigger is available from the Actions tab (workflow_dispatch).
+
+on:
+  schedule:
+    - cron: '0 14 * * *'  # 14:00 UTC daily — 10am ET / 7am PT
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit cron endpoint
+        run: |
+          response=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X POST "${{ secrets.BACKEND_URL }}/api/cron/due-date-reminders" \
+            -H "x-admin-token: ${{ secrets.ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json")
+          echo "Response body:"
+          cat /tmp/response.json
+          echo
+          echo "Status: $response"
+          if [ "$response" != "200" ]; then
+            echo "Failed with status $response"
+            exit 1
+          fi
