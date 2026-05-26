@@ -15,10 +15,13 @@ test.describe("Landing page", () => {
 
   test("$300 weekly raffle banner is visible (regression: was Cancún)", async ({ page }) => {
     await page.goto("/");
-    // The new copy mentions $300 and weekly
-    await expect(page.getByText(/\$300 cash/i).first()).toBeVisible();
-    await expect(page.getByText(/every week/i).first()).toBeVisible();
-    // The OLD Cancún copy should NOT appear anywhere
+    // The new landing uses "$300 cash" and "weekly $300 raffle" copy.
+    // Accept either "every week" or "weekly" so the test survives copy edits
+    // that swap one phrasing for the other (which the post-main landing
+    // remake does).
+    await expect(page.getByText(/\$300( cash)?/i).first()).toBeVisible();
+    await expect(page.getByText(/every week|weekly/i).first()).toBeVisible();
+    // The OLD Cancún copy should NOT appear anywhere.
     await expect(page.locator("body")).not.toContainText(/cancún|cancun/i);
   });
 
