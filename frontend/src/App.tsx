@@ -724,124 +724,425 @@ const CustomerApp = () => {
   // ── Landing ──────────────────────────────────────────────────────────────────
   if (!application) {
     if (view === "landing") {
+      const goSignup = () => setView("referral");
+      const goSignIn = () => { window.location.href = "/loan"; };
       return (
-        <main className={styles.page}>
-          <NavBar
-            onGetStarted={() => setView("referral")}
-            onSignIn={() => window.location.href = "/loan"}
-          />
+        <div className={styles.ldPage}>
+          {/* ── 1. Nav ─────────────────────────────────────────────────────── */}
+          <header className={styles.ldNav}>
+            <div className={styles.ldNavInner}>
+              <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                <span className={styles.ldBrandMark}>
+                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                    <circle cx="11" cy="11" r="10" fill="#fff" />
+                    <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                advance<span className={styles.ldBrandDot}>.</span>
+              </a>
+              <nav className={styles.ldNavLinks} aria-label="Main">
+                <a href="#how">How it works</a>
+                <a href="#why">Why us</a>
+                <a href="#raffle">Raffle</a>
+                <a href="#faq">FAQ</a>
+              </nav>
+              <div className={styles.ldNavCtas}>
+                <button type="button" onClick={goSignIn} className={styles.ldLinkBtn}>Sign in</button>
+                <button type="button" onClick={goSignup} className={styles.ldBtnGreen}>Get cash <span aria-hidden="true">→</span></button>
+              </div>
+            </div>
+          </header>
 
-          {/* Hero — two-column with mascot */}
-          <section className={styles.hero}>
-            <div className={styles.heroContent}>
-              <div className={styles.heroTextBlock}>
-                <div className={styles.heroTrustRow}>
-                  <span className={styles.heroBadge}>No credit check · No hidden fees</span>
-                  <span className={styles.heroTrustBadge}>👥 Trusted by 700,000+ people</span>
+          <main>
+            {/* ── 2. Hero ──────────────────────────────────────────────────── */}
+            <section className={styles.ldHero}>
+              <div className={styles.ldHeroBgGrid} aria-hidden="true" />
+              <div className={styles.ldHeroBgGlow} aria-hidden="true" />
+              <div className={styles.ldHeroInner}>
+                <div className={styles.ldHeroCopy}>
+                  <span className={styles.ldEyebrow}>
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                      <path d="M3 6.5l2.5 2.5L10 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    No credit check · 0% interest · No collections
+                  </span>
+                  <h1 className={styles.ldH1}>
+                    Cash before<br />
+                    <span className={styles.ldH1Accent}>your paycheck.</span>
+                  </h1>
+                  <p className={styles.ldHeroSub}>
+                    Up to <strong>$300 in your account today</strong>. Repay on your next payday — no interest, no hidden fees, no surprises.
+                  </p>
+                  <div className={styles.ldHeroCtaRow}>
+                    <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
+                      Get my cash <span aria-hidden="true">→</span>
+                    </button>
+                    <a className={styles.ldHeroLink} href="#how">
+                      How it works
+                    </a>
+                  </div>
+                  <ul className={styles.ldHeroProof}>
+                    <li>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 7l2.5 2.5L11 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                      Same-day funding
+                    </li>
+                    <li>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="3" y="6" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
+                      Bank-grade security
+                    </li>
+                    <li>
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4" /></svg>
+                      No credit pull
+                    </li>
+                  </ul>
                 </div>
-                <h1 className={styles.heroHeading}>Get cash<br />before payday.</h1>
-                <p className={styles.heroSub}>
-                  Connect your bank, get a decision today, and pay it back on your next payday. That's it.
+
+                {/* Phone frame mockup */}
+                <div className={styles.ldHeroPhoneWrap}>
+                  <div className={styles.ldHeroSparkle1} aria-hidden="true" />
+                  <div className={styles.ldHeroSparkle2} aria-hidden="true" />
+                  <div className={styles.ldPhone}>
+                    <div className={styles.ldPhoneNotch} aria-hidden="true" />
+                    <div className={styles.ldPhoneScreen}>
+                      <div className={styles.ldPhoneTop}>
+                        <span>9:41</span>
+                        <span className={styles.ldPhoneTopIcons}>
+                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M1 8h2v1H1zM4 6h2v3H4zM7 4h2v5H7zM10 2h2v7h-2z" fill="#0a1410" /></svg>
+                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M7 9a4 4 0 0 0 0-8 4 4 0 0 0 0 8z" stroke="#0a1410" strokeWidth="1" fill="none" /></svg>
+                          <svg width="20" height="10" viewBox="0 0 20 10" fill="none"><rect x="0.5" y="2.5" width="17" height="5" rx="1.5" stroke="#0a1410" /><rect x="2" y="4" width="13" height="2" rx="0.5" fill="#0a1410" /><rect x="18" y="4" width="1.5" height="2" rx="0.5" fill="#0a1410" /></svg>
+                        </span>
+                      </div>
+                      <div className={styles.ldPhoneAppHeader}>
+                        <span className={styles.ldPhoneAppName}>advance<span>.</span></span>
+                        <span className={styles.ldPhoneAvatar}>JS</span>
+                      </div>
+                      <p className={styles.ldPhoneGreet}>Hey Jamie 👋</p>
+                      <div className={styles.ldPhoneCard}>
+                        <div className={styles.ldPhonePill}>
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          Approved
+                        </div>
+                        <p className={styles.ldPhoneLabel}>Advance amount</p>
+                        <div className={styles.ldPhoneAmount}>$250<span>.00</span></div>
+                        <div className={styles.ldPhoneRow}>
+                          <span>Repay on</span>
+                          <strong>Fri, Mar 14</strong>
+                        </div>
+                        <div className={styles.ldPhoneRow}>
+                          <span>Account</span>
+                          <strong>Chase ••4582</strong>
+                        </div>
+                        <div className={styles.ldPhoneRow}>
+                          <span>Interest</span>
+                          <strong className={styles.ldPhoneFree}>$0.00</strong>
+                        </div>
+                        <button type="button" className={styles.ldPhoneBtn}>Send to my bank</button>
+                      </div>
+                      <p className={styles.ldPhoneFooter}>🎰 You&apos;re entered in this week&apos;s $300 raffle</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 3. Amount tier strip ─────────────────────────────────────── */}
+            <section className={styles.ldAmounts}>
+              <div className={styles.ldContainer}>
+                <p className={styles.ldKicker}>How much do you need?</p>
+                <h2 className={styles.ldH2}>Borrow only what you need.<br />Repay only what you borrowed.</h2>
+                <div className={styles.ldAmountChips}>
+                  <div className={styles.ldChip}>$25</div>
+                  <div className={styles.ldChip}>$50</div>
+                  <div className={styles.ldChip}>$100</div>
+                  <div className={styles.ldChip}>$200</div>
+                  <div className={styles.ldChipFeatured}>
+                    $300
+                    <span className={styles.ldChipBadge}>max</span>
+                  </div>
+                </div>
+                <p className={styles.ldAmountsNote}>
+                  Standard delivery same-day, free. Need it in minutes? $5 flat for instant transfer. That&apos;s the only fee.
                 </p>
-                <div className={styles.heroActions}>
-                  <button className={styles.btnWhite} onClick={() => setView("referral")}>
-                    Get started — it's free
+              </div>
+            </section>
+
+            {/* ── 4. How it works ──────────────────────────────────────────── */}
+            <section className={styles.ldHow} id="how">
+              <div className={styles.ldContainer}>
+                <div className={styles.ldSectionHeader}>
+                  <span className={styles.ldKicker}>How it works</span>
+                  <h2 className={styles.ldH2}>From application to cash<br />in three steps.</h2>
+                </div>
+                <div className={styles.ldStepsGrid}>
+                  <article className={styles.ldStep}>
+                    <div className={styles.ldStepIconBox}>
+                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                        <rect x="4" y="3" width="20" height="22" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                        <line x1="8" y1="10" x2="20" y2="10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        <line x1="8" y1="14" x2="16" y2="14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        <line x1="8" y1="18" x2="14" y2="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <span className={styles.ldStepLabel}>Step 01</span>
+                    <h3>Apply in 2 minutes</h3>
+                    <p>Tell us your name, employer, payday and last 4 of your SSN. No credit pull, ever.</p>
+                  </article>
+                  <article className={styles.ldStep}>
+                    <div className={styles.ldStepIconBox}>
+                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                        <path d="M3 11L14 4l11 7H3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                        <rect x="6" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
+                        <rect x="12.5" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
+                        <rect x="19" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
+                        <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <span className={styles.ldStepLabel}>Step 02</span>
+                    <h3>Connect your bank</h3>
+                    <p>Link with Plaid — read-only, encrypted. We see your income but never your password.</p>
+                  </article>
+                  <article className={styles.ldStep}>
+                    <div className={styles.ldStepIconBox}>
+                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                        <circle cx="14" cy="14" r="10" stroke="currentColor" strokeWidth="1.8" />
+                        <path d="M10 14h8M14 10v8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <span className={styles.ldStepLabel}>Step 03</span>
+                    <h3>Get your money</h3>
+                    <p>A real reviewer approves your advance. Money lands in your account the same day.</p>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 5. Why us ────────────────────────────────────────────────── */}
+            <section className={styles.ldWhy} id="why">
+              <div className={styles.ldContainer}>
+                <div className={styles.ldSectionHeader}>
+                  <span className={styles.ldKicker}>Why advance</span>
+                  <h2 className={styles.ldH2}>Built for people.<br />Not for banks.</h2>
+                  <p className={styles.ldLead}>Every choice we made is the opposite of a payday lender.</p>
+                </div>
+                <div className={styles.ldFeatureGrid}>
+                  <div className={styles.ldFeature}>
+                    <div className={styles.ldFeatureNum}>0%</div>
+                    <h3>No interest. Ever.</h3>
+                    <p>$25 borrowed, $25 repaid. The math is that simple.</p>
+                  </div>
+                  <div className={styles.ldFeature}>
+                    <div className={styles.ldFeatureNum}>0</div>
+                    <h3>No credit check</h3>
+                    <p>No hard pull. No soft pull. Your credit score never moves.</p>
+                  </div>
+                  <div className={styles.ldFeature}>
+                    <div className={styles.ldFeatureNum}>$0</div>
+                    <h3>No hidden fees</h3>
+                    <p>Standard delivery is free. Optional $5 for instant. That&apos;s the whole pricing page.</p>
+                  </div>
+                  <div className={styles.ldFeature}>
+                    <div className={styles.ldFeatureNum}>24h</div>
+                    <h3>Same-day cash</h3>
+                    <p>Approved before 2pm ET? Money lands in your account today. Guaranteed.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 6. Raffle ────────────────────────────────────────────────── */}
+            <section className={styles.ldRaffle} id="raffle">
+              <div className={styles.ldContainer}>
+                <div className={styles.ldRaffleGrid}>
+                  <div className={styles.ldRaffleCopy}>
+                    <span className={styles.ldRaffleKicker}>🎰 Member perk</span>
+                    <h2 className={styles.ldRaffleHeadline}>
+                      $300 cash.<br />
+                      <span className={styles.ldRaffleAccent}>Every Friday.</span>
+                    </h2>
+                    <p className={styles.ldRaffleSub}>
+                      Every active member in good standing is automatically entered in our weekly $300 cash raffle. No purchase. No forms. Winners paid via PayPal, Cash App, or Zelle.
+                    </p>
+                    <ul className={styles.ldRaffleBullets}>
+                      <li>
+                        <span className={styles.ldRaffleCheck}>✓</span>
+                        Auto-entered every week — no signup
+                      </li>
+                      <li>
+                        <span className={styles.ldRaffleCheck}>✓</span>
+                        Extra entry for every successful referral
+                      </li>
+                      <li>
+                        <span className={styles.ldRaffleCheck}>✓</span>
+                        Winner announced every Friday, paid same-day
+                      </li>
+                    </ul>
+                    <button type="button" onClick={goSignup} className={styles.ldBtnDarkLg}>
+                      Get my entry <span aria-hidden="true">→</span>
+                    </button>
+                  </div>
+                  <div className={styles.ldRaffleVisual}>
+                    <div className={styles.ldTicket}>
+                      <div className={styles.ldTicketTop}>
+                        <span className={styles.ldTicketBrand}>advance<span>.</span></span>
+                        <span className={styles.ldTicketSerial}>WK · 12 / 2026</span>
+                      </div>
+                      <div className={styles.ldTicketDivider}>
+                        <span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span />
+                      </div>
+                      <p className={styles.ldTicketLabel}>This week&apos;s prize</p>
+                      <div className={styles.ldTicketAmount}>$300</div>
+                      <p className={styles.ldTicketCash}>paid in cash · PayPal · Cash App · Zelle</p>
+                      <div className={styles.ldTicketFooter}>
+                        <span>Next draw</span>
+                        <strong>Fri · Mar 14</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 7. Trust & Security ──────────────────────────────────────── */}
+            <section className={styles.ldTrust}>
+              <div className={styles.ldContainer}>
+                <div className={styles.ldSectionHeader}>
+                  <span className={styles.ldKicker}>Security</span>
+                  <h2 className={styles.ldH2}>Your money is safe.<br />Your data is safer.</h2>
+                  <p className={styles.ldLead}>We use the same banking infrastructure as Robinhood, Mercury, and Coinbase. We never store your bank password.</p>
+                </div>
+                <div className={styles.ldTrustGrid}>
+                  <div className={styles.ldTrustCard}>
+                    <div className={styles.ldTrustLogo}>Plaid</div>
+                    <h3>Bank linking</h3>
+                    <p>Read-only access via Plaid. Your bank credentials never touch our servers.</p>
+                  </div>
+                  <div className={styles.ldTrustCard}>
+                    <div className={styles.ldTrustLogo}>Stripe</div>
+                    <h3>Payments</h3>
+                    <p>PCI-DSS Level 1. The same payments processor used by Amazon, Google, and Shopify.</p>
+                  </div>
+                  <div className={styles.ldTrustCard}>
+                    <div className={styles.ldTrustLogoIcon} aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                        <rect x="3" y="9" width="16" height="11" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+                        <path d="M7 9V6a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                    <h3>Encryption</h3>
+                    <p>256-bit TLS in transit. AES-256 at rest. SOC 2 Type II partner infrastructure.</p>
+                  </div>
+                </div>
+                <div className={styles.ldComplianceRow}>
+                  <span>Member FDIC partner bank</span>
+                  <span className={styles.ldComplianceDot} />
+                  <span>CCPA-compliant</span>
+                  <span className={styles.ldComplianceDot} />
+                  <span>GLBA</span>
+                  <span className={styles.ldComplianceDot} />
+                  <span>TCPA-compliant</span>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 8. FAQ ───────────────────────────────────────────────────── */}
+            <section className={styles.ldFaq} id="faq">
+              <div className={styles.ldContainer}>
+                <div className={styles.ldFaqGrid}>
+                  <div>
+                    <span className={styles.ldKicker}>FAQ</span>
+                    <h2 className={styles.ldH2}>Questions, plain answers.</h2>
+                    <p className={styles.ldLead}>If something isn&apos;t clear, ask us — we&apos;ll answer the same day.</p>
+                  </div>
+                  <div className={styles.ldFaqList}>
+                    {[
+                      ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
+                      ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
+                      ["What states is advance available in?", "Currently 35 US states. If we're not in your state yet, you can join the waitlist."],
+                      ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
+                      ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
+                      ["Is there a membership fee?", "No monthly fee. The only optional cost is $5 if you want instant (same-hour) delivery instead of standard same-day."],
+                    ].map(([q, a]) => (
+                      <details key={q} className={styles.ldFaqItem}>
+                        <summary>
+                          <span>{q}</span>
+                          <span className={styles.ldFaqPlus} aria-hidden="true">
+                            <span /><span />
+                          </span>
+                        </summary>
+                        <p>{a}</p>
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* ── 9. CTA band ──────────────────────────────────────────────── */}
+            <section className={styles.ldCta}>
+              <div className={styles.ldCtaBgGlow} aria-hidden="true" />
+              <div className={styles.ldContainer}>
+                <h2 className={styles.ldCtaHeadline}>
+                  Your next paycheck<br />is closer than you think.
+                </h2>
+                <p className={styles.ldCtaSub}>Get started in 2 minutes. No credit check. No commitment.</p>
+                <div className={styles.ldCtaBtnRow}>
+                  <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
+                    Get my cash <span aria-hidden="true">→</span>
                   </button>
+                  <a className={styles.ldCtaGhost} href="#faq">Read the FAQ</a>
                 </div>
+                <p className={styles.ldCtaNote}>Invite-only beta — have a referral code ready</p>
               </div>
-              <div className={styles.mascotWrap}>
-                <AlienMascot flag="usa" size={240} />
-              </div>
-            </div>
-          </section>
+            </section>
+          </main>
 
-          {/* Raffle banner */}
-          <section className={styles.raffleBanner}>
-            <div className={styles.raffleBannerInner}>
-              <div>
-                <p className={styles.raffleBadge}>🎰 Weekly raffle</p>
-                <h2 className={styles.raffleHeading}>Win <em>$300 cash.</em><br />Every week.</h2>
-                <p className={styles.raffleSub}>
-                  Every active borrower in good standing is automatically entered into our weekly $300 cash raffle. No purchase, no extra steps — just stay current on your advances.
-                </p>
-                <div className={styles.rafflePerks}>
-                  <div className={styles.rafflePerk}>
-                    <div className={styles.rafflePerkDot} />
-                    Automatic entry — no signup form to fill
+          {/* ── 10. Footer ─────────────────────────────────────────────────── */}
+          <footer className={styles.ldFooter}>
+            <div className={styles.ldContainer}>
+              <div className={styles.ldFooterTop}>
+                <div className={styles.ldFooterBrand}>
+                  <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                    advance<span className={styles.ldBrandDot}>.</span>
+                  </a>
+                  <p>Financial breathing room for the people who keep everything running.</p>
+                </div>
+                <div className={styles.ldFooterCols}>
+                  <div>
+                    <p className={styles.ldFooterColTitle}>Product</p>
+                    <ul>
+                      <li><a href="#how">How it works</a></li>
+                      <li><a href="#raffle">Raffle</a></li>
+                      <li><a href="#faq">FAQ</a></li>
+                    </ul>
                   </div>
-                  <div className={styles.rafflePerk}>
-                    <div className={styles.rafflePerkDot} />
-                    Refer a friend for an extra entry
+                  <div>
+                    <p className={styles.ldFooterColTitle}>Legal</p>
+                    <ul>
+                      <li><a href="/terms">Terms</a></li>
+                      <li><a href="/privacy">Privacy</a></li>
+                      <li><a href="#">Disclosures</a></li>
+                    </ul>
                   </div>
-                  <div className={styles.rafflePerk}>
-                    <div className={styles.rafflePerkDot} />
-                    Winner drawn weekly · paid via PayPal, Cash App, or Zelle
+                  <div>
+                    <p className={styles.ldFooterColTitle}>Support</p>
+                    <ul>
+                      <li><a href="mailto:hello@getbits.app">Contact</a></li>
+                      <li><a href="#">Help center</a></li>
+                    </ul>
                   </div>
                 </div>
               </div>
-              <div className={styles.raffleMascot}>
-                <AlienMascot flag="usa" size={220} />
+              <div className={styles.ldStates}>
+                <p className={styles.ldStatesLabel}>Available in 35 US states</p>
+                <p className={styles.ldStatesList}>AL · AK · AZ · AR · CA · CO · DE · FL · GA · HI · ID · IL · IN · IA · KS · MI · MN · MS · MO · MT · NE · NV · NM · NY · NC · OH · OK · OR · RI · SC · TN · TX · UT · WA · WI</p>
+              </div>
+              <div className={styles.ldFooterBottom}>
+                <span>© 2026 advance. All rights reserved.</span>
+                <p>advance is a financial technology company, not a bank. Banking services provided by partner bank, Member FDIC. advance is not a payday lender. Cash advances are repayable in full on your next pay date with no interest. Available only to eligible residents in supported states.</p>
               </div>
             </div>
-          </section>
-
-          {/* Trust stats strip */}
-          <div className={styles.trustStatStrip}>
-            <div className={styles.trustStatItem}>
-              <span className={styles.trustStatNum}>700k+</span>
-              <span className={styles.trustStatLabel}>People trust us<br />with their data</span>
-            </div>
-            <div className={styles.trustStatItem}>
-              <span className={styles.trustStatNum}>$0</span>
-              <span className={styles.trustStatLabel}>Hidden fees,<br />ever</span>
-            </div>
-            <div className={styles.trustStatItem}>
-              <span className={styles.trustStatNum}>0%</span>
-              <span className={styles.trustStatLabel}>Interest — repay<br />on your payday</span>
-            </div>
-          </div>
-
-          {/* How it works */}
-          <section className={styles.section}>
-            <div className={styles.sectionInner}>
-              <p className={styles.sectionLabel}>How it works</p>
-              <h2 className={styles.sectionHeading}>Three steps to your money.</h2>
-              <div className={styles.stepsGrid}>
-                <div className={styles.stepCard}>
-                  <div className={styles.stepNum}>1</div>
-                  <strong>Apply in 2 minutes</strong>
-                  <span>Name, employer, next payday, last 4 of SSN. No credit pull — ever.</span>
-                </div>
-                <div className={styles.stepCard}>
-                  <div className={styles.stepNum}>2</div>
-                  <strong>Connect your bank</strong>
-                  <span>We verify your income via Plaid. Secure and read-only — we never see your password.</span>
-                </div>
-                <div className={styles.stepCard}>
-                  <div className={styles.stepNum}>3</div>
-                  <strong>Get your money</strong>
-                  <span>A real human reviews your application and sends your money the same day.</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Trust pillars */}
-          <TrustPillars />
-
-          {/* Partner strip */}
-          <div className={styles.partnerStrip}>
-            <span>Secured by</span>
-            <div className={styles.partnerBadge}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#000"/><path d="M4 7l2.5 2.5L10 5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Plaid
-            </div>
-            <div className={styles.partnerBadge}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect width="14" height="14" rx="3" fill="#635bff"/><path d="M5.8 5.2c0-.5.4-.8 1-.8.8 0 1.6.3 2.2.6V3.4C8.4 3.1 7.7 3 7 3 5.3 3 4.2 3.9 4.2 5.3c0 2.2 3 1.8 3 2.9 0 .6-.5.9-1.1.9-.9 0-1.8-.4-2.5-.9v1.7c.7.3 1.4.5 2.2.5 1.7 0 2.9-.9 2.9-2.3C10.7 5.9 5.8 6.3 5.8 5.2z" fill="#fff"/></svg>
-              Stripe
-            </div>
-          </div>
-        </main>
+          </footer>
+        </div>
       );
     }
 
