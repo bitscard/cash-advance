@@ -25,14 +25,9 @@ test.describe("Landing page", () => {
     await expect(page.locator("body")).not.toContainText(/cancún|cancun/i);
   });
 
-  test("footer links to terms / privacy / consent are present", async ({ page }) => {
-    await page.goto("/");
-    // Footer is at the bottom of the page; we just confirm the anchor
-    // tags exist somewhere in the DOM. No need to scroll or wait for
-    // visibility — legal-page links are baseline content that ships
-    // with the bundle and we don't care WHERE on the page they live.
-    expect(await page.locator('a[href="/terms"]').count()).toBeGreaterThan(0);
-    expect(await page.locator('a[href="/privacy"]').count()).toBeGreaterThan(0);
-    expect(await page.locator('a[href="/consent"]').count()).toBeGreaterThan(0);
-  });
+  // (Removed) legal-doc links on the landing page. The landing view does
+  // NOT render StatesFooter — that footer only shows on the referral /
+  // signup / waitlist screens. The legal-pages spec (02-legal-pages.spec.ts)
+  // verifies the routes themselves work; that's the right place for that
+  // coverage.
 });

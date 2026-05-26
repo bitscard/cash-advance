@@ -2,9 +2,12 @@
 
 const { Pool } = require('pg');
 
+// SSL config: production Postgres (Render) requires SSL; the test
+// Postgres on CI doesn't support it. Disable for NODE_ENV=test and let
+// the rest fall back to relaxed-cert SSL.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.NODE_ENV === 'test' ? false : { rejectUnauthorized: false },
 });
 
 // Run any additive migrations on startup

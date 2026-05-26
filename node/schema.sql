@@ -34,6 +34,19 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS messages_application_id_idx ON messages(application_id, created_at);
 
+-- Multi-source income (one row per employer). Was previously created via
+-- fire-and-forget pool.query() in db.js at module load — moved here so the
+-- table is guaranteed to exist before any code that INSERTs into it runs.
+CREATE TABLE IF NOT EXISTS income_sources (
+  id              SERIAL      PRIMARY KEY,
+  application_id  TEXT        NOT NULL,
+  employer        TEXT        NOT NULL,
+  payday          DATE        NOT NULL,
+  pay_frequency   TEXT        NOT NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS income_sources_application_id_idx ON income_sources(application_id);
+
 -- Payout preference columns (migration-safe)
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_contact TEXT;
