@@ -1947,7 +1947,7 @@ dd {
   font-size: clamp(44px, 7vw, 88px);
   font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 0.98;
+  line-height: 0.80;
   color: #fff;
 }
 .ldH1Accent {
@@ -2029,13 +2029,15 @@ dd {
   align-items: center;
   gap: 12px;
 }
-.ldLinkBtn {
+.ldPage .ldLinkBtn {
   font-size: 14px;
   font-weight: 600;
   color: var(--ld-ink);
+  background: none;
+  padding: 6px 4px;
+  transition: color 0.15s ease;
 }
-.ldLinkBtn:hover { color: var(--ld-brand); }
-.ldBtnGreen {
+.ldPage .ldBtnGreen {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2045,11 +2047,7 @@ dd {
   font-weight: 600;
   padding: 11px 18px;
   border-radius: 999px;
-  transition: transform 0.15s, background 0.15s;
-}
-.ldBtnGreen:hover {
-  background: var(--ld-brand);
-  transform: translateY(-1px);
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 @media (max-width: 860px) {
   .ldNavLinks { display: none; }
@@ -2120,7 +2118,7 @@ dd {
   margin-bottom: 28px;
 }
 .ldHeroSub {
-  margin-top: 24px;
+  margin-top: 88px;
   font-size: 19px;
   line-height: 1.55;
   color: rgba(255,255,255,0.78);
@@ -2134,9 +2132,10 @@ dd {
   margin-top: 36px;
   flex-wrap: wrap;
 }
-.ldBtnWhiteLg {
+.ldPage .ldBtnWhiteLg {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: #fff;
   color: var(--ld-brand-deep);
@@ -2146,11 +2145,7 @@ dd {
   border-radius: 999px;
   letter-spacing: -0.01em;
   box-shadow: 0 8px 24px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.08);
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.ldBtnWhiteLg:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 32px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 .ldHeroLink {
   font-size: 15px;
@@ -2323,7 +2318,10 @@ dd {
 }
 .ldPhoneRow strong { color: var(--ld-ink); font-weight: 600; }
 .ldPhoneFree { color: var(--ld-brand) !important; }
-.ldPhoneBtn {
+.ldPage .ldPhoneBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   margin-top: 12px;
   background: var(--ld-ink);
@@ -2333,6 +2331,7 @@ dd {
   padding: 12px 14px;
   border-radius: 12px;
   cursor: default;
+  min-height: 0;
 }
 .ldPhoneFooter {
   text-align: center;
@@ -2551,8 +2550,9 @@ dd {
   font-size: clamp(40px, 5.5vw, 72px);
   font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 0.98;
+  line-height: 1.02;
   color: #2a1900;
+  margin-top: 4px;
 }
 .ldRaffleAccent {
   background: linear-gradient(120deg, #b25e07 0%, #f59e0b 100%);
@@ -2564,7 +2564,8 @@ dd {
   font-size: 17px;
   color: rgba(66,40,5,0.78);
   line-height: 1.6;
-  margin-top: 20px;
+  margin-top: 22px;
+  margin-bottom: 32px;
   max-width: 480px;
 }
 .ldRaffleBullets {
@@ -2594,9 +2595,10 @@ dd {
   font-weight: 800;
   flex-shrink: 0;
 }
-.ldBtnDarkLg {
+.ldPage .ldBtnDarkLg {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: #2a1900;
   color: #fff;
@@ -2606,12 +2608,7 @@ dd {
   border-radius: 999px;
   letter-spacing: -0.01em;
   box-shadow: 0 10px 28px rgba(42,25,0,0.22);
-  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
-}
-.ldBtnDarkLg:hover {
-  background: #1a0f00;
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgba(42,25,0,0.30);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 /* Ticket card */
@@ -2873,7 +2870,7 @@ dd {
   position: relative;
   font-size: 18px;
   color: rgba(255,255,255,0.78);
-  margin-bottom: 38px;
+  margin-bottom: 50px;
 }
 .ldCtaBtnRow {
   position: relative;
@@ -2987,8 +2984,20 @@ dd {
   font-size: 11.5px;
   text-align: right;
 }
+.ldDisclaimer {
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ldDisclaimerLead {
+  color: rgba(255,255,255,0.7) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
 @media (max-width: 768px) {
   .ldFooterBottom p { text-align: left; }
+  .ldDisclaimer { text-align: left; }
 }
 
 /* ── Landing button :hover overrides ─────────────────────────────────────
@@ -3056,4 +3065,545 @@ dd {
   transform: none;
   box-shadow: none;
   outline: none;
+}
+
+/* ── Cancún ticket destination (replaces $300 amount) ─────────────────── */
+.ldPage .ldTicketDest {
+  font-size: 52px;
+  font-weight: 700;
+  color: var(--ld-amber-deep);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.ldPage .ldTicketDest span {
+  font-size: 36px;
+}
+
+/* ── Trust strip — consolidated single container (was 3 cards) ──────── */
+.ldPage .ldTrustStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  padding: 32px 36px;
+  background: #fff;
+  border-radius: var(--ld-r-lg);
+  border: 1px solid var(--ld-line);
+  margin-bottom: 18px;
+}
+.ldPage .ldTrustStripItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ldPage .ldTrustStripItem strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.015em;
+}
+.ldPage .ldTrustStripItem span {
+  font-size: 13.5px;
+  color: var(--ld-muted);
+  line-height: 1.55;
+}
+@media (max-width: 768px) {
+  .ldPage .ldTrustStrip {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 24px;
+  }
+  .ldPage .ldTrustStripItem {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--ld-line-soft);
+  }
+  .ldPage .ldTrustStripItem:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Mobile polish — landing page is primarily consumed on mobile
+═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Tighter vertical rhythm */
+  .ldPage .ldSectionHeader { margin-bottom: 36px; }
+  .ldHero { padding: 56px 0 72px; }
+  .ldAmounts,
+  .ldHow,
+  .ldWhy,
+  .ldRaffle,
+  .ldTrust,
+  .ldFaq { padding: 64px 0; }
+  .ldCta { padding: 64px 0; }
+
+  /* Headline line-heights stay tight (matching desktop base values). */
+
+  /* Sub copy slightly smaller on small screens */
+  .ldHeroSub { font-size: 17px; margin-top: 72px; }
+  .ldLead { font-size: 16px; }
+  .ldRaffleSub { font-size: 15px; }
+  .ldCtaSub { font-size: 16px; }
+
+  /* Eyebrow / kicker breathing room */
+  .ldEyebrow { margin-bottom: 20px; }
+  .ldRaffleKicker { margin-bottom: 28px; }
+  .ldRaffleHeadline { line-height: 1.08; }
+  .ldRaffleSub { margin-top: 32px; margin-bottom: 44px; font-size: 16px; line-height: 1.65; }
+}
+
+@media (max-width: 540px) {
+  .ldRaffleKicker { margin-bottom: 24px; }
+  .ldRaffleSub { margin-top: 28px; margin-bottom: 40px; }
+}
+
+@media (max-width: 540px) {
+  /* Full-width primary CTAs on phones */
+  .ldPage .ldBtnWhiteLg,
+  .ldPage .ldBtnDarkLg {
+    width: 100%;
+  }
+  .ldPage .ldHeroCtaRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .ldPage .ldHeroCtaRow .ldHeroLink {
+    text-align: center;
+    align-self: center;
+  }
+  .ldPage .ldCtaBtnRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .ldPage .ldCtaGhost {
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Hero proof row wraps more naturally with smaller gap */
+  .ldHeroProof { gap: 14px 16px; margin-top: 28px; }
+
+  /* Amount chips: smaller padding so they fit nicely */
+  .ldPage .ldChip,
+  .ldPage .ldChipFeatured {
+    font-size: 18px;
+    padding: 16px 22px;
+    min-width: 76px;
+  }
+  .ldPage .ldChipFeatured { font-size: 22px; padding: 16px 26px; }
+
+  /* Ticket card narrower padding so it doesn't overflow */
+  .ldPage .ldTicket { padding: 26px 24px; max-width: 320px; }
+  .ldPage .ldTicketAmount,
+  .ldPage .ldTicketDest { font-size: 44px; }
+  .ldPage .ldTicketDest span { font-size: 30px; }
+
+  /* Phone mockup slightly smaller on phones */
+  .ldPage .ldPhone { width: 280px; }
+  .ldPage .ldPhoneAmount { font-size: 38px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Hero eyebrow dot (replaces the lock icon) + proof row tweaks
+═══════════════════════════════════════════════════════════════════════ */
+.ldEyebrowDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+  box-shadow: 0 0 0 4px rgba(199,242,213,0.15);
+}
+.ldHeroProof li strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Delivery section (Zelle / Cash App / PayPal) — Faisal's #1 selling point
+   Light section with white cards + brand-tinted ambient glow.
+═══════════════════════════════════════════════════════════════════════ */
+.ldDelivery {
+  padding: 110px 0;
+  position: relative;
+  background: #ffffff;
+  border-bottom: 1px solid var(--ld-line-soft);
+  overflow: hidden;
+}
+.ldDelivery::before {
+  /* Subtle emerald glow at the top — echoes the hero, softens the
+     visual jump from the dark hero into the light section below. */
+  content: '';
+  position: absolute;
+  top: -260px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1200px;
+  height: 500px;
+  background: radial-gradient(ellipse, rgba(13,82,52,0.10) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+}
+@media (max-width: 768px) { .ldDelivery { padding: 72px 0; } }
+
+.ldDeliveryHeader {
+  text-align: center;
+  margin-bottom: 56px;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  z-index: 1;
+}
+.ldDeliveryHeader .ldKicker { justify-content: center; }
+.ldDeliveryHeader .ldLead {
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 22px;
+}
+
+.ldDeliveryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+}
+@media (max-width: 860px) {
+  .ldDeliveryGrid { grid-template-columns: 1fr; }
+}
+/* White card with ambient brand glow behind */
+.ldDeliveryCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 30px 28px 32px;
+  background: #ffffff;
+  border: 1px solid var(--ld-line);
+  box-shadow: 0 6px 18px rgba(7,40,25,0.04), 0 1px 3px rgba(7,40,25,0.03);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  min-height: 220px;
+  isolation: isolate;
+}
+.ldDeliveryCard:hover {
+  transform: translateY(-6px);
+  border-color: rgba(7,40,25,0.10);
+  box-shadow: 0 28px 56px rgba(7,40,25,0.10), 0 8px 16px rgba(7,40,25,0.05);
+}
+
+/* Brand-tinted ambient glow behind the icon */
+.ldDeliveryAmbient {
+  position: absolute;
+  top: -60px;
+  left: -50px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.32;
+  z-index: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+.ldDeliveryCard:hover .ldDeliveryAmbient { opacity: 0.50; }
+
+.ldDeliveryCardZelle    .ldDeliveryAmbient { background: rgba(140, 80,210, 0.95); }
+.ldDeliveryCardCashApp  .ldDeliveryAmbient { background: rgba( 50,180,100, 0.85); }
+.ldDeliveryCardPayPal   .ldDeliveryAmbient { background: rgba( 70,130,220, 0.90); }
+
+.ldDeliveryCard > *:not(.ldDeliveryAmbient) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Icon tile */
+.ldDeliveryIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255,255,255,0.18);
+}
+.ldDeliveryCardZelle .ldDeliveryIcon {
+  background: linear-gradient(135deg, #9c69d8 0%, #6e3cbe 100%);
+  box-shadow: 0 8px 22px rgba(110,60,190,0.32), inset 0 1px 0 rgba(255,255,255,0.30);
+}
+.ldDeliveryCardCashApp .ldDeliveryIcon {
+  background: linear-gradient(135deg, #4cc88c 0%, #2aa66c 100%);
+  box-shadow: 0 8px 22px rgba(60,200,120,0.30), inset 0 1px 0 rgba(255,255,255,0.30);
+}
+.ldDeliveryCardPayPal .ldDeliveryIcon {
+  background: linear-gradient(135deg, #6da0e0 0%, #3c6ec8 100%);
+  box-shadow: 0 8px 22px rgba(80,140,220,0.32), inset 0 1px 0 rgba(255,255,255,0.30);
+}
+
+.ldDeliveryBrand {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ld-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+
+.ldDeliveryCard h3 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+  line-height: 1.25;
+}
+.ldDeliveryCard p {
+  font-size: 14.5px;
+  color: var(--ld-muted);
+  line-height: 1.6;
+}
+
+/* Legacy classes kept harmless (no longer referenced in JSX). */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   British angle teaser section (landing)
+═══════════════════════════════════════════════════════════════════════ */
+.ldBritish {
+  padding: 110px 0;
+  background: linear-gradient(180deg, #fffbf2 0%, #fff7e3 100%);
+  position: relative;
+  overflow: hidden;
+}
+@media (max-width: 768px) { .ldBritish { padding: 72px 0; } }
+
+.ldBritishGrid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 64px;
+  align-items: center;
+}
+@media (max-width: 860px) {
+  .ldBritishGrid { grid-template-columns: 1fr; gap: 40px; }
+}
+.ldBritishFlag {
+  font-size: 22px;
+  vertical-align: middle;
+}
+
+.ldBritishPhotoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ldBritishPhotoFrame {
+  background: #fff;
+  padding: 14px 14px 18px;
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(7,40,25,0.18), 0 8px 20px rgba(7,40,25,0.08);
+  transform: rotate(-2.5deg);
+  max-width: 380px;
+  width: 100%;
+}
+.ldBritishPhoto {
+  display: block;
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #f4f4f0;
+}
+.ldBritishPhotoTag {
+  margin-top: 22px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--ld-muted);
+  transform: rotate(-2.5deg);
+}
+.ldBritishPhotoTag strong {
+  color: var(--ld-ink);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Reusable link styles for new sections */
+.ldInlineLink {
+  color: var(--ld-brand);
+  font-weight: 600;
+  border-bottom: 1px solid currentColor;
+}
+.ldInlineLink:hover { color: var(--ld-brand-dark); }
+
+.ldStoryLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-brand);
+  padding-bottom: 4px;
+  border-bottom: 2px solid currentColor;
+  transition: gap 0.15s ease, color 0.15s ease;
+}
+.ldStoryLink:hover { gap: 12px; color: var(--ld-brand-dark); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Footer — Made in England line
+═══════════════════════════════════════════════════════════════════════ */
+.ldFooterMade {
+  margin-top: 16px !important;
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.55) !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   /story page styles
+═══════════════════════════════════════════════════════════════════════ */
+.ldStoryHero {
+  position: relative;
+  background: linear-gradient(180deg, var(--ld-brand-dark) 0%, var(--ld-brand) 60%, var(--ld-brand-deep) 100%);
+  color: #fff;
+  padding: 96px 0 80px;
+  overflow: hidden;
+  text-align: center;
+}
+@media (max-width: 768px) { .ldStoryHero { padding: 72px 0 56px; } }
+.ldStoryHeroInner {
+  position: relative;
+  z-index: 1;
+  max-width: 1040px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.ldStoryHeroInner .ldEyebrow { margin-bottom: 32px; }
+/* Story-page H1 is a longer editorial sentence — needs to be smaller than the landing's punchy 88px hero so each half fits on one line */
+.ldStoryHeroInner .ldH1 {
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  text-align: center;
+  width: 100%;
+}
+.ldStoryLead {
+  margin-top: 32px;
+  font-size: 19px;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.65;
+  max-width: 640px;
+  text-align: center;
+}
+@media (max-width: 768px) {
+  .ldStoryLead { font-size: 16px; margin-top: 24px; line-height: 1.6; }
+  .ldStoryHeroInner .ldEyebrow { margin-bottom: 24px; }
+  .ldStoryHeroInner .ldH1 { font-size: clamp(34px, 9vw, 46px); line-height: 1.12; }
+}
+
+.ldStoryChapter {
+  padding: 110px 0;
+  background: var(--ld-bg);
+}
+.ldStoryChapterAlt { background: var(--ld-bg-cream); }
+@media (max-width: 768px) { .ldStoryChapter { padding: 64px 0; } }
+
+.ldStoryChapterGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 80px;
+  align-items: center;
+}
+@media (max-width: 860px) {
+  .ldStoryChapterGrid { grid-template-columns: 1fr; gap: 40px; }
+  .ldStoryChapterFlip > :first-child { order: 2; }
+  .ldStoryChapterFlip > :last-child { order: 1; }
+}
+
+.ldStoryChapterCopy { max-width: 480px; }
+.ldStoryNumber {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ld-brand);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+/* Looser H2 line-height for editorial chapter headings */
+.ldStoryChapter .ldH2,
+.ldStoryBrit .ldH2 {
+  line-height: 1.12;
+}
+.ldStoryBody {
+  font-size: 18px;
+  line-height: 1.75;
+  color: var(--ld-ink-2);
+  margin-top: 28px;
+}
+.ldStoryBody em {
+  color: var(--ld-brand-dark);
+  font-style: normal;
+  font-weight: 600;
+}
+.ldStoryBrit .ldKicker { margin-bottom: 20px; }
+.ldStoryBrit .ldStoryBody { margin-top: 32px; }
+
+@media (max-width: 768px) {
+  .ldStoryBody { font-size: 16px; line-height: 1.7; margin-top: 24px; }
+  .ldStoryNumber { margin-bottom: 20px; }
+}
+
+.ldStoryPhotoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ldStoryPhotoFrame {
+  background: #fff;
+  padding: 16px 16px 22px;
+  border-radius: 12px;
+  box-shadow: 0 30px 70px rgba(7,40,25,0.15), 0 10px 24px rgba(7,40,25,0.08);
+  max-width: 440px;
+  width: 100%;
+  transform: rotate(-2deg);
+}
+.ldStoryChapterFlip .ldStoryPhotoFrame { transform: rotate(2deg); }
+.ldStoryPhoto {
+  display: block;
+  width: 100%;
+  height: 380px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: #f4f4f0;
+}
+@media (max-width: 540px) {
+  .ldStoryPhoto { height: 280px; }
+}
+.ldStoryPhotoCaption {
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--ld-muted);
+  font-style: italic;
+  transform: rotate(-2deg);
+}
+.ldStoryChapterFlip .ldStoryPhotoCaption { transform: rotate(2deg); }
+
+.ldStoryBrit {
+  padding: 110px 0;
+  background: linear-gradient(180deg, #fffbf2 0%, #fff5d8 100%);
+  text-align: center;
+}
+@media (max-width: 768px) { .ldStoryBrit { padding: 72px 0; } }
+.ldStoryBrit .ldKicker { justify-content: center; }
+.ldStoryBrit .ldStoryBody {
+  margin: 24px auto 0;
+  font-size: 18px;
 }
