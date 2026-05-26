@@ -6,6 +6,7 @@ import { apiUrl } from "./api";
 import styles from "./App.module.css";
 import TermsPage from "./TermsPage";
 import PrivacyPage from "./PrivacyPage";
+import StoryPage from "./StoryPage";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -373,6 +374,7 @@ const App = () => {
   if (path === "/loan") return <LoanApp />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/privacy") return <PrivacyPage />;
+  if (path === "/story") return <StoryPage />;
   if (path === "/oauth-return") return <OauthReturn />;
   return <CustomerApp />;
 };
@@ -760,18 +762,19 @@ const CustomerApp = () => {
               <div className={styles.ldHeroInner}>
                 <div className={styles.ldHeroCopy}>
                   <span className={styles.ldEyebrow}>
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                      <path d="M3 6.5l2.5 2.5L10 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    No credit check · 0% interest · No collections
+                    <span className={styles.ldEyebrowDot} aria-hidden="true" />
+                    AI-powered · No credit check · 0% interest
                   </span>
                   <h1 className={styles.ldH1}>
                     Cash before<br />
                     <span className={styles.ldH1Accent}>your paycheck.</span>
                   </h1>
-                  <p className={styles.ldHeroSub}>
-                    Up to <strong>$300 in your account today</strong>. Repay on your next payday — no interest, no hidden fees, no surprises.
+                  <div className="mt-6">
+          <p className={styles.ldHeroSub}>
+                    Up to <strong>$300 in your account today</strong>. Repay on your next payday — 0% interest, no late fees, no credit pull. Just $3.99/month for membership.
                   </p>
+                  </div>
+        
                   <div className={styles.ldHeroCtaRow}>
                     <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
                       Get my cash <span aria-hidden="true">→</span>
@@ -782,16 +785,26 @@ const CustomerApp = () => {
                   </div>
                   <ul className={styles.ldHeroProof}>
                     <li>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3 7l2.5 2.5L11 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      Same-day funding
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+                        <circle cx="11" cy="7" r="2" stroke="currentColor" strokeWidth="1.4" />
+                        <path d="M2 13c0-2 2-3 4-3s4 1 4 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                        <path d="M9 13c0-1.5 1.5-2.5 3-2.5s2.5 1 2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      </svg>
+                      <strong>700,000+</strong>&nbsp;members
                     </li>
                     <li>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><rect x="3" y="6" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4" /><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>
-                      Bank-grade security
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M8 1.5l1.85 4.05L14 6.2l-3.15 2.75L11.7 13 8 10.85 4.3 13l.85-4.05L2 6.2l4.15-.65L8 1.5z" fill="currentColor" />
+                      </svg>
+                      <strong>4.7</strong>&nbsp;on Trustpilot
                     </li>
                     <li>
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4" /></svg>
-                      No credit pull
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M8 1.5l1.4 3.6 3.6 1.4-3.6 1.4L8 11.5l-1.4-3.6L3 6.5l3.6-1.4L8 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="none" />
+                        <circle cx="13" cy="13" r="1.2" fill="currentColor" />
+                      </svg>
+                      AI-powered approvals
                     </li>
                   </ul>
                 </div>
@@ -844,6 +857,63 @@ const CustomerApp = () => {
               </div>
             </section>
 
+            {/* ── 2b. Delivery options (the #1 selling point) ──────────────── */}
+            <section className={styles.ldDelivery}>
+              <div className={styles.ldContainer}>
+                <div className={styles.ldDeliveryHeader}>
+                  <span className={styles.ldKicker}>The advance way</span>
+                  <h2 className={styles.ldH2}>
+                    Get your cash<br />
+                    <span className={styles.ldH1Accent} style={{ background: "linear-gradient(120deg, #0d5234 0%, #1a8a55 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>your way.</span>
+                  </h2>
+                  <p className={styles.ldLead}>
+                    Zelle to your bank. Cash App to your $cashtag. PayPal if that&apos;s your thing. You pick how it lands.
+                  </p>
+                </div>
+                <div className={styles.ldDeliveryGrid}>
+                  {/* Zelle */}
+                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardZelle}`}>
+                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
+                    <div className={styles.ldDeliveryIcon}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M7 7h10L7 17h10" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <p className={styles.ldDeliveryBrand}>Zelle</p>
+                    <h3>Straight to your bank</h3>
+                    <p>Lands in your linked bank in minutes — no extra fees on top.</p>
+                  </div>
+
+                  {/* Cash App */}
+                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardCashApp}`}>
+                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
+                    <div className={styles.ldDeliveryIcon}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 4v16M16 8.5c-1.4-1-3-1.5-4.5-1.5-2 0-3.5 1-3.5 2.5s1.5 2.4 4 3 4 1.2 4 2.7-1.5 2.5-3.5 2.5c-1.5 0-3.1-.6-4.5-1.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <p className={styles.ldDeliveryBrand}>Cash App</p>
+                    <h3>Hits your $cashtag</h3>
+                    <p>Send the advance straight to your Cash App balance — same day.</p>
+                  </div>
+
+                  {/* PayPal */}
+                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardPayPal}`}>
+                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
+                    <div className={styles.ldDeliveryIcon}>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M8 4h7c2.5 0 4.5 1.8 4.5 4.5S17.5 13 15 13h-3.5L10 20" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M6 7h6c2 0 3.5 1.5 3.5 3.5S14 14 12 14H8.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
+                      </svg>
+                    </div>
+                    <p className={styles.ldDeliveryBrand}>PayPal</p>
+                    <h3>To your PayPal balance</h3>
+                    <p>Already on PayPal? Funds land in your wallet, no extra steps.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* ── 3. Amount tier strip ─────────────────────────────────────── */}
             <section className={styles.ldAmounts}>
               <div className={styles.ldContainer}>
@@ -860,7 +930,7 @@ const CustomerApp = () => {
                   </div>
                 </div>
                 <p className={styles.ldAmountsNote}>
-                  Standard delivery same-day, free. Need it in minutes? $5 flat for instant transfer. That&apos;s the only fee.
+                  Membership is <strong>$3.99/month</strong>. Instant transfers are <strong>$5</strong>. No interest, no late fees, no credit pull.
                 </p>
               </div>
             </section>
@@ -954,6 +1024,42 @@ const CustomerApp = () => {
               </div>
             </section>
 
+            {/* ── 7. British angle / story teaser ──────────────────────────── */}
+            <section className={styles.ldBritish}>
+              <div className={styles.ldContainer}>
+                <div className={styles.ldBritishGrid}>
+                  <div>
+                    <span className={styles.ldKicker}>Our story</span>
+                    <h2 className={styles.ldH2}>
+                      Built by guys in England.<br />
+                      For America.
+                    </h2>
+                    <div className="mt-6">
+        <p className={styles.ldLead}>
+                      We flew over with no clue how anything works. Met hundreds of people in diners, gas stations, and dollar stores. You said you needed cash before payday — without the loan-shark nonsense. So we built it.
+                    </p>
+                    </div>
+            
+                    <p className={styles.ldLead} style={{ marginTop: "16px" }}>
+                      If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.ldInlineLink}>email us</a> and tell us off.
+                    </p>
+                    <a href="/story" className={styles.ldStoryLink}>
+                      Read our story <span aria-hidden="true">→</span>
+                    </a>
+                  </div>
+                  <div className={styles.ldBritishPhotoWrap}>
+                    <div className={styles.ldBritishPhotoFrame}>
+                      <img src="/founder-1.jpeg" alt="One of the advance founders on a trip across the US" className={styles.ldBritishPhoto} />
+                    </div>
+                    <div className={styles.ldBritishPhotoTag}>
+                      <strong>USA road trip</strong>
+                      <span>Meeting members across the country</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             {/* ── 8. FAQ ───────────────────────────────────────────────────── */}
             <section className={styles.ldFaq} id="faq">
               <div className={styles.ldContainer}>
@@ -970,7 +1076,7 @@ const CustomerApp = () => {
                       ["What states is advance available in?", "Currently 35 US states. If we're not in your state yet, you can join the waitlist."],
                       ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
                       ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
-                      ["Is there a membership fee?", "No monthly fee. The only optional cost is $5 if you want instant (same-hour) delivery instead of standard same-day."],
+                      ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
                     ].map(([q, a]) => (
                       <details key={q} className={styles.ldFaqItem}>
                         <summary>
@@ -994,7 +1100,10 @@ const CustomerApp = () => {
                 <h2 className={styles.ldCtaHeadline}>
                   Your next paycheck<br />is closer than you think.
                 </h2>
-                <p className={styles.ldCtaSub}>Get started in 2 minutes. No credit check. No commitment.</p>
+                <div className="mb-6">
+                   <p className={styles.ldCtaSub}>Get started in 2 minutes. No credit check. No commitment.</p>
+                </div>
+    
                 <div className={styles.ldCtaBtnRow}>
                   <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
                     Get my cash <span aria-hidden="true">→</span>
@@ -1017,6 +1126,9 @@ const CustomerApp = () => {
                   <p>
                     A new product from <strong>Bits Card Inc.</strong><br />
                     Earned wage access — not a loan.
+                  </p>
+                  <p className={styles.ldFooterMade}>
+                    <span aria-hidden="true">🇬🇧</span> Made in England · Built for America
                   </p>
                 </div>
                 <div className={styles.ldFooterCols}>
