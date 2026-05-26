@@ -18,7 +18,7 @@ Key design choices:
 | --- | --- |
 | **State-gated eligibility (35 of 50 US states live)** | Lending laws vary by state; ineligible users go on a waitlist instead of being blocked outright. |
 | **Invite-only with a master gate code** | Word-of-mouth growth; `neworleans` is the master code that unlocks signup regardless of personal referral. |
-| **Plaid for income verification, Stripe for money movement** | Plaid handles the read-only bank connection; Stripe handles ACH debits, card fallback, and now the $3.99/mo subscription via Checkout. |
+| **Plaid for income verification, Stripe for money movement** | Plaid handles the read-only bank connection (Hosted Link flow); Stripe handles ACH debits, card fallback, and the $3.99/mo subscription (created at funded-time with `billing_cycle_anchor` set to first repayment day). |
 | **3-layer income classification** | Plaid PFC codes → keyword blocklist → Claude Haiku fallback. Cuts false positives (refunds, transfers, SSI/VA benefits) from being counted as wages. |
 | **Server-side enforcement of every business rule** | The React app mirrors logic for UX, but eligibility, expiry, charge fallback, etc. are all enforced server-side. |
 
@@ -192,7 +192,7 @@ If you add a new column that should reach the client, add it to `publicApp` — 
 
 ## 7. Application lifecycle (status state machine)
 
-Stored in `applications.status`. The label map lives at `App.tsx:148`.
+Stored in `applications.status`. The label map lives in `App.tsx`.
 
 ```
                     intake
@@ -211,21 +211,26 @@ Stored in `applications.status`. The label map lives at `App.tsx:148`.
    │          │          │
 expired    funded    (admin can also push to denied here)
               │
+              │  (funded handler also creates Stripe subscription
+              │   with billing_cycle_anchor = repayment_due_date)
+              ▼
    repayment_scheduled
               │
-   ┌──────────┼──────────────┐
-   │          │              │
- repaid   repayment_failed   │
-              │              │
-          written_off  ◄─────┘
+   ┌──────────┼─────────────────────────────────┐
+   │          │              │                  │
+ repaid   repayment_failed   subscription_failed   │
+              │                                  │
+          written_off  ◄───────────────────── (after cooldown / admin write-off)
 ```
 
 Transitions are admin-driven through `PATCH /api/advance/admin/applications/:id/status`, with a few automated edges:
 
 - `approved → expired`: lazy expiry; if `GET /applications/:id` sees `status='approved' && !delivery_type && offer_expires_at < now`, it transitions in-place.
-- `approved → funded`: when admin marks `funded`, the same handler auto-schedules `repayment = requested_amount + (instant ? 5 : 0)`, due on `payday`.
+- `approved → funded`: admin marks `funded`. Same handler auto-schedules `repayment = requested_amount + (instant ? 5 : 0)` due on `payday`, AND creates the Stripe subscription with `billing_cycle_anchor = repayment_due_date` (see §11).
 - `funded → repayment_scheduled`: happens on `setRepayment`.
-- `funded → written_off` with `repayment_count = 0` and `referred_by` set: also writes `limit_freeze_until = today + 3 months` to the referrer (`saveLimitFreeze`) and posts a system message to that referrer's thread.
+- `funded → repayment_failed`: `/admin/charge` sets this when the Stripe PaymentIntent fails. Locks out reapply.
+- `funded → subscription_failed`: Stripe webhook sets this when the membership invoice fails (`invoice.payment_failed`). Locks out reapply.
+- `funded → written_off` with `repayment_count = 0` and `referred_by` set: also writes `limit_freeze_until = today + 3 months` to the referrer and posts a system message to that referrer's thread.
 
 ---
 
@@ -284,7 +289,7 @@ Submit hits `POST /api/advance/applications` with the cleaned shape:
 
 If the state isn't eligible and there's no gate code, the frontend also fires `POST /api/waitlist` for Mailchimp tagging. (Backend signup independently tags the user `welcome` + `waitlist`.)
 
-### 8.4 7-step pre-bank onboarding
+### 8.4 6-step pre-bank onboarding
 
 After signup the customer is gated by:
 
@@ -296,19 +301,18 @@ const preBankActive =
   !application.plaid_connected;
 ```
 
-Steps render in this order (`App.tsx:1429+`); each has its own gate so a refresh always returns to the right place.
+Steps render in this order; each has its own gate so a refresh always returns to the right place.
 
 | # | Step | Gate | What it does |
 | --- | --- | --- | --- |
 | 1 | Benefits | `!benefitsSeen` | Pitches "no credit check, no interest, no collections, weekly raffle." Pure presentation. |
-| 2 | **Membership ($3.99/mo)** | `subscription_status !== "active"` | Server creates a Stripe Checkout subscription session; user is redirected to Stripe; on success `?subscription=success&session_id=…` triggers `/subscription/sync` to flip `subscription_status` to `active`. |
-| 3 | Receive money | `!payout_methods \|\| !payout_contact` | Single-select PayPal / Cash App / Zelle + handle, with a confirmation block. |
-| 4 | Trust ladder | `!trustScreenSeen` | Static screen showing $25 → $200 milestones and how trust building works. |
-| 5 | Backup card | `!stripe_card_saved` | Stripe `CardElement` + `SetupIntent` → saves `stripe_card_pm_id`. |
-| 6 | Delivery speed | `!delivery_type` | Same-day (+$5 at repayment) vs 3–5 days (free). |
-| 7 | Bank verification | otherwise | Plaid Hosted Link. On `?plaid_complete=1` return, calls `/plaid/check-completion` to finalize. |
+| 2 | Receive money | `!payout_methods \|\| !payout_contact` | Single-select PayPal / Cash App / Zelle + handle, with a confirmation block. |
+| 3 | Trust ladder | `!trustScreenSeen` | Static screen showing $25 → $200 milestones and how trust building works. |
+| 4 | **Card + membership** | `!stripe_card_saved` | Stripe `CardElement` + `SetupIntent` → saves `stripe_card_pm_id`. Page also discloses the bundled $3.99/mo membership that will charge to this card starting on the user's first repayment day. The Stripe subscription is **not** created here — it's deferred until `funded` (see §11). |
+| 5 | Delivery speed | `!delivery_type` | Same-day (+$5 at repayment) vs 3–5 days (free). Live "first month" breakdown shows advance + same-day fee + $3.99 membership. |
+| 6 | Bank verification | otherwise | Plaid Hosted Link. On `?plaid_complete=1` return, calls `/plaid/check-completion` to finalize. |
 
-After step 7 the app is `reviewing` and gets out of `preBankActive`.
+After step 6 the app is `bank_connected` and gets out of `preBankActive`. The standalone Stripe Checkout subscription step that used to live between Steps 1 and 2 has been removed — the membership is now bundled into Step 4's card collection and the actual Stripe subscription is created later at funded-time.
 
 ### 8.5 Waitlist
 
@@ -371,30 +375,48 @@ It exists because the main flow keys off `localStorage.advance_application_id` �
 
 ## 11. Subscription / membership ($3.99/mo)
 
-Added recently. The customer must subscribe before they can pick a payout method, link a bank, or take an advance.
+The customer pays $3.99/month as a recurring Stripe subscription. Billing model is precise about when the first charge fires and how it relates to advance repayments — read carefully because the wording matters for support conversations.
+
+### Billing model
+
+- **No charge at card save.** When the user saves their card in Step 4 of pre-bank onboarding, the card is stored as the Stripe customer's default payment method and the subscription is NOT created yet. `subscription_status` stays `'pending_payment'`.
+- **First charge fires on first repayment day.** When admin marks `status='funded'`, the backend creates a Stripe subscription with `billing_cycle_anchor = repayment_due_date` (UTC midnight of that day) and `proration_behavior: 'none'`. Stripe's first invoice fires on that anchor date — as a **separate transaction from the advance repayment**.
+- **Monthly thereafter.** Stripe handles the recurring schedule on the anchor day of each subsequent month. Independent of whether the user takes another advance.
+- **Subsequent advance paydays only collect the loan + same-day fee.** The membership stays on its own monthly cadence and is never bundled with advance repayment charges.
 
 ### Backend (`node/index.js`)
 
-| Endpoint | What it does |
-| --- | --- |
-| `POST /api/advance/applications/:id/subscription/activate` | Legacy free-activation path. **No longer used by the new signup flow** — left in place for compatibility. Flips to `active` (eligible) or `waitlisted` (ineligible). |
-| `POST /api/advance/applications/:id/subscription/checkout-session` | Creates (or reuses) the Stripe Customer and returns a **Checkout Session URL** in subscription mode, $3.99/mo, inline `price_data` so no Stripe Dashboard price ID is required. Success URL: `${origin}/?subscription=success&session_id={CHECKOUT_SESSION_ID}`. |
-| `POST /api/advance/applications/:id/subscription/sync` | Called by the frontend on return from Stripe. Retrieves the session, asserts customer match, asserts `sub.status ∈ {active, trialing}`, flips `subscription_status` to `active`, stores `subscription_id` + `subscription_next_billing`, writes a system message. |
+| Endpoint | Status | What it does |
+| --- | --- | --- |
+| `POST /api/advance/applications/:id/stripe/setup-intent` | Active | Creates the Stripe Customer (if needed) and a `SetupIntent` for the card collection step. |
+| `POST /api/advance/applications/:id/stripe/save-payment-method` | Active | Stores the saved payment method on the application row and sets it as the Stripe customer's default PM. **Does NOT create the subscription** — that happens at funded-time. |
+| `PATCH /api/advance/admin/applications/:id/status` (when `status='funded'`) | Active | Auto-schedules the advance repayment AND creates the Stripe subscription with `billing_cycle_anchor=repayment_due_date`. Subscription failure is logged but does not block the funded transition. |
+| `POST /api/webhooks/stripe` | Active | Listens for `invoice.payment_failed` (→ `status='subscription_failed'` lockout), `invoice.payment_succeeded` (→ updates `subscription_next_billing`), `customer.subscription.deleted` (→ `subscription_status='cancelled'`). Verifies signature when `STRIPE_WEBHOOK_SECRET` is set. |
+| `POST /api/advance/applications/:id/subscription/checkout-session` | **Legacy / unused by current UI** | Older flow that opened Stripe Checkout for a standalone subscription step. Kept on the backend in case we ever want to expose a separate "manage membership" path. Not called from the customer app today. |
+| `POST /api/advance/applications/:id/subscription/sync` | **Legacy / unused** | Pair to the Checkout endpoint above. Same reasoning. |
+| `POST /api/advance/applications/:id/subscription/activate` | **Legacy / unused** | Free-activation predecessor. No longer called from the UI. |
 
-### Signup-time change
+### Signup-time state
 
-Eligible signups now land on `subscription_status='pending_payment'` instead of `'active'` (`node/index.js:580`). Waitlisted users still land on `'waitlisted'`. This is what makes the new "Step 2 — Membership" gate fire.
+Eligible signups land on `subscription_status='pending_payment'`. Waitlisted users land on `'waitlisted'`. Card-save does not flip status. `funded` transition flips it to `'active'` once the Stripe subscription is created.
 
-### Frontend (`frontend/src/App.tsx`)
+### Failure lockout
 
-- A `useEffect` watches `?subscription=success&session_id=…` on mount; if present, calls `/subscription/sync` and strips the query params via `history.replaceState`.
-- `startMembershipCheckout()` POSTs to `/subscription/checkout-session` and does `window.location.href = data.url`.
-- The Membership step (`App.tsx:1475+`) renders only when `preBankActive && subscription_status !== "active"`.
+If either the advance repayment OR the membership invoice fails, the user is locked out of new advances until they resolve:
+- Advance repayment failure → `status='repayment_failed'` (set by `/admin/charge`).
+- Membership invoice failure → `status='subscription_failed'` (set by the webhook).
+- `POST /reapply` rejects both with a 400 pointing the user to support.
 
-### What's not (yet) wired
+### Webhook setup (required)
 
-- **Webhook handling** for `customer.subscription.updated`, `invoice.payment_failed`, etc. Today we only learn the subscription is alive at first-charge sync time. If a renewal fails, nothing in our DB changes automatically — we'd find out by Stripe email until a webhook is added.
-- **Cancellation UX.** No in-app "cancel membership" button. The customer would do it from the Stripe billing portal (not wired) or by emailing support.
+The lockout only works if the Stripe webhook is wired. In the Stripe Dashboard → Webhooks → Add endpoint:
+- URL: `https://plaid-backend-gr01.onrender.com/api/webhooks/stripe`
+- Events: `invoice.payment_failed`, `invoice.payment_succeeded`, `customer.subscription.deleted`
+- Copy the signing secret into the Render env as `STRIPE_WEBHOOK_SECRET`. Without this var, the endpoint still works in dev but logs a warning ("webhook secret not configured — event accepted without verification").
+
+### What's still not wired
+
+- **In-app cancellation UX.** Customers email support; we don't yet expose a "Cancel membership" button or Stripe billing portal link.
 
 ---
 
@@ -495,33 +517,56 @@ That lazy-expiry pattern (rather than a cron) keeps the data eventually-consiste
 
 ## 17. Cron / background jobs
 
-There's **one** real background job today: due-date reminders.
+Two parallel triggers for due-date reminders, plus admin-driven jobs for repayment charging.
 
-```js
-setInterval(sendDueDateReminders, 60 * 60 * 1000);  // hourly
-setTimeout(sendDueDateReminders, 30_000);           // also 30s after boot
+### Due-date reminders (`due_date_reminder` Mailchimp tag, 2 days before repayment)
+
+- **GitHub Actions scheduled workflow** (primary). `.github/workflows/cron-due-date-reminders.yml` runs daily at **14:00 UTC** (10am ET / 7am PT) and POSTs `https://<backend>/api/cron/due-date-reminders` with the `ADMIN_TOKEN` header. Manually triggerable from the Actions tab. Uses repo secrets `BACKEND_URL` and `ADMIN_TOKEN`.
+- **In-process backup** (defense in depth). Same code path also runs from a `setInterval(sendDueDateReminders, 60 * 60 * 1000)` plus a `setTimeout(..., 30_000)` on boot. Guarded by `if (require.main === module)` so the timer doesn't fire during tests. Won't fire while the Render service is asleep.
+
+Both paths call `sendDueDateReminders()`, which queries:
+```sql
+SELECT * FROM applications
+WHERE status IN ('funded', 'repayment_scheduled')
+  AND repayment_due_date::date = CURRENT_DATE + INTERVAL '2 days'
+  AND due_date_reminder_sent_at IS NULL
+  AND email IS NOT NULL
 ```
+For each match, it tags the user (`due_date_reminder`) and stamps `due_date_reminder_sent_at = NOW()`. Idempotent — re-runs the same day no-op. The stamp resets to NULL whenever `setRepayment` runs, so each new advance cycle gets its own reminder.
 
-`sendDueDateReminders` queries apps with `repayment_due_date = CURRENT_DATE + 2`, status ∈ `{funded, repayment_scheduled}`, `due_date_reminder_sent_at IS NULL`. For each, it tags the user in Mailchimp (`due_date_reminder`) and stamps `due_date_reminder_sent_at = NOW()` so we never double-send. Also exposed as `POST /api/cron/due-date-reminders` for external schedulers (Render cron, GitHub Actions, etc.) if you'd rather not rely on an in-process timer.
+### Other scheduled workflows
 
-Other cron-shaped operations (`run-due-repayments`) are **admin-triggered**, not scheduled. There's no membership-billing cron because Stripe handles that itself.
+- `.github/workflows/charge-due-repayments.yml` — daily ping of `/admin/run-due-repayments` to auto-charge any due repayments.
+- `.github/workflows/charge-due-memberships.yml` — predecessor; relevant only if we ever stop letting Stripe handle membership renewals.
+
+### Admin-triggered jobs
+
+`run-due-repayments` is also reachable directly from the admin panel. Stripe handles all subscription renewals natively — no cron on our side for membership billing.
 
 ---
 
 ## 18. Mailchimp tagging
 
-Single function `addToMailchimp(name, email, state, tags)`. Always upserts (idempotent on "Member Exists"). Tags fire at:
+Single function `addToMailchimp(name, email, state, tags)`. Two-step pattern per call:
 
-| Event | Tags |
-| --- | --- |
-| Signup, eligible state | `welcome` |
-| Signup, ineligible state | `welcome`, `waitlist` |
-| Bank connected → reviewing | `application_under_review` |
-| Status → `approved` | `approved` |
-| Status → `denied` | `denied` |
-| 2 days before due date | `due_date_reminder` |
+1. **`PUT /lists/{id}/members/{md5(email)}`** — upserts the member record + merge fields (FNAME, LNAME, STATE). `status_if_new: 'subscribed'` so new members aren't stuck in pending.
+2. **`POST /lists/{id}/members/{md5(email)}/tags`** — adds the tags additively. Existing tags are preserved.
 
-This is also where the marketing team wires drip campaigns — keep the tag names stable.
+**Important history:** the earlier implementation used `POST /lists/{id}/members` which only creates new members. After the welcome tag created the contact, every subsequent call returned "Member Exists" and silently dropped the new tags — so `application_under_review`, `approved`, and `due_date_reminder` never reached the inbox. The PUT-then-tags pattern fixes that and is idempotent for re-runs.
+
+Tags fire at:
+
+| Event | Tags | Code site |
+| --- | --- | --- |
+| Signup, eligible state | `welcome` | `POST /api/advance/applications` |
+| Signup, ineligible state | `welcome`, `waitlist` | same |
+| Bank connected (Hosted Link) | `application_under_review` | `/plaid/check-completion` |
+| Bank connected (legacy iframe) | `application_under_review` | `/plaid/exchange-token` |
+| Status → `approved` | `approved` | `PATCH /admin/applications/:id/status` |
+| Status → `denied` | `denied` | same |
+| 2 days before due date | `due_date_reminder` | `sendDueDateReminders()` cron |
+
+The marketing team wires Customer Journeys against these tag names. **Keep them stable** — renaming a tag breaks the journey trigger.
 
 ---
 
@@ -569,29 +614,37 @@ This is also where the marketing team wires drip campaigns — keep the tag name
 
 ## 21. Test suite
 
-**There is no test suite.** `node/package.json` literally has:
+Comprehensive automated suite, ~150 tests across three layers. CI runs every PR via `.github/workflows/test.yml` (backend job uses a Postgres service container; frontend job runs Vitest + Playwright with browser install).
 
-```json
-"test": "echo \"Error: no test specified\" && exit 1"
-```
+### Backend (`node/`)
 
-The frontend has no `*.test.*` / `*.spec.*` / `__tests__/` files either.
+Jest + supertest. `npm test`, `npm run test:unit`, `npm run test:integration`.
 
-### What we lean on instead
+| Layer | Files | What's covered |
+| --- | --- | --- |
+| **Unit (104 cases)** | `__tests__/unit/*.test.js` | All pure functions: `isPlausibleSSN` (SSA rules, advertised fakes), `payPeriodDays`, `findPaychecksByPattern` (daily/weekly/biweekly/monthly), `calcSourceAccrued`, `buildRefundSet`, `isExcludedByPFC` + `isExcludedByKeyword` + `classifyTransaction` (with mocked Anthropic), `getOfferExpiresAt` + `STATE_TIMEZONES` (ET/CT/MT/PT/AZ/HI/AK + DST), `computeChargeAmountCents` (the regression fix for the missing $5 instant fee), `generateReferralSlug`. |
+| **Integration (~50 cases)** | `__tests__/integration/*.test.js` | Express endpoints against an ephemeral Postgres on port 5433 via `docker-compose.test.yml`. Plaid + Stripe + Anthropic SDKs are jest-mocked at module boundary. Coverage: signup happy path + validation; eligibility gate (3 named regressions for waitlist bypass bugs); Plaid Hosted Link + legacy `/exchange-token`; payout/delivery/recompute; full admin status state machine; charge endpoint (regression for null-`repayment_amount` instant-fee drop); due-date cron idempotency; Mailchimp tag-add side effects; reapply tier ladder + frozen referrals. |
 
-| Mitigation | What it actually buys you |
-| --- | --- |
-| TypeScript on the frontend | Catches shape mismatches and obvious typos; CI runs `tsc` via `npm run build`. |
-| Manual smoke through Plaid sandbox | Most flows are exercised end-to-end before merge. |
-| Lazy expiry / idempotent crons | Bugs in time-based code are recoverable by re-running. |
-| Server-side enforcement of every rule | The React app can't be tricked into a state the backend wouldn't allow. |
+### Frontend (`frontend/`)
 
-### Recommended test additions (in order)
+Vitest + React Testing Library + Playwright. `npm test`, `npm run e2e`.
 
-1. **Unit:** `isPlausibleSSN`, `classifyTransaction` (PFC + keyword layers — no AI), `calcSourceAccrued`, the reapply tier math, `checkOverdraft` decision tree. These are all pure functions or close to it.
-2. **Integration:** Express handlers with a test Postgres database (`pg-mem` or a docker-compose Postgres). Cover signup → subscription → Plaid mock → admin approval → funded → repayment success and the two failure variants (overdraft skip, card fallback).
-3. **Contract:** Snapshot a `publicApp(row)` return for each status. This is the most regression-prone surface — any new column needs to land here.
-4. **E2E:** Playwright against a sandbox stack. Just the four critical paths: signup-to-bank-link, approve-to-funded, mark-as-paid happy path, reapply.
+| Layer | Files | What's covered |
+| --- | --- | --- |
+| **Unit (8 cases)** | `src/__tests__/unit/*.test.ts` | `dataUtilities.ts` transform samples + cross-file consistency check that backend `ELIGIBLE_STATES`, frontend `ELIGIBLE_STATES`, T&Cs `STATE_PROVISIONS`, and Privacy `ELIGIBLE_STATES` all match (35 states). |
+| **Component (18 cases)** | `src/__tests__/components/*.test.tsx` | `TermsPage` renders all 35 state subsections; `PrivacyPage` state callouts; `ConsentPage` 7 sections + the 4-item "I hereby" list; `StatesFooter` legal links; signup-form consent line links all three legal docs. |
+| **E2E (~27 across chromium / webkit / iphone)** | `e2e/*.spec.ts` | Landing hero + $300 weekly raffle (regression for the Cancún copy swap); `/terms`, `/privacy`, `/consent` route content; mobile viewport rendering at iPhone 13. |
+
+### CI workflow
+
+`.github/workflows/test.yml`:
+- Triggers on push to `main` and on PRs targeting `main`.
+- Two parallel jobs (`backend tests`, `frontend tests`).
+- Backend job spins up Postgres 16 as a service container, runs Jest with `--runInBand`.
+- Frontend job runs Vitest, then installs Playwright browsers and runs E2E across all three projects.
+- Failure artifact: Playwright HTML report uploaded on failure for 7 days.
+
+Recommended branch protection on `main`: require both jobs before merging (GitHub → Settings → Branches).
 
 ---
 
@@ -601,16 +654,27 @@ The frontend has no `*.test.*` / `*.spec.*` / `__tests__/` files either.
 
 | Var | Required? | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | Postgres connection string. `ssl: { rejectUnauthorized: false }` is hardcoded. |
+| `DATABASE_URL` | Yes | Postgres connection string. SSL enabled by default; disabled when `NODE_ENV=test` (matches the CI test container, no SSL). |
+| `NODE_ENV` | — | Set to `test` by Jest; left unset in prod. |
 | `JWT_SECRET` | Yes (prod) | Falls back to `dev_jwt_secret_change_in_production` in dev. |
-| `ADMIN_TOKEN` | Yes (prod) | If unset, `requireAdmin` always passes — dev only. |
+| `ADMIN_TOKEN` | Yes (prod) | If unset, `requireAdmin` always passes — dev only. Also used by the GitHub Actions cron workflows (via the `ADMIN_TOKEN` repo secret). |
 | `STRIPE_SECRET_KEY` | Yes | Powers cards, charges, subscriptions. |
+| `STRIPE_WEBHOOK_SECRET` | Yes (prod) | Signing secret from Stripe Dashboard → Webhooks. Without it, `/api/webhooks/stripe` accepts events but logs a warning (unsafe in prod — anyone could spoof a payment failure to lock a user out). |
 | `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_ENV` | Yes | `PLAID_ENV` defaults to `sandbox`. |
-| `PLAID_PRODUCTS`, `PLAID_COUNTRY_CODES`, `PLAID_REDIRECT_URI`, `PLAID_ANDROID_PACKAGE_NAME`, `SIGNAL_RULESET_KEY` | Optional | Plaid quickstart leftovers, only some are still used. |
+| `PLAID_PRODUCTS`, `PLAID_COUNTRY_CODES`, `PLAID_REDIRECT_URI`, `PLAID_ANDROID_PACKAGE_NAME`, `SIGNAL_RULESET_KEY` | Optional | Plaid quickstart leftovers. With Hosted Link, `PLAID_REDIRECT_URI` is no longer needed — explicitly leave it unset. |
 | `ANTHROPIC_API_KEY` | Yes (for income classification) | Without it, layer 3 of classification returns `uncertain` for everything. |
-| `MAILCHIMP_API_KEY`, `MAILCHIMP_LIST_ID`, `MAILCHIMP_SERVER` | Yes (for tagging) | If unset, tagging silently no-ops. |
+| `MAILCHIMP_API_KEY`, `MAILCHIMP_LIST_ID`, `MAILCHIMP_SERVER_PREFIX` | Yes (for tagging) | If unset, tagging silently no-ops. |
 | `TEST_SSNS` | Optional | Comma-separated 9-digit SSNs that bypass plausibility + dupe checks. |
 | `APP_PORT` | Optional | Defaults to 8000. |
+
+### GitHub repo secrets (for CI + cron workflows)
+
+Set under repo → Settings → Secrets and variables → Actions:
+
+| Var | Used by | Notes |
+| --- | --- | --- |
+| `ADMIN_TOKEN` | `cron-due-date-reminders.yml`, `charge-due-repayments.yml` | Same value as on Render. |
+| `BACKEND_URL` | same | Production base URL of the backend, no trailing slash. |
 
 ### Frontend env vars
 
@@ -629,19 +693,18 @@ The frontend has no `*.test.*` / `*.spec.*` / `__tests__/` files either.
 
 ## 23. Known gaps & follow-ups
 
-These are documented here so they're not lost — every one is a real production risk before scale.
-
-| # | Gap | Impact | Owner / status |
+| # | Gap | Impact | Status |
 | --- | --- | --- | --- |
-| 1 | **No Stripe webhook handler** | Subscription renewal failures, disputes, refunds, and cancellations don't update our DB. We'd find out by email. | Open. Recommend `POST /api/stripe/webhook` with at minimum `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`. |
-| 2 | **No in-app subscription cancel** | Customers have to email or use Stripe billing portal (not wired). | Open. Plug the billing portal once the webhook is in place. |
-| 3 | **No automated test suite** | Regressions ride to prod on type checks + manual smoke. | Open. See §21 for staged plan. |
-| 4 | **In-process cron** | If Render restarts at the wrong minute, a day of reminders could be missed (idempotency saves us from double-sends, not from skips). | Move to Render cron jobs or an external trigger hitting `/api/cron/due-date-reminders`. |
-| 5 | **Free `/subscription/activate` endpoint still mounted** | Anyone with a JWT can flip themselves to `active` without paying. Currently unused by the UI but reachable. | Either gate it behind `requireAdmin` or remove. |
-| 6 | **In-memory AI classification cache** | Per-process; a horizontal scale-up multiplies Anthropic calls. | Acceptable for today's volume; move to Redis if/when we shard. |
-| 7 | **PLAID_ENV defaults to sandbox** | Prod misconfig would silently approve sandbox accounts as real income. | Make `PLAID_ENV=production` an explicit prod requirement (assert at boot). |
+| 1 | ~~No Stripe webhook handler~~ | — | **Resolved.** `/api/webhooks/stripe` handles `invoice.payment_failed` (→ `subscription_failed` lockout), `invoice.payment_succeeded` (→ next-billing sync), `customer.subscription.deleted`. Needs `STRIPE_WEBHOOK_SECRET` env var on Render. |
+| 2 | **No in-app subscription cancel** | Customers have to email support; Stripe billing portal not wired. | Open. Plug the billing portal as an "Manage membership" button on the dashboard. |
+| 3 | ~~No automated test suite~~ | — | **Resolved.** ~150 tests + GitHub Actions CI. See §21. |
+| 4 | ~~In-process cron~~ | — | **Resolved.** `.github/workflows/cron-due-date-reminders.yml` runs daily at 14:00 UTC and POSTs the cron endpoint. In-process `setInterval` left in place as a redundancy. |
+| 5 | **Legacy `/subscription/activate` + `/subscription/checkout-session` + `/subscription/sync` endpoints still mounted** | Unused by the current UI but reachable. The `/activate` one in particular could flip subscription_status to `active` without payment if called directly with a customer JWT. | Open. Remove or gate behind admin once we're confident no in-flight clients call them. |
+| 6 | **In-memory AI classification cache** | Per-process; horizontal scale-up multiplies Anthropic calls. | Acceptable for today's volume; move to Redis if/when we shard. |
+| 7 | **`PLAID_ENV` defaults to sandbox** | Prod misconfig would silently approve sandbox accounts as real income. | Make `PLAID_ENV=production` an explicit prod requirement (assert at boot). |
 | 8 | **`ADMIN_TOKEN` unset = open admin** | Useful in dev, dangerous if the env var ever drops in prod. | Assert at boot in production. |
-| 9 | **Single `applications` row per user** | "Reapply" mutates the same row instead of creating a new one. History is reconstructed from `messages`. | Acceptable today; if we ever want true loan-by-loan analytics, introduce a `loans` child table. |
+| 9 | **Single `applications` row per user** | "Reapply" mutates the same row instead of creating a new one. History reconstructed from `messages`. | Acceptable today; introduce a `loans` child table if/when we want loan-by-loan analytics. |
+| 10 | **Legal docs not lawyer-reviewed** | T&Cs (35-state version with per-state regulators in Section O), Privacy Policy (state-specific privacy callouts), and Consent doc (E-SIGN consent) all carry "not reviewed by counsel" footers. | Open. Get an attorney pass before any new state goes live or before scaling marketing. |
 
 ---
 
@@ -653,24 +716,27 @@ These are documented here so they're not lost — every one is a real production
 - `POST /api/advance/applications` — signup.
 - `POST /api/advance/auth/login` — email + password → JWT.
 - `POST /api/waitlist` — Mailchimp waitlist tag (no DB row).
-- `POST /api/cron/due-date-reminders` — externally triggerable cron.
+- `POST /api/cron/due-date-reminders` — externally triggerable cron (requires `x-admin-token`).
+- `POST /api/webhooks/stripe` — Stripe webhook receiver (signature-verified when `STRIPE_WEBHOOK_SECRET` is set).
 
 ### Customer (requireAuth, must match `payload.applicationId`)
 
 - `GET  /api/advance/applications/:id` — pull current app + lazy-expire approved offers.
+- `GET  /api/advance/auth/me` — pull current app via JWT.
 - `GET  /api/advance/applications/:id/messages` — chat thread.
 - `POST /api/advance/applications/:id/messages` — customer-sent message.
-- `POST /api/advance/applications/:id/subscription/checkout-session` — start Stripe Checkout.
-- `POST /api/advance/applications/:id/subscription/sync` — confirm after Stripe return.
-- `POST /api/advance/applications/:id/subscription/activate` — **legacy free path** (see Gap #5).
-- `POST /api/advance/applications/:id/delivery` — pick instant vs standard.
+- `POST /api/advance/applications/:id/delivery` — pick same-day vs 3–5 days.
 - `PATCH /api/advance/applications/:id/payout-preference` — set payout method + contact.
-- `POST /api/advance/applications/:id/plaid/link-token` — start Plaid Hosted Link.
+- `POST /api/advance/applications/:id/plaid/link-token` — start Plaid Hosted Link, returns `hosted_link_url`.
 - `POST /api/advance/applications/:id/plaid/check-completion` — finalize after `?plaid_complete=1`.
-- `POST /api/advance/applications/:id/stripe/setup-intent` — start card setup.
-- `POST /api/advance/applications/:id/stripe/save-payment-method` — store card PM.
+- `POST /api/advance/applications/:id/plaid/exchange-token` — legacy iframe flow; still works for any in-flight clients.
+- `POST /api/advance/applications/:id/stripe/setup-intent` — start card setup (creates Stripe Customer if needed).
+- `POST /api/advance/applications/:id/stripe/save-payment-method` — store card PM + set as customer default.
 - `POST /api/advance/applications/:id/payoff` — customer-initiated "I paid it" marker.
-- `POST /api/advance/applications/:id/reapply` — tier-aware reapply.
+- `POST /api/advance/applications/:id/reapply` — tier-aware reapply (blocks `repayment_failed` and `subscription_failed`).
+- `POST /api/advance/applications/:id/subscription/checkout-session` — **legacy**, not called by current UI.
+- `POST /api/advance/applications/:id/subscription/sync` — **legacy**, pair to above.
+- `POST /api/advance/applications/:id/subscription/activate` — **legacy free path** (see Gap #5).
 
 ### Admin (requireAdmin)
 
@@ -679,7 +745,7 @@ These are documented here so they're not lost — every one is a real production
 - `GET  /api/advance/admin/applications/:id/income_analysis` — heuristic "is income stable?" report.
 - `GET  /api/advance/admin/applications/:id/payment-method-details` — bank name, routing, last4.
 - `GET  /api/advance/admin/applications/:id/referrals` — referral tree summary.
-- `PATCH /api/advance/admin/applications/:id/status` — state transitions w/ optional note.
+- `PATCH /api/advance/admin/applications/:id/status` — state transitions; on `funded` also creates the Stripe subscription with `billing_cycle_anchor` = repayment date.
 - `POST /api/advance/admin/applications/:id/repayment` — schedule custom repayment.
 - `POST /api/advance/admin/applications/:id/charge` — manual charge attempt.
 - `POST /api/advance/admin/run-due-repayments` — bulk run.
