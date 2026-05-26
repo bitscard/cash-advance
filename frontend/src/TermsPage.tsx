@@ -62,6 +62,7 @@ const TermsPage = () => (
       <p>Advance provides a <strong>wage access service — not a loan</strong>. We allow eligible users to access a portion of wages they have already earned during the current pay period, based on their verified income and deposit history. No interest is charged. We do not use your credit score and we never pull your credit. We do not report your account or repayment history to any credit bureau.</p>
       <p style={{ marginTop: "1.2rem" }}>Advances are limited to a conservative fraction of wages you have demonstrably earned in the current pay period based on your historical deposit pattern. We do not advance against future expected income. Maximum advance amounts are determined by your account history and are displayed in-app at the time of your request. The default first advance is $25.00; subsequent advances may grow to a maximum of $200.00 on the schedule set forth in your in-app dashboard, subject to on-time repayment.</p>
       <p style={{ marginTop: "1.2rem" }}>You may not hold more than one outstanding advance at a time. You may not roll over or refinance an unpaid advance.</p>
+      <p style={{ marginTop: "1.2rem" }}><strong>Membership:</strong> Use of the Service requires an active <strong>$3.99 / month</strong> membership subscription. The subscription is charged to the same card used for repayment, billed monthly on the anniversary of activation, and may be cancelled at any time from your in-app dashboard or by emailing <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. Cancellation prevents future renewals; we do not pro-rate refunds for the partial month in which you cancel.</p>
     </Section>
 
     <Section title="B. Delivery Options">
@@ -96,17 +97,17 @@ const TermsPage = () => (
     </Section>
 
     <Section title="F. Required Disclosures">
-      <p><strong>This is not a loan.</strong> The Advance service is a wage access product. No interest is charged. There are no membership fees.</p>
-      <p style={{ marginTop: "0.8rem" }}><strong>Fee summary per advance:</strong></p>
+      <p><strong>This is not a loan.</strong> The Advance service is a wage access product. No interest is charged. The Service requires an active $3.99/month membership subscription as described in Section A.</p>
+      <p style={{ marginTop: "0.8rem" }}><strong>Fee summary:</strong></p>
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "0.8rem", fontSize: "1.4rem" }}>
         <tbody>
           {[
             ["3–5 day delivery (default)", "Free — repay advance principal only"],
             ["Same-day delivery (if selected)", "$5.00 — added to repayment; nothing charged upfront"],
-            ["Membership fee", "$0.00 (no subscription required)"],
+            ["Membership subscription", "$3.99 / month — billed to the card on file, cancellable any time"],
             ["Interest", "$0.00"],
             ["Tips", "$0.00 (we do not accept tips)"],
-            ["Amount due at settlement (3–5 day)", "Advance amount only"],
+            ["Amount due at settlement (3–5 day)", "Advance amount only ($25–$200)"],
             ["Amount due at settlement (same-day)", "Advance amount + $5.00"],
           ].map(([label, value]) => (
             <tr key={label} style={{ borderBottom: "1px solid var(--border)" }}>

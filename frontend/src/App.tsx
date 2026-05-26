@@ -7,6 +7,8 @@ import styles from "./App.module.css";
 import TermsPage from "./TermsPage";
 import PrivacyPage from "./PrivacyPage";
 import StoryPage from "./StoryPage";
+import ConsentPage from "./ConsentPage";
+import SystemDesignPage from "./SystemDesignPage";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -22,6 +24,7 @@ type Status =
   | "repayment_scheduled"
   | "repaid"
   | "repayment_failed"
+  | "subscription_failed"
   | "written_off";
 
 interface IncomeSource {
@@ -58,6 +61,8 @@ interface Application {
   payout_methods: string | null;
   payout_contact: string | null;
   subscription_status: string | null;
+  subscription_id: string | null;
+  subscription_next_billing: string | null;
   delivery_type: string | null;
   instant_fee_paid: boolean;
   repayment_count: number;
@@ -156,6 +161,7 @@ const statusLabel: Record<Status, string> = {
   repayment_scheduled: "Repayment scheduled",
   repaid: "Repaid",
   repayment_failed: "Repayment failed",
+  subscription_failed: "Membership payment failed",
   written_off: "Written off",
 };
 
@@ -375,6 +381,8 @@ const App = () => {
   if (path === "/terms") return <TermsPage />;
   if (path === "/privacy") return <PrivacyPage />;
   if (path === "/story") return <StoryPage />;
+  if (path === "/consent") return <ConsentPage />;
+  if (path === "/system-design") return <SystemDesignPage />;
   if (path === "/oauth-return") return <OauthReturn />;
   return <CustomerApp />;
 };
@@ -721,6 +729,14 @@ const CustomerApp = () => {
   useEffect(() => {
     fetchPlaidLinkToken();
   }, [application?.id, application?.plaid_connected, token]);
+
+  // Membership subscription is bundled into the Card step now — the same
+  // card the user saves for repayment is used to back the $3.99/mo
+  // subscription. No separate Stripe Checkout step. The backend's
+  // /stripe/save-payment-method endpoint creates the subscription
+  // automatically when the card is saved. Standalone Stripe Checkout
+  // endpoints (/subscription/checkout-session, /subscription/sync) are
+  // kept on the backend as a fallback but no longer called from this UI.
 
 
   // ── Landing ──────────────────────────────────────────────────────────────────
@@ -1416,9 +1432,13 @@ const CustomerApp = () => {
                   <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
                     Terms &amp; Conditions
                   </a>
-                  {" "}and{" "}
+                  ,{" "}
                   <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
                     Privacy Policy
+                  </a>
+                  , and{" "}
+                  <a href="/consent" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
+                    Consent to the Use of Electronic Documents and Signatures
                   </a>
                   , including the state-specific provisions that apply to your state of residence. We never pull your credit and we will never send your account to collections.
                 </p>
@@ -1739,12 +1759,17 @@ const CustomerApp = () => {
   //   1. Benefits        — pitch what they're signing up for
   //   2. Receive money   — pick payout method (PayPal/Cash App/Zelle) + confirm
   //   3. Trust           — milestone ladder, how trust-building works
-  //   4. Card            — backup repayment card (Stripe)
+  //   4. Card            — backup repayment card (Stripe). Saving the card
+  //                        ALSO activates the $3.99/mo membership subscription
+  //                        (handled server-side in /stripe/save-payment-method).
   //   5. Delivery speed  — same-day ($5) vs 3-5 days (free)
   //   6. Bank            — verify income via Plaid Hosted Link
+  // Eligible users land in subscription_status='pending_payment' at signup;
+  // saving a card flips them to 'active'. Pre-bank screens render for both
+  // states so the user can progress through Steps 1-4 before card save.
   const preBankActive =
     application.status === "intake" &&
-    application.subscription_status === "active" &&
+    (application.subscription_status === "active" || application.subscription_status === "pending_payment") &&
     !application.plaid_connected;
 
   // Step 1 of 6: benefits pitch (reuses the landing-page benefit cards)
@@ -2052,12 +2077,12 @@ const CustomerApp = () => {
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 4 of 6 · Repayment method</p>
+              <p className={styles.benefitsHeaderKicker}>Step 4 of 6 · Repayment method &amp; membership</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                Add a backup card.
+                Add your card.
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                We'll charge this card on your payday to collect your repayment. You won't be charged until your advance is funded.
+                One card backs everything — your monthly membership and each advance repayment. We charge nothing else.
               </p>
             </div>
             <div style={{ flexShrink: 0, opacity: 0.92 }}>
@@ -2066,6 +2091,29 @@ const CustomerApp = () => {
           </div>
         </div>
         <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          {/* Membership disclosure — what the card will be charged for. */}
+          <div style={{
+            background: "var(--white)", border: "2px solid var(--brand)",
+            borderRadius: "var(--r-lg)", padding: "1.8rem 2rem", marginBottom: "2rem",
+          }}>
+            <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.8rem" }}>
+              This card will be charged
+            </p>
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
+                <span>Each advance repayment <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(on your payday)</span></span>
+                <strong style={{ color: "var(--ink)" }}>$25–$30</strong>
+              </li>
+              <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
+                <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts on your first repayment day, then monthly)</span></span>
+                <strong style={{ color: "var(--ink)" }}>$3.99/mo</strong>
+              </li>
+            </ul>
+            <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: "1rem 0 0", lineHeight: 1.5 }}>
+              Membership and advance repayments are two separate charges on the same card. Cancel membership any time from your dashboard. We never charge interest, late fees, or hidden fees.
+            </p>
+          </div>
+
           {!stripeKey ? (
             <p className={styles.error}>Card payments are not configured yet.</p>
           ) : (
@@ -2137,11 +2185,21 @@ const CustomerApp = () => {
             </button>
           </div>
           {deliveryChoice && (() => {
-            const total = application.requested_amount + (deliveryChoice === "instant" ? 5 : 0);
+            const advance = application.requested_amount;
+            const instantFee = deliveryChoice === "instant" ? 5 : 0;
+            const repayOnPayday = advance + instantFee;
+            const firstMonthTotal = repayOnPayday + 3.99;
             return (
-              <div style={{ marginTop: "1.6rem", padding: "1.4rem 1.8rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "1.35rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay on payday</span>
-                <strong style={{ fontSize: "2rem", color: "var(--ink)" }}>${total}</strong>
+              <div style={{ marginTop: "1.6rem", padding: "1.4rem 1.8rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)" }}>
+                <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 0.8rem" }}>Your first month</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "1.35rem", color: "var(--ink-2)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Advance</span><span>${advance}.00</span></div>
+                  {instantFee > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}><span>Same-day fee</span><span>$5.00</span></div>}
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span>Membership (monthly)</span><span>$3.99</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1.5px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.2rem", fontSize: "1.55rem", fontWeight: 800, color: "var(--ink)" }}>
+                    <span>Total first month</span><span>${firstMonthTotal.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
             );
           })()}
@@ -2251,11 +2309,27 @@ const CustomerApp = () => {
               </button>
             </div>
             {deliveryChoice && (() => {
-              const total = application.requested_amount + (deliveryChoice === "instant" ? 5 : 0);
+              const advance = application.requested_amount;
+              const instantFee = deliveryChoice === "instant" ? 5 : 0;
+              const membership = 3.99;
+              const repayOnPayday = advance + instantFee;
+              const firstMonthTotal = repayOnPayday + membership;
               return (
-                <div style={{ marginTop: "1.6rem", padding: "1.4rem 1.8rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "1.35rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay on payday</span>
-                  <strong style={{ fontSize: "2rem", color: "var(--ink)" }}>${total}</strong>
+                <div style={{ marginTop: "1.6rem", padding: "1.4rem 1.8rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)" }}>
+                  <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 0.8rem" }}>Your first month</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", fontSize: "1.35rem", color: "var(--ink-2)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span>Advance</span><span>${advance}.00</span></div>
+                    {instantFee > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span>Same-day fee</span><span>$5.00</span></div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between" }}><span>Membership (monthly)</span><span>$3.99</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1.5px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.2rem", fontSize: "1.55rem", fontWeight: 800, color: "var(--ink)" }}>
+                      <span>Total first month</span><span>${firstMonthTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "1.15rem", color: "var(--muted)", margin: "0.8rem 0 0", lineHeight: 1.5 }}>
+                    ${repayOnPayday}.00 due on payday for this advance · $3.99 billed monthly going forward
+                  </p>
                 </div>
               );
             })()}
@@ -2391,7 +2465,10 @@ const CustomerApp = () => {
 
           {/* Hero */}
           {(() => {
-            const totalToRepay = application.requested_amount + (application.delivery_type === "instant" ? 5 : 0);
+            const advance = application.requested_amount;
+            const instantFee = application.delivery_type === "instant" ? 5 : 0;
+            const repayOnPayday = advance + instantFee;
+            const firstMonthTotal = repayOnPayday + 3.99;
             return (
               <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
                 <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
@@ -2399,13 +2476,23 @@ const CustomerApp = () => {
                   You're all set!
                 </h1>
                 <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.6rem" }}>
-                  Your <strong style={{ color: "var(--ink)" }}>${application.requested_amount} advance</strong> is{" "}
+                  Your <strong style={{ color: "var(--ink)" }}>${advance} advance</strong> is{" "}
                   {application.delivery_type === "instant" ? "on its way — same-day delivery." : "on its way — arriving in 3–5 business days."}
                 </p>
-                <div style={{ display: "inline-flex", gap: "1.2rem", alignItems: "baseline", padding: "1rem 2rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)" }}>
-                  <span style={{ fontSize: "1.3rem", color: "var(--muted)", fontWeight: 600 }}>You'll repay</span>
-                  <strong style={{ fontSize: "2rem", color: "var(--ink)" }}>${totalToRepay}</strong>
-                  <span style={{ fontSize: "1.3rem", color: "var(--muted)" }}>on payday</span>
+                <div style={{ display: "inline-block", padding: "1.4rem 2rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", textAlign: "left", minWidth: "28rem" }}>
+                  <p style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 0.6rem" }}>First month</p>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.3rem", color: "var(--ink-2)" }}>
+                    <span>Advance + {instantFee > 0 ? "same-day fee" : "delivery (free)"}</span>
+                    <span>${repayOnPayday}.00 on payday</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.3rem", color: "var(--ink-2)", marginTop: "0.3rem" }}>
+                    <span>Membership</span>
+                    <span>$3.99 monthly</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1.5px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.5rem", fontWeight: 800, fontSize: "1.45rem", color: "var(--ink)" }}>
+                    <span>Total first month</span>
+                    <span>${firstMonthTotal.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
             );
@@ -2506,6 +2593,17 @@ const CustomerApp = () => {
                   <dd className={styles.dueDate}>${application.requested_amount + (application.delivery_type === "instant" ? 5 : 0)} on payday</dd>
                 </>
               ) : null}
+              <dt>Membership</dt>
+              <dd>
+                $3.99/mo{" "}
+                {application.status === "subscription_failed"
+                  ? "· payment failed"
+                  : application.subscription_id
+                    ? `· active${application.subscription_next_billing ? ` · next: ${application.subscription_next_billing}` : ""}`
+                    : application.stripe_card_saved
+                      ? "· starts on first repayment"
+                      : "· card needed"}
+              </dd>
             </dl>
 
             {needsBank && (
@@ -3838,6 +3936,8 @@ const StatesFooter = () => (
       <a href="/terms" style={{ color: "var(--muted)", textDecoration: "underline" }}>Terms &amp; Conditions</a>
       {" · "}
       <a href="/privacy" style={{ color: "var(--muted)", textDecoration: "underline" }}>Privacy Policy</a>
+      {" · "}
+      <a href="/consent" style={{ color: "var(--muted)", textDecoration: "underline" }}>Electronic Consent</a>
       {" · "}
       <a href="mailto:usa@getbits.app" style={{ color: "var(--muted)", textDecoration: "underline" }}>usa@getbits.app</a>
     </p>

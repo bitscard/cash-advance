@@ -2,9 +2,12 @@
 
 const { Pool } = require('pg');
 
+// SSL config: production Postgres (Render) requires SSL; the test
+// Postgres on CI doesn't support it. Disable for NODE_ENV=test and let
+// the rest fall back to relaxed-cert SSL.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.NODE_ENV === 'test' ? false : { rejectUnauthorized: false },
 });
 
 // Run any additive migrations on startup
@@ -80,6 +83,8 @@ const publicApp = (row) => ({
   payout_methods: row.payout_methods || null,
   payout_contact: row.payout_contact || null,
   subscription_status: row.subscription_status || null,
+  subscription_id: row.subscription_id || null,
+  subscription_next_billing: fmtDate(row.subscription_next_billing) || null,
   delivery_type: row.delivery_type || null,
   instant_fee_paid: row.instant_fee_paid || false,
   repayment_count: row.repayment_count || 0,
@@ -366,6 +371,8 @@ async function saveOfferExpiry(id, offer_expires_at) {
 }
 
 module.exports = {
+  // Export the pool so test teardown can close all connections cleanly.
+  pool,
   publicApp,
   createApplication,
   getApplicationByReferralCode,
