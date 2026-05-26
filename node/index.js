@@ -462,7 +462,16 @@ app.use(
 app.use(bodyParser.json());
 app.use(cors());
 
-// ── Waitlist ──────────────────────────────────────────────────────────────────
+// ── Mailchimp tag dispatch ────────────────────────────────────────────────────
+// IMPORTANT history: an earlier version used `POST /lists/{id}/members` which
+// *only* creates new members. For an existing member it returns 400 "Member
+// Exists" and silently DROPS the tags. That broke every tag after the first —
+// e.g. signup fired `welcome` (created the member) but the bank-connect
+// `application_under_review` tag never attached because the member already
+// existed. The fix is to upsert the member with PUT first, then call the
+// dedicated /tags endpoint which is additive and works on any member regardless
+// of how they were created.
+const crypto = require('crypto');
 async function addToMailchimp(name, email, state, tags = ['waitlist']) {
   const apiKey = process.env.MAILCHIMP_API_KEY;
   const listId = process.env.MAILCHIMP_LIST_ID;
@@ -471,27 +480,59 @@ async function addToMailchimp(name, email, state, tags = ['waitlist']) {
     console.log('[mailchimp] env vars not set — skipping:', email, tags);
     return;
   }
+  if (!email) {
+    console.log('[mailchimp] no email provided — skipping');
+    return;
+  }
   const [firstName, ...rest] = (name || '').trim().split(' ');
   const lastName = rest.join(' ');
-  const mcResponse = await fetch(
-    `https://${server}.api.mailchimp.com/3.0/lists/${listId}/members`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}`,
-      },
+  const subscriberHash = crypto.createHash('md5').update(email.toLowerCase()).digest('hex');
+  const authHeader = `Basic ${Buffer.from(`anystring:${apiKey}`).toString('base64')}`;
+  const memberUrl = `https://${server}.api.mailchimp.com/3.0/lists/${listId}/members/${subscriberHash}`;
+
+  // 1. Upsert the member record (creates if new, updates merge fields if
+  //    existing). status_if_new ensures new members go straight to
+  //    'subscribed' rather than 'pending'.
+  try {
+    const upsertResp = await fetch(memberUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
       body: JSON.stringify({
         email_address: email,
-        status: 'subscribed',
+        status_if_new: 'subscribed',
         merge_fields: { FNAME: firstName || '', LNAME: lastName || '', STATE: state || '' },
-        tags,
       }),
+    });
+    if (!upsertResp.ok) {
+      const errData = await upsertResp.json().catch(() => ({}));
+      console.error('[mailchimp upsert] error:', errData.detail || errData.title || upsertResp.status);
+      return;
     }
-  );
-  const mcData = await mcResponse.json();
-  if (!mcResponse.ok && mcData.title !== 'Member Exists') {
-    console.error('[mailchimp] error:', mcData.detail || mcData.title);
+  } catch (err) {
+    console.error('[mailchimp upsert] network error:', err.message);
+    return;
+  }
+
+  // 2. Add the tags using the dedicated tags endpoint. This is additive —
+  //    existing tags on the member are preserved. status:'active' adds the
+  //    tag; status:'inactive' would remove it.
+  if (!Array.isArray(tags) || tags.length === 0) return;
+  try {
+    const tagsResp = await fetch(`${memberUrl}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
+      body: JSON.stringify({
+        tags: tags.map(name => ({ name, status: 'active' })),
+      }),
+    });
+    if (!tagsResp.ok) {
+      const errData = await tagsResp.json().catch(() => ({}));
+      console.error('[mailchimp tags] error:', errData.detail || errData.title || tagsResp.status);
+    } else {
+      console.log('[mailchimp tags] applied', { email, tags });
+    }
+  } catch (err) {
+    console.error('[mailchimp tags] network error:', err.message);
   }
 }
 
