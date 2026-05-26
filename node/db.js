@@ -366,6 +366,8 @@ async function saveOfferExpiry(id, offer_expires_at) {
 }
 
 module.exports = {
+  // Export the pool so test teardown can close all connections cleanly.
+  pool,
   publicApp,
   createApplication,
   getApplicationByReferralCode,

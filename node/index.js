@@ -441,9 +441,13 @@ app.post('/api/cron/due-date-reminders', async function (request, response) {
 
 // In-process backup: check hourly. Won't fire while the app is asleep on
 // Render's free tier, so the admin endpoint above is the reliable path.
-setInterval(sendDueDateReminders, 60 * 60 * 1000);
-// Also run 30s after startup so a fresh deploy catches today's reminders.
-setTimeout(sendDueDateReminders, 30 * 1000);
+// Guarded so tests that `require('./index.js')` don't accidentally start
+// a timer that keeps the test process alive (Jest would hang).
+if (require.main === module) {
+  setInterval(sendDueDateReminders, 60 * 60 * 1000);
+  // Also run 30s after startup so a fresh deploy catches today's reminders.
+  setTimeout(sendDueDateReminders, 30 * 1000);
+}
 
 app.post('/api/waitlist', async function (request, response, next) {
   try {
@@ -575,9 +579,11 @@ app.post('/api/advance/applications', async function (request, response, next) {
       referred_by: referredBy,
     });
     await db.createIncomeSources(row.id, income_sources);
-    // Eligibility is state-only: GA and UT are live; all other states are waitlisted regardless of referral code
+    // Eligibility is state-only: GA and UT are live; all other states are waitlisted regardless of referral code.
+    // Eligible users start in 'pending_payment' — they must subscribe to the $3.99/mo
+    // membership (after the benefits step) before continuing the onboarding flow.
     const eligibleOnSignup = ELIGIBLE_STATES.has(state || '');
-    await db.saveSubscription(row.id, null, eligibleOnSignup ? 'active' : 'waitlisted', null);
+    await db.saveSubscription(row.id, null, eligibleOnSignup ? 'pending_payment' : 'waitlisted', null);
     await db.addMessage(row.id, 'admin', `Thanks ${name || 'there'}. I have your cash advance request. Next, connect your bank with Plaid so I can review income, balance, and recent activity.`);
     await db.addMessage(row.id, 'system', 'Use the Connect bank button. If approved, the reviewer may ask for routing and account details for manual payout. Never send your online banking password. Repayment is due within 30 days of funding.');
     // Fire the welcome email automation. Waitlisted users get both tags so
@@ -851,6 +857,101 @@ app.post('/api/advance/applications/:id/subscription/activate', async function (
     if (isEligible) {
       await db.addMessage(row.id, 'system', 'Membership activated. You can now request a cash advance.');
     }
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
+// $3.99/month membership via Stripe Checkout (subscription mode).
+// Creates (or reuses) a Stripe Customer for the application, then returns a
+// Checkout Session URL the client redirects to. On success/cancel Stripe
+// sends the user back to the origin with a session_id query param the
+// /subscription/sync endpoint uses to confirm the subscription is live.
+const MEMBERSHIP_PRICE_CENTS = 399;
+const MEMBERSHIP_PRODUCT_NAME = 'Advance Membership';
+app.post('/api/advance/applications/:id/subscription/checkout-session', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!ELIGIBLE_STATES.has(row.state || '')) {
+      return response.status(400).json({ error: { error_message: 'Membership is not available in your state yet.' } });
+    }
+    if (row.subscription_status === 'active' && row.subscription_id) {
+      return response.json({ already_active: true });
+    }
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const origin = (request.body && request.body.origin) || request.headers.origin || `http://localhost:3000`;
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'usd',
+          unit_amount: MEMBERSHIP_PRICE_CENTS,
+          recurring: { interval: 'month' },
+          product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+        },
+      }],
+      success_url: `${origin}/?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/?subscription=cancel`,
+      metadata: { application_id: row.id },
+      subscription_data: { metadata: { application_id: row.id } },
+    });
+
+    response.json({ url: session.url, session_id: session.id });
+  } catch (err) { next(err); }
+});
+
+// Called by the client after the Stripe Checkout redirect. Confirms the
+// subscription is active and flips subscription_status to 'active' so the
+// pre-bank onboarding flow can advance past the membership step.
+app.post('/api/advance/applications/:id/subscription/sync', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { session_id } = request.body || {};
+    if (!session_id) {
+      return response.status(400).json({ error: { error_message: 'session_id is required' } });
+    }
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    const session = await stripe.checkout.sessions.retrieve(session_id, { expand: ['subscription'] });
+    if (!session || session.customer !== row.stripe_customer_id) {
+      return response.status(400).json({ error: { error_message: 'Checkout session does not match this application.' } });
+    }
+    const sub = session.subscription;
+    if (!sub || typeof sub === 'string') {
+      return response.status(400).json({ error: { error_message: 'Subscription is not ready yet. Please try again in a moment.' } });
+    }
+    if (!['active', 'trialing'].includes(sub.status)) {
+      return response.status(400).json({ error: { error_message: `Subscription is ${sub.status}. Payment may have failed.` } });
+    }
+    const nextBilling = sub.current_period_end
+      ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+      : null;
+    const updated = await db.saveSubscription(row.id, sub.id, 'active', nextBilling);
+    await db.addMessage(row.id, 'system', 'Membership activated — $3.99/month. You can now continue and request a cash advance.');
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -2118,9 +2219,15 @@ app.get('/api/income/verification/paystubs', function (request, response, next) 
     .catch(next);
 })
 
-const server = app.listen(APP_PORT, function () {
-  console.log('plaid-quickstart server listening on port ' + APP_PORT);
-});
+// Only bind the port when run directly (`node index.js`). When the file is
+// `require`d (Jest + supertest), we skip the listen so multiple test files
+// don't fight over the same port — supertest hits the in-memory app instead.
+let server;
+if (require.main === module) {
+  server = app.listen(APP_PORT, function () {
+    console.log('plaid-quickstart server listening on port ' + APP_PORT);
+  });
+}
 
 const prettyPrintResponse = (response) => {
   console.log(util.inspect(response.data, { colors: true, depth: 4 }));
@@ -2409,3 +2516,34 @@ app.use('/api', function (error, request, response, next) {
     response.status(500).json({ error: { error_message: error.message || 'Internal server error' } });
   }
 });
+
+// Test-only exports. Lets Jest import the Express app for supertest and
+// exercise the pure helper functions directly without booting the server
+// or any background timers. Adding to module.exports is harmless in prod —
+// nothing in the app depends on these names from outside.
+module.exports = {
+  app,
+  // Plaid + Stripe clients exposed so integration tests can swap them via jest.mock
+  client,
+  stripe,
+  // Pure functions — unit-testable
+  isPlausibleSSN,
+  payPeriodDays,
+  findPaychecksByPattern,
+  calcSourceAccrued,
+  buildRefundSet,
+  isExcludedByPFC,
+  isExcludedByKeyword,
+  classifyTransaction,
+  getOfferExpiresAt,
+  computeChargeAmountCents,
+  generateReferralSlug,
+  makeUniqueReferralCode,
+  // Tag dispatch helper (lets mailchimp tests assert on side effects)
+  addToMailchimp,
+  // Cron task body (callable directly without waiting for setInterval)
+  sendDueDateReminders,
+  // Eligibility data
+  ELIGIBLE_STATES,
+  STATE_TIMEZONES,
+};
