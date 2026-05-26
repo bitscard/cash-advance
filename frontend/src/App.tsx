@@ -742,7 +742,6 @@ const CustomerApp = () => {
               </a>
               <nav className={styles.ldNavLinks} aria-label="Main">
                 <a href="#how">How it works</a>
-                <a href="#why">Why us</a>
                 <a href="#raffle">Raffle</a>
                 <a href="#faq">FAQ</a>
               </nav>
@@ -916,130 +915,41 @@ const CustomerApp = () => {
               </div>
             </section>
 
-            {/* ── 5. Why us ────────────────────────────────────────────────── */}
-            <section className={styles.ldWhy} id="why">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldSectionHeader}>
-                  <span className={styles.ldKicker}>Why advance</span>
-                  <h2 className={styles.ldH2}>Built for people.<br />Not for banks.</h2>
-                  <p className={styles.ldLead}>Every choice we made is the opposite of a payday lender.</p>
-                </div>
-                <div className={styles.ldFeatureGrid}>
-                  <div className={styles.ldFeature}>
-                    <div className={styles.ldFeatureNum}>0%</div>
-                    <h3>No interest. Ever.</h3>
-                    <p>$25 borrowed, $25 repaid. The math is that simple.</p>
-                  </div>
-                  <div className={styles.ldFeature}>
-                    <div className={styles.ldFeatureNum}>0</div>
-                    <h3>No credit check</h3>
-                    <p>No hard pull. No soft pull. Your credit score never moves.</p>
-                  </div>
-                  <div className={styles.ldFeature}>
-                    <div className={styles.ldFeatureNum}>$0</div>
-                    <h3>No hidden fees</h3>
-                    <p>Standard delivery is free. Optional $5 for instant. That&apos;s the whole pricing page.</p>
-                  </div>
-                  <div className={styles.ldFeature}>
-                    <div className={styles.ldFeatureNum}>24h</div>
-                    <h3>Same-day cash</h3>
-                    <p>Approved before 2pm ET? Money lands in your account today. Guaranteed.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
             {/* ── 6. Raffle ────────────────────────────────────────────────── */}
             <section className={styles.ldRaffle} id="raffle">
               <div className={styles.ldContainer}>
                 <div className={styles.ldRaffleGrid}>
-                  <div className={styles.ldRaffleCopy}>
-                    <span className={styles.ldRaffleKicker}>🎰 Member perk</span>
+                  <div>
+                    <span className={styles.ldRaffleKicker}>Member perk</span>
                     <h2 className={styles.ldRaffleHeadline}>
-                      $300 cash.<br />
-                      <span className={styles.ldRaffleAccent}>Every Friday.</span>
+                      Win a trip<br />
+                      <span className={styles.ldRaffleAccent}>to Cancún.</span>
                     </h2>
                     <p className={styles.ldRaffleSub}>
-                      Every active member in good standing is automatically entered in our weekly $300 cash raffle. No purchase. No forms. Winners paid via PayPal, Cash App, or Zelle.
+                      Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your advances — you&apos;re in.
                     </p>
-                    <ul className={styles.ldRaffleBullets}>
-                      <li>
-                        <span className={styles.ldRaffleCheck}>✓</span>
-                        Auto-entered every week — no signup
-                      </li>
-                      <li>
-                        <span className={styles.ldRaffleCheck}>✓</span>
-                        Extra entry for every successful referral
-                      </li>
-                      <li>
-                        <span className={styles.ldRaffleCheck}>✓</span>
-                        Winner announced every Friday, paid same-day
-                      </li>
-                    </ul>
                     <button type="button" onClick={goSignup} className={styles.ldBtnDarkLg}>
-                      Get my entry <span aria-hidden="true">→</span>
+                      Become a member <span aria-hidden="true">→</span>
                     </button>
                   </div>
                   <div className={styles.ldRaffleVisual}>
                     <div className={styles.ldTicket}>
                       <div className={styles.ldTicketTop}>
                         <span className={styles.ldTicketBrand}>advance<span>.</span></span>
-                        <span className={styles.ldTicketSerial}>WK · 12 / 2026</span>
+                        <span className={styles.ldTicketSerial}>Q1 · 2026</span>
                       </div>
                       <div className={styles.ldTicketDivider}>
                         <span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span />
                       </div>
-                      <p className={styles.ldTicketLabel}>This week&apos;s prize</p>
-                      <div className={styles.ldTicketAmount}>$300</div>
-                      <p className={styles.ldTicketCash}>paid in cash · PayPal · Cash App · Zelle</p>
+                      <p className={styles.ldTicketLabel}>Quarterly getaway</p>
+                      <div className={styles.ldTicketDest}>Cancún <span aria-hidden="true">🏖️</span></div>
+                      <p className={styles.ldTicketCash}>All-inclusive · 4 days · 2 guests</p>
                       <div className={styles.ldTicketFooter}>
                         <span>Next draw</span>
-                        <strong>Fri · Mar 14</strong>
+                        <strong>April 1, 2026</strong>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── 7. Trust & Security ──────────────────────────────────────── */}
-            <section className={styles.ldTrust}>
-              <div className={styles.ldContainer}>
-                <div className={styles.ldSectionHeader}>
-                  <span className={styles.ldKicker}>Security</span>
-                  <h2 className={styles.ldH2}>Your money is safe.<br />Your data is safer.</h2>
-                  <p className={styles.ldLead}>We use the same banking infrastructure as Robinhood, Mercury, and Coinbase. We never store your bank password.</p>
-                </div>
-                <div className={styles.ldTrustGrid}>
-                  <div className={styles.ldTrustCard}>
-                    <div className={styles.ldTrustLogo}>Plaid</div>
-                    <h3>Bank linking</h3>
-                    <p>Read-only access via Plaid. Your bank credentials never touch our servers.</p>
-                  </div>
-                  <div className={styles.ldTrustCard}>
-                    <div className={styles.ldTrustLogo}>Stripe</div>
-                    <h3>Payments</h3>
-                    <p>PCI-DSS Level 1. The same payments processor used by Amazon, Google, and Shopify.</p>
-                  </div>
-                  <div className={styles.ldTrustCard}>
-                    <div className={styles.ldTrustLogoIcon} aria-hidden="true">
-                      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                        <rect x="3" y="9" width="16" height="11" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
-                        <path d="M7 9V6a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <h3>Encryption</h3>
-                    <p>256-bit TLS in transit. AES-256 at rest. SOC 2 Type II partner infrastructure.</p>
-                  </div>
-                </div>
-                <div className={styles.ldComplianceRow}>
-                  <span>Member FDIC partner bank</span>
-                  <span className={styles.ldComplianceDot} />
-                  <span>CCPA-compliant</span>
-                  <span className={styles.ldComplianceDot} />
-                  <span>GLBA</span>
-                  <span className={styles.ldComplianceDot} />
-                  <span>TCPA-compliant</span>
                 </div>
               </div>
             </section>
@@ -1104,7 +1014,10 @@ const CustomerApp = () => {
                   <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
                     advance<span className={styles.ldBrandDot}>.</span>
                   </a>
-                  <p>Financial breathing room for the people who keep everything running.</p>
+                  <p>
+                    A new product from <strong>Bits Card Inc.</strong><br />
+                    Earned wage access — not a loan.
+                  </p>
                 </div>
                 <div className={styles.ldFooterCols}>
                   <div>
@@ -1126,19 +1039,20 @@ const CustomerApp = () => {
                   <div>
                     <p className={styles.ldFooterColTitle}>Support</p>
                     <ul>
-                      <li><a href="mailto:hello@getbits.app">Contact</a></li>
+                      <li><a href="mailto:usa@getbits.app">Contact</a></li>
                       <li><a href="#">Help center</a></li>
                     </ul>
                   </div>
                 </div>
               </div>
-              <div className={styles.ldStates}>
-                <p className={styles.ldStatesLabel}>Available in 35 US states</p>
-                <p className={styles.ldStatesList}>AL · AK · AZ · AR · CA · CO · DE · FL · GA · HI · ID · IL · IN · IA · KS · MI · MN · MS · MO · MT · NE · NV · NM · NY · NC · OH · OK · OR · RI · SC · TN · TX · UT · WA · WI</p>
-              </div>
               <div className={styles.ldFooterBottom}>
-                <span>© 2026 advance. All rights reserved.</span>
-                <p>advance is a financial technology company, not a bank. Banking services provided by partner bank, Member FDIC. advance is not a payday lender. Cash advances are repayable in full on your next pay date with no interest. Available only to eligible residents in supported states.</p>
+                <span>© 2026 Bits Card Inc. All rights reserved.</span>
+                <div className={styles.ldDisclaimer}>
+                  <p className={styles.ldDisclaimerLead}>All accounts are subject to ID verification and approval.</p>
+                  <p>
+                    advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app">usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
+                  </p>
+                </div>
               </div>
             </div>
           </footer>

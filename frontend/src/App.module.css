@@ -2029,13 +2029,15 @@ dd {
   align-items: center;
   gap: 12px;
 }
-.ldLinkBtn {
+.ldPage .ldLinkBtn {
   font-size: 14px;
   font-weight: 600;
   color: var(--ld-ink);
+  background: none;
+  padding: 6px 4px;
+  transition: color 0.15s ease;
 }
-.ldLinkBtn:hover { color: var(--ld-brand); }
-.ldBtnGreen {
+.ldPage .ldBtnGreen {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2045,11 +2047,7 @@ dd {
   font-weight: 600;
   padding: 11px 18px;
   border-radius: 999px;
-  transition: transform 0.15s, background 0.15s;
-}
-.ldBtnGreen:hover {
-  background: var(--ld-brand);
-  transform: translateY(-1px);
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 @media (max-width: 860px) {
   .ldNavLinks { display: none; }
@@ -2134,9 +2132,10 @@ dd {
   margin-top: 36px;
   flex-wrap: wrap;
 }
-.ldBtnWhiteLg {
+.ldPage .ldBtnWhiteLg {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: #fff;
   color: var(--ld-brand-deep);
@@ -2146,11 +2145,7 @@ dd {
   border-radius: 999px;
   letter-spacing: -0.01em;
   box-shadow: 0 8px 24px rgba(0,0,0,0.22), 0 1px 2px rgba(0,0,0,0.08);
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-.ldBtnWhiteLg:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 32px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 .ldHeroLink {
   font-size: 15px;
@@ -2323,7 +2318,10 @@ dd {
 }
 .ldPhoneRow strong { color: var(--ld-ink); font-weight: 600; }
 .ldPhoneFree { color: var(--ld-brand) !important; }
-.ldPhoneBtn {
+.ldPage .ldPhoneBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   margin-top: 12px;
   background: var(--ld-ink);
@@ -2333,6 +2331,7 @@ dd {
   padding: 12px 14px;
   border-radius: 12px;
   cursor: default;
+  min-height: 0;
 }
 .ldPhoneFooter {
   text-align: center;
@@ -2551,8 +2550,9 @@ dd {
   font-size: clamp(40px, 5.5vw, 72px);
   font-weight: 700;
   letter-spacing: -0.035em;
-  line-height: 0.98;
+  line-height: 1.02;
   color: #2a1900;
+  margin-top: 4px;
 }
 .ldRaffleAccent {
   background: linear-gradient(120deg, #b25e07 0%, #f59e0b 100%);
@@ -2564,7 +2564,8 @@ dd {
   font-size: 17px;
   color: rgba(66,40,5,0.78);
   line-height: 1.6;
-  margin-top: 20px;
+  margin-top: 22px;
+  margin-bottom: 32px;
   max-width: 480px;
 }
 .ldRaffleBullets {
@@ -2594,9 +2595,10 @@ dd {
   font-weight: 800;
   flex-shrink: 0;
 }
-.ldBtnDarkLg {
+.ldPage .ldBtnDarkLg {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   background: #2a1900;
   color: #fff;
@@ -2606,12 +2608,7 @@ dd {
   border-radius: 999px;
   letter-spacing: -0.01em;
   box-shadow: 0 10px 28px rgba(42,25,0,0.22);
-  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
-}
-.ldBtnDarkLg:hover {
-  background: #1a0f00;
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgba(42,25,0,0.30);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 /* Ticket card */
@@ -2987,8 +2984,20 @@ dd {
   font-size: 11.5px;
   text-align: right;
 }
+.ldDisclaimer {
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ldDisclaimerLead {
+  color: rgba(255,255,255,0.7) !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
 @media (max-width: 768px) {
   .ldFooterBottom p { text-align: left; }
+  .ldDisclaimer { text-align: left; }
 }
 
 /* ── Landing button :hover overrides ─────────────────────────────────────
@@ -3056,4 +3065,150 @@ dd {
   transform: none;
   box-shadow: none;
   outline: none;
+}
+
+/* ── Cancún ticket destination (replaces $300 amount) ─────────────────── */
+.ldPage .ldTicketDest {
+  font-size: 52px;
+  font-weight: 700;
+  color: var(--ld-amber-deep);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.ldPage .ldTicketDest span {
+  font-size: 36px;
+}
+
+/* ── Trust strip — consolidated single container (was 3 cards) ──────── */
+.ldPage .ldTrustStrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  padding: 32px 36px;
+  background: #fff;
+  border-radius: var(--ld-r-lg);
+  border: 1px solid var(--ld-line);
+  margin-bottom: 18px;
+}
+.ldPage .ldTrustStripItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ldPage .ldTrustStripItem strong {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.015em;
+}
+.ldPage .ldTrustStripItem span {
+  font-size: 13.5px;
+  color: var(--ld-muted);
+  line-height: 1.55;
+}
+@media (max-width: 768px) {
+  .ldPage .ldTrustStrip {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 24px;
+  }
+  .ldPage .ldTrustStripItem {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--ld-line-soft);
+  }
+  .ldPage .ldTrustStripItem:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Mobile polish — landing page is primarily consumed on mobile
+═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Tighter vertical rhythm */
+  .ldPage .ldSectionHeader { margin-bottom: 36px; }
+  .ldHero { padding: 56px 0 72px; }
+  .ldAmounts,
+  .ldHow,
+  .ldWhy,
+  .ldRaffle,
+  .ldTrust,
+  .ldFaq { padding: 64px 0; }
+  .ldCta { padding: 64px 0; }
+
+  /* Slightly looser line-height on headlines so two-line H1/H2 don't feel cramped */
+  .ldH1 { line-height: 1.04; }
+  .ldH2 { line-height: 1.1; }
+  .ldRaffleHeadline { line-height: 1.05; }
+  .ldCtaHeadline { line-height: 1.1; }
+
+  /* Sub copy slightly smaller on small screens */
+  .ldHeroSub { font-size: 17px; }
+  .ldLead { font-size: 16px; }
+  .ldRaffleSub { font-size: 15px; }
+  .ldCtaSub { font-size: 16px; }
+
+  /* Eyebrow / kicker breathing room */
+  .ldEyebrow { margin-bottom: 20px; }
+  .ldRaffleKicker { margin-bottom: 28px; }
+  .ldRaffleHeadline { line-height: 1.08; }
+  .ldRaffleSub { margin-top: 32px; margin-bottom: 44px; font-size: 16px; line-height: 1.65; }
+}
+
+@media (max-width: 540px) {
+  .ldRaffleKicker { margin-bottom: 24px; }
+  .ldRaffleSub { margin-top: 28px; margin-bottom: 40px; }
+}
+
+@media (max-width: 540px) {
+  /* Full-width primary CTAs on phones */
+  .ldPage .ldBtnWhiteLg,
+  .ldPage .ldBtnDarkLg {
+    width: 100%;
+  }
+  .ldPage .ldHeroCtaRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .ldPage .ldHeroCtaRow .ldHeroLink {
+    text-align: center;
+    align-self: center;
+  }
+  .ldPage .ldCtaBtnRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .ldPage .ldCtaGhost {
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* Hero proof row wraps more naturally with smaller gap */
+  .ldHeroProof { gap: 14px 16px; margin-top: 28px; }
+
+  /* Amount chips: smaller padding so they fit nicely */
+  .ldPage .ldChip,
+  .ldPage .ldChipFeatured {
+    font-size: 18px;
+    padding: 16px 22px;
+    min-width: 76px;
+  }
+  .ldPage .ldChipFeatured { font-size: 22px; padding: 16px 26px; }
+
+  /* Ticket card narrower padding so it doesn't overflow */
+  .ldPage .ldTicket { padding: 26px 24px; max-width: 320px; }
+  .ldPage .ldTicketAmount,
+  .ldPage .ldTicketDest { font-size: 44px; }
+  .ldPage .ldTicketDest span { font-size: 30px; }
+
+  /* Phone mockup slightly smaller on phones */
+  .ldPage .ldPhone { width: 280px; }
+  .ldPage .ldPhoneAmount { font-size: 38px; }
 }
