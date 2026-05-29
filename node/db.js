@@ -43,9 +43,10 @@ pool.query(`
     application_id TEXT NOT NULL,
     employer TEXT NOT NULL,
     payday DATE NOT NULL,
-    pay_frequency TEXT NOT NULL,
+    pay_frequency TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
   );
+  ALTER TABLE income_sources ALTER COLUMN pay_frequency DROP NOT NULL;
 `).catch(() => {});
 
 pool.query(`
@@ -109,7 +110,9 @@ async function createIncomeSources(application_id, sources) {
   for (const s of sources) {
     await pool.query(
       'INSERT INTO income_sources (application_id, employer, payday, pay_frequency) VALUES ($1,$2,$3,$4)',
-      [application_id, s.employer, s.payday, s.pay_frequency],
+      // pay_frequency no longer collected at signup; default to null and let
+      // downstream code derive it from bank transactions.
+      [application_id, s.employer, s.payday, s.pay_frequency || null],
     );
   }
 }

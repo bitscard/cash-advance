@@ -614,8 +614,7 @@ const CustomerApp = () => {
     }
     for (const [i, src] of form.income_sources.entries()) {
       const label = form.income_sources.length > 1 ? ` (source ${i + 1})` : "";
-      if (!src.pay_frequency) { setError(`Please select how often you get paid${label}`); return; }
-      if (src.pay_frequency === "other" && !src.pay_frequency_other.trim()) { setError(`Please describe your pay schedule${label}`); return; }
+      // Pay frequency no longer collected — derived from bank transactions later.
     }
     if (!form.state) {
       setError("Please select your state");
@@ -638,10 +637,9 @@ const CustomerApp = () => {
       const body = {
         ...rest,
         ssn: ssn.replace(/-/g, ""),
-        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => ({
-          ...s,
-          pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
-        })),
+        // pay_frequency dropped from signup — strip the lingering fields
+        // off the form state before sending; backend treats null as fine.
+        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => s),
         requested_amount: 25,
         ...(normalizedGateCode ? { referral_code: normalizedGateCode } : {}),
       };
@@ -1411,28 +1409,9 @@ const CustomerApp = () => {
                           <input required min={today} type="date" value={src.payday}
                             onChange={e => updateSource(i, "payday", e.target.value)} />
                         </label>
-                        <label>
-                          How often do you get paid?
-                          <select required value={src.pay_frequency}
-                            onChange={e => updateSource(i, "pay_frequency", e.target.value)}
-                            style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: src.pay_frequency ? "var(--ink)" : "var(--muted)", appearance: "auto" }}>
-                            <option value="" disabled>Select frequency…</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="biweekly">Biweekly</option>
-                            <option value="semimonthly">Semi-monthly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="daily">Daily</option>
-                            <option value="other">Other</option>
-                          </select>
-                        </label>
-                        {src.pay_frequency === "other" && (
-                          <label>
-                            Describe your pay schedule
-                            <input required type="text" placeholder="e.g. every Friday, on the 1st and 15th…"
-                              value={src.pay_frequency_other}
-                              onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
-                          </label>
-                        )}
+                        {/* Pay frequency removed from signup — we derive it
+                            from Plaid (or Stripe FC) transaction patterns later.
+                            Backend stays tolerant of null pay_frequency. */}
                       </div>
                     ))}
                     <button type="button" onClick={addSource}
