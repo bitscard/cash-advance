@@ -76,9 +76,20 @@ const publicApp = (row) => ({
   requested_amount: parseFloat(row.requested_amount),
   payday: fmtDate(row.payday),
   status: row.status,
-  plaid_connected: Boolean(row.stripe_fc_account_id || row.access_token),
+  // plaid_connected = ONLY the legacy Plaid path. FC bank-linked users
+  // have stripe_fc_account_id set; UI code that needs "is bank linked,
+  // any path" should check `bank_linked` below or both fields directly.
+  // Splitting these prevents the new flow from collapsing prematurely
+  // (FC link at Step 4 was killing the preBank gate which is what
+  // shows Steps 5 + 6 to the user).
+  plaid_connected: Boolean(row.access_token),
+  bank_linked: Boolean(row.stripe_fc_account_id || row.access_token),
   // stripe_card_saved: new flow uses stripe_card_pm_id; old card-only users have no fc_account_id
   stripe_card_saved: Boolean(row.stripe_card_pm_id || (row.stripe_payment_method_id && !row.stripe_fc_account_id)),
+  // Frontend needs raw PM/account IDs to gate the FC-vs-Plaid step rendering.
+  stripe_payment_method_id: row.stripe_payment_method_id || null,
+  stripe_card_pm_id: row.stripe_card_pm_id || null,
+  stripe_fc_account_id: row.stripe_fc_account_id || null,
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -438,11 +449,14 @@ async function saveStripeFcSession(id, sessionId) {
 async function saveStripeFcLinkedAccount(id, fcAccountId, bankPmId) {
   // We deliberately write the FC-derived bank PM to the existing
   // stripe_payment_method_id column so the repayment cron picks it up
-  // without any additional refactoring. Also flips the application to
-  // 'bank_connected' since FC linking IS the bank step now.
+  // without any additional refactoring. Status stays 'intake' so the
+  // user can continue through delivery picker + (for ACH payout) the
+  // Connect Express identity step. Status flips to 'bank_connected'
+  // either when admin marks bank-verified manually or when the Plaid
+  // flow completes for legacy users.
   const { rows } = await pool.query(
     `UPDATE applications
-     SET stripe_fc_account_id=$1, stripe_payment_method_id=$2, status='bank_connected', updated_at=NOW()
+     SET stripe_fc_account_id=$1, stripe_payment_method_id=$2, updated_at=NOW()
      WHERE id=$3 RETURNING *`,
     [fcAccountId, bankPmId, id],
   );

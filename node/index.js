@@ -1136,6 +1136,17 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
       ? 'Same-day delivery selected — funds sent the same day. A $5 fee will be added to your repayment.'
       : '3–5 day delivery selected — funds arrive within 3–5 business days. No extra charge.';
     await db.addMessage(row.id, 'system', note);
+
+    // FC users: bank was already linked at Step 4, so reaching the
+    // delivery save means they've completed all pre-bank steps. Flip
+    // status to 'bank_connected' so admin sees them in the review
+    // queue. Legacy Plaid users get this flip from setAccessToken.
+    if (updated.stripe_fc_account_id && updated.status === 'intake') {
+      updated = await db.updateApplicationStatus(updated.id, 'bank_connected') || updated;
+      await db.addMessage(updated.id, 'system', 'Bank account verified via Stripe. A reviewer will check your application and respond here.');
+      console.log('[delivery] FC user — status flipped to bank_connected', { application_id: updated.id });
+    }
+
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -1889,6 +1900,13 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
           transfers: { requested: true },
         },
         business_type: 'individual',
+        // If the user already linked their bank via Stripe Financial
+        // Connections at Step 4, pass the resulting PaymentMethod as the
+        // external_account. Stripe accepts a us_bank_account PM here and
+        // turns it into the connected account's bank for payouts — which
+        // means the hosted onboarding can SKIP the bank step entirely.
+        // We attach as a separate API call below (rather than inline) so
+        // we can degrade gracefully if Stripe rejects the cross-attach.
         // Pre-fill the platform-perspective fields. Without these,
         // Stripe's hosted onboarding asks the recipient to provide a
         // business name / website / product description — which makes
@@ -1931,6 +1949,22 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
       accountId = account.id;
       await db.saveStripeConnectAccount(row.id, accountId, 'onboarding');
       console.log('[stripe/connect] account created', { application_id: row.id, account_id: accountId });
+
+      // Pre-attach the FC-verified bank as the Connect account's
+      // external_account so the hosted onboarding can skip the bank step.
+      // Best-effort: if Stripe rejects the cross-attach (e.g., FC PM
+      // can't be reused for Connect), the user just types bank info
+      // manually in the hosted form. No regression.
+      if (row.stripe_payment_method_id) {
+        try {
+          await stripe.accounts.createExternalAccount(accountId, {
+            external_account: row.stripe_payment_method_id,
+          });
+          console.log('[stripe/connect] external_account pre-attached', { application_id: row.id });
+        } catch (e) {
+          console.log('[stripe/connect] external_account pre-attach failed (non-fatal — user will enter bank in hosted form)', e.message);
+        }
+      }
     }
 
     const origin = (request.body && request.body.origin) || request.headers.origin || 'http://localhost:3000';

@@ -56,7 +56,11 @@ interface Application {
   payday: string;
   status: Status;
   plaid_connected: boolean;
+  bank_linked: boolean;
   stripe_card_saved: boolean;
+  stripe_payment_method_id: string | null;
+  stripe_card_pm_id: string | null;
+  stripe_fc_account_id: string | null;
   stripe_charge_status: string | null;
   payout_methods: string | null;
   payout_contact: string | null;
@@ -709,6 +713,70 @@ const CustomerApp = () => {
   // Connect status from the backend so the rest of the flow can advance.
   const [stripeConnectBusy, setStripeConnectBusy] = useState(false);
   const [stripeConnectError, setStripeConnectError] = useState<string | null>(null);
+
+  // Stripe Financial Connections — replaces Plaid for bank linking. One FC
+  // session gives us: chargeable bank PaymentMethod (for repayment debit),
+  // transactions (for income verification), and a bank token attachable to
+  // the user's Connect external_account (for ACH payouts).
+  const [fcBusy, setFcBusy] = useState(false);
+  const [fcError, setFcError] = useState<string | null>(null);
+
+  const startStripeFcLink = async () => {
+    if (!application || !stripePromise) {
+      setFcError("Stripe is not configured yet.");
+      return;
+    }
+    setFcBusy(true);
+    setFcError(null);
+    try {
+      const stripe = await stripePromise;
+      if (!stripe) throw new Error("Could not load Stripe");
+
+      // 1. Create FC session on backend
+      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/create-session`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const sessionData = await sessionRes.json();
+      if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
+
+      // 2. Launch Stripe's embedded FC flow (Plaid-powered under the hood
+      // but Stripe-branded). User links their bank without leaving our app.
+      // Cast to any because some @stripe/stripe-js minor versions don't
+      // include the FC methods in their type defs even though the runtime
+      // method is available since v2.x.
+      const stripeWithFc = stripe as unknown as {
+        collectFinancialConnectionsAccounts: (args: { clientSecret: string }) => Promise<{
+          financialConnectionsSession?: unknown;
+          error?: { message?: string; code?: string };
+        }>;
+      };
+      const result = await stripeWithFc.collectFinancialConnectionsAccounts({
+        clientSecret: sessionData.client_secret,
+      });
+      if (result.error) {
+        if (result.error.code === "session_expired") {
+          throw new Error("Your bank-linking session expired. Please try again.");
+        }
+        throw new Error(result.error.message || "Bank linking was cancelled.");
+      }
+
+      // 3. Tell backend the session is done — it retrieves the linked
+      // account(s) + saves the PaymentMethod for repayment.
+      const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      const completeData = await completeRes.json();
+      if (!completeRes.ok) throw new Error(completeData.error?.error_message || "Could not finalize bank link");
+
+      if (completeData.application) setApplication(completeData.application);
+    } catch (e) {
+      setFcError(e instanceof Error ? e.message : "Something went wrong with bank linking.");
+    } finally {
+      setFcBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!application || !token) return;
@@ -2178,20 +2246,26 @@ const CustomerApp = () => {
     );
   }
 
-  // Step 4 of 6: backup repayment card (Stripe)
-  if (preBankActive && !application.stripe_card_saved) {
+  // Step 4 of 6: bank link via Stripe Financial Connections
+  // ONE bank link powers: repayment debit, income verification, and ACH
+  // payout (if user picked ACH at Step 2). Replaces both the old card
+  // collection step AND the Plaid bank verification step (Step 6 below
+  // becomes a no-op when stripe_fc_account_id is set).
+  const hasBankPm = !!application.stripe_payment_method_id;
+  const hasCardPm = !!application.stripe_card_pm_id;
+  if (preBankActive && !hasBankPm && !hasCardPm) {
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 4 of 6 · Repayment method &amp; membership</p>
+              <p className={styles.benefitsHeaderKicker}>Step 4 of 6 · Bank account &amp; membership</p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                Add your card.
+                Connect your bank.
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                One card backs everything — your monthly membership and each advance repayment. We charge nothing else.
+                We use your bank to verify your income, send your advance, and collect repayment — all from one secure connection.
               </p>
             </div>
             <div style={{ flexShrink: 0, opacity: 0.92 }}>
@@ -2200,40 +2274,49 @@ const CustomerApp = () => {
           </div>
         </div>
         <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-          {/* Membership disclosure — what the card will be charged for. */}
+          {/* What the bank will be used for — set expectations clearly. */}
           <div style={{
             background: "var(--white)", border: "2px solid var(--brand)",
             borderRadius: "var(--r-lg)", padding: "1.8rem 2rem", marginBottom: "2rem",
           }}>
             <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.8rem" }}>
-              This card will be charged
+              Your bank will be used for
             </p>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+              <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
+                <span>Income verification <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(read-only)</span></span>
+                <strong style={{ color: "var(--ink)" }}>Free</strong>
+              </li>
               <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
                 <span>Each advance repayment <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(on your payday)</span></span>
                 <strong style={{ color: "var(--ink)" }}>$25–$30</strong>
               </li>
               <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
-                <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts on your first repayment day, then monthly)</span></span>
+                <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts on first repayment, then monthly)</span></span>
                 <strong style={{ color: "var(--ink)" }}>$3.99/mo</strong>
               </li>
             </ul>
             <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: "1rem 0 0", lineHeight: 1.5 }}>
-              Membership and advance repayments are two separate charges on the same card. Cancel membership any time from your dashboard. We never charge interest, late fees, or hidden fees.
+              Membership and repayments are separate charges. Cancel membership any time. We never charge interest, late fees, or hidden fees.
             </p>
           </div>
 
-          {!stripeKey ? (
-            <p className={styles.error}>Card payments are not configured yet.</p>
-          ) : (
-            <Elements stripe={stripePromise}>
-              <SaveCardForm
-                applicationId={application.id}
-                authToken={token}
-                onSaved={() => loadApplication(application.id)}
-              />
-            </Elements>
+          {fcError && <p className={styles.error}>{fcError}</p>}
+
+          <button
+            style={{ width: "100%" }}
+            disabled={fcBusy || !stripeKey}
+            onClick={startStripeFcLink}
+          >
+            {fcBusy ? "Opening secure bank link…" : "Connect bank →"}
+          </button>
+
+          {!stripeKey && (
+            <p className={styles.error} style={{ marginTop: "1rem" }}>
+              Bank linking is not configured yet.
+            </p>
           )}
+
           <div style={{
             background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
             borderRadius: "var(--r-lg)", padding: "1.4rem 1.8rem", marginTop: "2rem",
@@ -2243,7 +2326,7 @@ const CustomerApp = () => {
             </p>
           </div>
           <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
-            🔒 Card details are encrypted and stored by Stripe — we never see them.
+            🔒 Bank linking is powered by Stripe. Your credentials are never shared with us.
           </p>
         </div>
         <StatesFooter />
@@ -2327,7 +2410,9 @@ const CustomerApp = () => {
   }
 
   // Step 6 of 6: bank connection (the final gate before review)
-  if (preBankActive) {
+  // SKIPPED for FC users — their bank is already linked at Step 4.
+  // Legacy Plaid path stays for users mid-flight on the old flow.
+  if (preBankActive && !application.stripe_fc_account_id) {
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
