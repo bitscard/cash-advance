@@ -1833,6 +1833,23 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
           transfers: { requested: true },
         },
         business_type: 'individual',
+        // Pre-fill the platform-perspective fields. Without these,
+        // Stripe's hosted onboarding asks the recipient to provide a
+        // business name / website / product description — which makes
+        // zero sense for a wage-advance recipient. Setting them here
+        // skips those screens entirely. Values describe what the
+        // ACCOUNT does from our platform's perspective (recipient of
+        // earned wage access), not what the recipient does for income.
+        business_profile: {
+          url: 'https://getbits.app',
+          product_description: 'Recipient of earned wage advances from Bits Cash Advance.',
+          // MCC 6051 = "Quasi Cash / Money Orders" — closest match for
+          // cash-disbursement recipients. Stripe accepts most codes
+          // here; the field is required for the transfers capability.
+          mcc: '6051',
+          support_email: 'usa@getbits.app',
+          support_url: 'https://getbits.app',
+        },
         // Pre-fill what we know to shave time off Stripe's hosted form.
         individual: {
           email: row.email,
@@ -1844,6 +1861,12 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
             return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
           })() : undefined,
           ssn_last_4: row.ssn ? row.ssn.replace(/-/g, '').slice(-4) : (row.ssn_last4 || undefined),
+        },
+        // Auto-accept the Connect platform's terms of service on
+        // behalf of the user. They've already agreed to ours; this
+        // means Stripe doesn't make them click through another ToS.
+        tos_acceptance: {
+          service_agreement: 'recipient',
         },
         metadata: { application_id: row.id },
       });
