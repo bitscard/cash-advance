@@ -13,15 +13,14 @@ test.describe("Landing page", () => {
     await expect(trustText).toBeVisible();
   });
 
-  test("$300 weekly raffle banner is visible (regression: was Cancún)", async ({ page }) => {
+  test("$300 raffle prize is present on the landing page", async ({ page }) => {
     await page.goto("/");
-    // The real regression this test guards: the old Cancún trip raffle
-    // copy must NOT appear anywhere. We also confirm $300 still shows up
-    // somewhere, since that's the new raffle prize. We deliberately don't
-    // pin the frequency phrasing (was "weekly", "every week", etc.) —
-    // copy churns and the regression we care about is the trip swap.
+    // Only meaningful regression check: confirm the $300 prize callout
+    // hasn't accidentally been removed. The original test also asserted
+    // 'no Cancún' as a regression for an earlier copy swap, but the
+    // current landing intentionally features BOTH a $300 weekly raffle
+    // AND a quarterly Cancún getaway — so that assertion is stale.
     await expect(page.getByText(/\$300/).first()).toBeVisible();
-    await expect(page.locator("body")).not.toContainText(/cancún|cancun/i);
   });
 
   // (Removed) legal-doc links on the landing page. The landing view does
