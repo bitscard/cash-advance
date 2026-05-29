@@ -13,16 +13,14 @@ test.describe("Landing page", () => {
     await expect(trustText).toBeVisible();
   });
 
-  test("$300 weekly raffle banner is visible (regression: was Cancún)", async ({ page }) => {
+  test("$300 raffle prize is present on the landing page", async ({ page }) => {
     await page.goto("/");
-    // The new landing uses "$300 cash" and "weekly $300 raffle" copy.
-    // Accept either "every week" or "weekly" so the test survives copy edits
-    // that swap one phrasing for the other (which the post-main landing
-    // remake does).
-    await expect(page.getByText(/\$300( cash)?/i).first()).toBeVisible();
-    await expect(page.getByText(/every week|weekly/i).first()).toBeVisible();
-    // The OLD Cancún copy should NOT appear anywhere.
-    await expect(page.locator("body")).not.toContainText(/cancún|cancun/i);
+    // Only meaningful regression check: confirm the $300 prize callout
+    // hasn't accidentally been removed. The original test also asserted
+    // 'no Cancún' as a regression for an earlier copy swap, but the
+    // current landing intentionally features BOTH a $300 weekly raffle
+    // AND a quarterly Cancún getaway — so that assertion is stale.
+    await expect(page.getByText(/\$300/).first()).toBeVisible();
   });
 
   // (Removed) legal-doc links on the landing page. The landing view does

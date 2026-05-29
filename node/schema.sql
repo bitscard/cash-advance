@@ -82,6 +82,18 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS referred_by TEXT;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS limit_freeze_until DATE;
 
+-- ACH payouts via Stripe Connect Express. Set when the user picks
+-- "Bank account (ACH)" as their payout method during Step 2 of
+-- onboarding. stripe_connect_status mirrors the state of the connected
+-- account: 'onboarding' (account created, hosted form not finished),
+-- 'ready' (charges_enabled && payouts_enabled both true — we can
+-- transfer money to them), 'restricted' (Stripe flagged the account,
+-- transfers will fail). transfer_id is set at funded-time so we have
+-- a traceable Stripe transfer per advance.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS transfer_id TEXT;
+
 -- Tracks when we've sent the "2 days until due date" Mailchimp tag so the
 -- recurring cron doesn't double-send. Reset to NULL whenever a new
 -- repayment is scheduled (next advance cycle).

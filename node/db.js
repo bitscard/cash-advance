@@ -92,6 +92,11 @@ const publicApp = (row) => ({
   referral_code: row.referral_code || null,
   referred_by: row.referred_by || null,
   limit_freeze_until: fmtDate(row.limit_freeze_until) || null,
+  // Stripe Connect Express (ACH payouts). connect_status mirrors the
+  // hosted-onboarding lifecycle: null → pending → ready → restricted.
+  stripe_connect_account_id: row.stripe_connect_account_id || null,
+  stripe_connect_status: row.stripe_connect_status || null,
+  transfer_id: row.transfer_id || null,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -370,6 +375,39 @@ async function saveOfferExpiry(id, offer_expires_at) {
   return rows[0] || null;
 }
 
+// Stripe Connect Express helpers (ACH payout flow).
+// stripe_connect_account_id is set when we first create the account; status
+// flips to 'ready' once charges_enabled && payouts_enabled both true.
+async function saveStripeConnectAccount(id, accountId, status) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET stripe_connect_account_id=$1, stripe_connect_status=$2, updated_at=NOW()
+     WHERE id=$3 RETURNING *`,
+    [accountId, status, id],
+  );
+  return rows[0] || null;
+}
+
+async function setStripeConnectStatusByAccountId(accountId, status) {
+  // Used by the webhook handler — we don't know the application id, only
+  // the Stripe account id that fired the event.
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET stripe_connect_status=$1, updated_at=NOW()
+     WHERE stripe_connect_account_id=$2 RETURNING *`,
+    [status, accountId],
+  );
+  return rows[0] || null;
+}
+
+async function saveTransferId(id, transferId) {
+  const { rows } = await pool.query(
+    `UPDATE applications SET transfer_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+    [transferId, id],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   // Export the pool so test teardown can close all connections cleanly.
   pool,
@@ -404,4 +442,7 @@ module.exports = {
   getDueApplications,
   getApplicationsNeedingDueReminder,
   markDueDateReminderSent,
+  saveStripeConnectAccount,
+  setStripeConnectStatusByAccountId,
+  saveTransferId,
 };
