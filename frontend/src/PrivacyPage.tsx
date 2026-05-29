@@ -6,7 +6,7 @@ const ELIGIBLE_STATES = [
   "Alabama", "Alaska", "Arizona", "Colorado", "Delaware", "Florida", "Georgia",
   "Hawaii", "Idaho", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
   "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Jersey",
-  "New Mexico", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
   "Pennsylvania", "Rhode Island", "South Dakota", "Tennessee", "Texas",
   "Vermont", "Virginia", "Washington", "West Virginia", "Wyoming",
 ];

@@ -83,7 +83,7 @@ describe('POST /api/advance/applications — eligibility gating', () => {
       .post('/api/advance/applications')
       .send(
         makeSignupPayload({
-          state: 'New York', // not in the eligible list
+          state: 'California', // not in the eligible list
           referral_code: 'neworleans',
         }),
       );
@@ -108,7 +108,7 @@ describe('POST /api/advance/applications — eligibility gating', () => {
       .post('/api/advance/applications')
       .send(
         makeSignupPayload({
-          state: 'New York',
+          state: 'California',
           referral_code: referrer.referral_code,
           ssn: '333445555',
         }),

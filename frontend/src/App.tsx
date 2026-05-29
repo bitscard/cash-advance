@@ -141,7 +141,7 @@ const ELIGIBLE_STATES = new Set([
   "Alabama", "Alaska", "Arizona", "Colorado", "Delaware", "Florida", "Georgia",
   "Hawaii", "Idaho", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
   "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Jersey",
-  "New Mexico", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
   "Pennsylvania", "Rhode Island", "South Dakota", "Tennessee", "Texas",
   "Vermont", "Virginia", "Washington", "West Virginia", "Wyoming",
 ]);
@@ -614,8 +614,7 @@ const CustomerApp = () => {
     }
     for (const [i, src] of form.income_sources.entries()) {
       const label = form.income_sources.length > 1 ? ` (source ${i + 1})` : "";
-      if (!src.pay_frequency) { setError(`Please select how often you get paid${label}`); return; }
-      if (src.pay_frequency === "other" && !src.pay_frequency_other.trim()) { setError(`Please describe your pay schedule${label}`); return; }
+      // Pay frequency no longer collected — derived from bank transactions later.
     }
     if (!form.state) {
       setError("Please select your state");
@@ -638,10 +637,9 @@ const CustomerApp = () => {
       const body = {
         ...rest,
         ssn: ssn.replace(/-/g, ""),
-        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => ({
-          ...s,
-          pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
-        })),
+        // pay_frequency dropped from signup — strip the lingering fields
+        // off the form state before sending; backend treats null as fine.
+        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => s),
         requested_amount: 25,
         ...(normalizedGateCode ? { referral_code: normalizedGateCode } : {}),
       };
@@ -1149,7 +1147,7 @@ const CustomerApp = () => {
                     {[
                       ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
                       ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
-                      ["What states is advance available in?", "Currently 35 US states. If we're not in your state yet, you can join the waitlist."],
+                      ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
                       ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
                       ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
                       ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
@@ -1411,28 +1409,9 @@ const CustomerApp = () => {
                           <input required min={today} type="date" value={src.payday}
                             onChange={e => updateSource(i, "payday", e.target.value)} />
                         </label>
-                        <label>
-                          How often do you get paid?
-                          <select required value={src.pay_frequency}
-                            onChange={e => updateSource(i, "pay_frequency", e.target.value)}
-                            style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: src.pay_frequency ? "var(--ink)" : "var(--muted)", appearance: "auto" }}>
-                            <option value="" disabled>Select frequency…</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="biweekly">Biweekly</option>
-                            <option value="semimonthly">Semi-monthly</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="daily">Daily</option>
-                            <option value="other">Other</option>
-                          </select>
-                        </label>
-                        {src.pay_frequency === "other" && (
-                          <label>
-                            Describe your pay schedule
-                            <input required type="text" placeholder="e.g. every Friday, on the 1st and 15th…"
-                              value={src.pay_frequency_other}
-                              onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
-                          </label>
-                        )}
+                        {/* Pay frequency removed from signup — we derive it
+                            from Plaid (or Stripe FC) transaction patterns later.
+                            Backend stays tolerant of null pay_frequency. */}
                       </div>
                     ))}
                     <button type="button" onClick={addSource}
@@ -1533,7 +1512,7 @@ const CustomerApp = () => {
                 We're coming to<br />{stateName}!
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                Advance is live in 35 states today. We're expanding fast — {stateName} is on the roadmap.
+                Advance is live in 36 states today. We're expanding fast — {stateName} is on the roadmap.
                 You'll get an email the moment we go live.
               </p>
             </div>
@@ -4058,7 +4037,7 @@ const OauthReturn = () => {
 
 const StatesFooter = () => (
   <div className={styles.statesFooter}>
-    <p className={styles.statesFooterTitle}>Available in 35 states</p>
+    <p className={styles.statesFooterTitle}>Available in 36 states</p>
     <p style={{ fontSize: "1.2rem", maxWidth: "60rem", margin: "0 auto", lineHeight: 1.5 }}>
       AL · AK · AZ · CO · DE · FL · GA · HI · ID · IA · KY · ME · MI · MN · MS · MT · NE · NH · NJ · NM · NC · ND · OH · OK · OR · PA · RI · SD · TN · TX · VT · VA · WA · WV · WY
     </p>

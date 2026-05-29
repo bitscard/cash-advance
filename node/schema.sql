@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS income_sources (
   application_id  TEXT        NOT NULL,
   employer        TEXT        NOT NULL,
   payday          DATE        NOT NULL,
-  pay_frequency   TEXT        NOT NULL,
+  pay_frequency   TEXT,
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS income_sources_application_id_idx ON income_sources(application_id);

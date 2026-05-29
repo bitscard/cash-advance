@@ -26,10 +26,10 @@ describe("StatesFooter (App.tsx)", () => {
     expect(slice).toMatch(/mailto:usa@getbits\.app/);
   });
 
-  test("declares it's available in 35 states", () => {
+  test("declares it's available in 36 states", () => {
     const start = APP_TSX.indexOf("const StatesFooter");
     const slice = APP_TSX.slice(start, start + 2000);
-    expect(slice).toMatch(/35 states/i);
+    expect(slice).toMatch(/36 states/i);
   });
 });
 
