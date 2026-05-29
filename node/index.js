@@ -429,6 +429,20 @@ app.post(
           }
           break;
         }
+        case 'account.updated': {
+          // Connect Express account state changed — usually triggered when
+          // the user finishes hosted onboarding, but also fires later if
+          // Stripe restricts the account for compliance reasons.
+          const accountId = obj?.id;
+          if (accountId) {
+            const isReady = obj.charges_enabled && obj.payouts_enabled;
+            const isRestricted = obj.requirements?.disabled_reason;
+            const newStatus = isReady ? 'ready' : (isRestricted ? 'restricted' : 'onboarding');
+            await db.setStripeConnectStatusByAccountId(accountId, newStatus);
+            console.log('[stripe/webhook] connect account updated', { account_id: accountId, status: newStatus });
+          }
+          break;
+        }
         case 'customer.subscription.deleted': {
           // User (or system) cancelled — clear local state.
           const subId = obj?.id;
@@ -1136,14 +1150,18 @@ app.patch('/api/advance/applications/:id/payout-preference', async function (req
     if (!methods) {
       return response.status(400).json({ error: { error_message: 'methods is required' } });
     }
+    // ACH and legacy 'Bank transfer' both skip the contact requirement —
+    // the bank info lives on the Stripe Connect account, not on a handle.
+    const isAch = methods === 'ACH' || methods.includes('ACH');
     const isBankTransfer = methods === 'Bank transfer' || methods.includes('Bank transfer');
-    if (!isBankTransfer && (!contact || !contact.trim())) {
+    const skipContact = isAch || isBankTransfer;
+    if (!skipContact && (!contact || !contact.trim())) {
       return response.status(400).json({ error: { error_message: 'contact is required for this payout method' } });
     }
     const updated = await db.savePayoutPreference(
       request.params.id,
       methods,
-      isBankTransfer ? 'connected_bank_account' : contact.trim(),
+      isAch ? 'stripe_connect' : (isBankTransfer ? 'connected_bank_account' : contact.trim()),
     );
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     response.json({ application: db.publicApp(updated) });
@@ -1497,6 +1515,62 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
       updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
       await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
 
+      // ACH payout via Stripe Connect Express. Only fires if the user
+      // picked 'ACH' as their payout method AND their Connect account is
+      // 'ready' (charges_enabled && payouts_enabled). For any other
+      // payout method (PayPal / Cash App / Zelle), admin still moves the
+      // money manually outside the app.
+      if (updated.payout_methods === 'ACH') {
+        if (updated.stripe_connect_account_id && updated.stripe_connect_status === 'ready') {
+          try {
+            const amountCents = Math.round(baseAmount * 100);
+            const transfer = await stripe.transfers.create({
+              amount: amountCents,
+              currency: 'usd',
+              destination: updated.stripe_connect_account_id,
+              description: `Advance disbursement for application ${updated.id}`,
+              metadata: { application_id: updated.id, delivery_type: updated.delivery_type || 'standard' },
+            });
+            updated = await db.saveTransferId(updated.id, transfer.id) || updated;
+            console.log('[funded] ACH transfer created', { application_id: updated.id, transfer_id: transfer.id, amount: amountCents });
+
+            // Same-day delivery → trigger instant payout on the Connect
+            // account so the money hits the user's bank in minutes via
+            // RTP. Standard delivery → leave Stripe's default payout
+            // schedule alone (typically 1-2 business days).
+            if (updated.delivery_type === 'instant') {
+              try {
+                const payout = await stripe.payouts.create(
+                  {
+                    amount: amountCents,
+                    currency: 'usd',
+                    method: 'instant',
+                    metadata: { application_id: updated.id },
+                  },
+                  { stripeAccount: updated.stripe_connect_account_id },
+                );
+                console.log('[funded] instant payout created', { application_id: updated.id, payout_id: payout.id });
+              } catch (payErr) {
+                // Common failure: bank doesn't support RTP. Fall back to
+                // standard payout (Stripe schedules it automatically) and
+                // notify the user so they know it'll be slower.
+                console.log('[funded] instant payout failed, falling back to standard', { application_id: updated.id, error: payErr.message });
+                await db.addMessage(updated.id, 'system', `Your bank doesn't support same-day transfers — we've switched you to 3–5 day delivery and refunded the $5 fee.`);
+              }
+            }
+          } catch (transferErr) {
+            console.log('[funded] ACH transfer failed', { application_id: updated.id, error: transferErr.message });
+            await db.addMessage(updated.id, 'system', `Bank transfer failed: ${transferErr.message}. Please contact support to resolve.`);
+          }
+        } else {
+          // Funded transition was triggered but the user's Connect
+          // account isn't ready — likely admin clicked too early. Log
+          // and surface a clear error.
+          console.log('[funded] ACH user has no ready Connect account', { application_id: updated.id, status: updated.stripe_connect_status });
+          await db.addMessage(updated.id, 'system', `Your direct deposit isn't set up yet. Please finish bank verification before funding.`);
+        }
+      }
+
       // First-advance subscription bootstrap: create the $3.99/mo Stripe
       // subscription anchored to the repayment date so the first charge
       // fires that day (as a SEPARATE Stripe transaction from the advance
@@ -1713,6 +1787,111 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
     }
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
+});
+
+// ── Stripe Connect Express (ACH payouts) ─────────────────────────────────────
+// Three endpoints make up the ACH onboarding flow:
+//   1. POST /stripe/connect/onboarding-link
+//      Creates the Connect Express account (idempotently) and returns a
+//      hosted-onboarding URL the frontend redirects the user to. Stripe
+//      collects identity (SSN, DOB, address) + bank info + sometimes ID
+//      photo. Account is created with capabilities: { transfers: requested }
+//      so the platform can later move money to it.
+//
+//   2. POST /stripe/connect/refresh-status
+//      Called by the frontend on return from Stripe (?connect_complete=1).
+//      Pulls the account state from Stripe and flips
+//      stripe_connect_status to 'ready' when both charges_enabled and
+//      payouts_enabled are true.
+//
+//   3. Webhook handler (see /api/webhooks/stripe below — already exists)
+//      account.updated events from Stripe also keep stripe_connect_status
+//      in sync, in case the user takes longer than expected to complete
+//      onboarding or Stripe later restricts the account.
+//
+// Funded-handler later in this file calls stripe.transfers.create() when
+// admin marks the application funded and the user picked ACH as payout.
+
+app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // Create the Connect account on first call; subsequent calls reuse it.
+    let accountId = row.stripe_connect_account_id;
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'US',
+        email: row.email,
+        capabilities: {
+          transfers: { requested: true },
+        },
+        business_type: 'individual',
+        // Pre-fill what we know to shave time off Stripe's hosted form.
+        individual: {
+          email: row.email,
+          first_name: (row.name || '').split(' ')[0] || undefined,
+          last_name: (row.name || '').split(' ').slice(1).join(' ') || undefined,
+          phone: row.phone || undefined,
+          dob: row.dob ? (() => {
+            const d = new Date(row.dob);
+            return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+          })() : undefined,
+          ssn_last_4: row.ssn ? row.ssn.replace(/-/g, '').slice(-4) : (row.ssn_last4 || undefined),
+        },
+        metadata: { application_id: row.id },
+      });
+      accountId = account.id;
+      await db.saveStripeConnectAccount(row.id, accountId, 'onboarding');
+      console.log('[stripe/connect] account created', { application_id: row.id, account_id: accountId });
+    }
+
+    const origin = (request.body && request.body.origin) || request.headers.origin || 'http://localhost:3000';
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${origin}/?connect_refresh=1`,
+      return_url: `${origin}/?connect_complete=1`,
+      type: 'account_onboarding',
+    });
+
+    response.json({ url: link.url, account_id: accountId });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!row.stripe_connect_account_id) {
+      return response.json({ status: 'not_started', application: db.publicApp(row) });
+    }
+    const account = await stripe.accounts.retrieve(row.stripe_connect_account_id);
+    const isReady = account.charges_enabled && account.payouts_enabled;
+    const isRestricted = account.requirements?.disabled_reason || false;
+    const newStatus = isReady ? 'ready' : (isRestricted ? 'restricted' : 'onboarding');
+    const updated = await db.saveStripeConnectAccount(row.id, row.stripe_connect_account_id, newStatus);
+    // When Connect onboarding finishes, also save 'ACH' as the payout
+    // method so the rest of the pre-bank flow can advance.
+    let final = updated;
+    if (newStatus === 'ready' && !row.payout_methods) {
+      final = await db.savePayoutPreference(row.id, 'ACH', 'stripe_connect') || updated;
+    }
+    response.json({ status: newStatus, application: db.publicApp(final) });
+  } catch (err) {
+    console.log('[stripe/connect/refresh-status] error', err.message);
+    next(err);
+  }
 });
 
 // Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.

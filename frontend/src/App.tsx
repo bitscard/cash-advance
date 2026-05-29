@@ -63,6 +63,11 @@ interface Application {
   subscription_status: string | null;
   subscription_id: string | null;
   subscription_next_billing: string | null;
+  // Stripe Connect Express (ACH payouts). Set when the user picks "Bank
+  // account (ACH)" in Step 2 and completes the Stripe-hosted onboarding.
+  stripe_connect_account_id: string | null;
+  stripe_connect_status: string | null;
+  transfer_id: string | null;
   delivery_type: string | null;
   instant_fee_paid: boolean;
   repayment_count: number;
@@ -539,8 +544,13 @@ const CustomerApp = () => {
 
   const submitPayoutPreference = async () => {
     if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
+    // ACH uses Stripe Connect — no contact handle needed (the backend
+    // already wrote 'stripe_connect' as the contact when onboarding
+    // completed). For any handle-based method (PayPal/Cash App/Zelle)
+    // the contact field is required.
+    const isAchPayout = payoutMethods.includes("ACH");
     const isBankTransferPayout = payoutMethods.includes("Bank transfer");
-    if (!isBankTransferPayout && !payoutContact.trim()) {
+    if (!isAchPayout && !isBankTransferPayout && !payoutContact.trim()) {
       setPayoutError("Please enter your username, email, or phone number");
       return;
     }
@@ -693,6 +703,56 @@ const CustomerApp = () => {
         }
       })
       .catch(() => setPlaidLinkError("Could not load bank connection. Please try again."));
+  };
+
+  // After Stripe Connect Express hosted onboarding, Stripe redirects the
+  // user back with ?connect_complete=1 (return) or ?connect_refresh=1
+  // (session expired; we'll mint a new link). Either way, sync the
+  // Connect status from the backend so the rest of the flow can advance.
+  const [stripeConnectBusy, setStripeConnectBusy] = useState(false);
+  const [stripeConnectError, setStripeConnectError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!application || !token) return;
+    const search = window.location.search;
+    const isReturn = search.includes("connect_complete=1");
+    const isRefresh = search.includes("connect_refresh=1");
+    if (!isReturn && !isRefresh) return;
+    setStripeConnectBusy(true);
+    fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/connect/refresh-status`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.application) setApplication(d.application);
+        if (d.status && d.status !== "ready" && d.status !== "onboarding") {
+          setStripeConnectError("Your bank account couldn't be set up. Please try again or pick a different payout method.");
+        }
+        window.history.replaceState({}, "", window.location.pathname);
+      })
+      .catch(() => setStripeConnectError("We couldn't confirm your bank setup. Please try again."))
+      .finally(() => setStripeConnectBusy(false));
+  }, [application?.id, token]);
+
+  const startStripeConnectOnboarding = async () => {
+    if (!application) return;
+    setStripeConnectBusy(true);
+    setStripeConnectError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/connect/onboarding-link`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ origin: window.location.origin }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not start direct deposit setup");
+      if (!data.url) throw new Error("Stripe Connect did not return a redirect URL");
+      window.location.href = data.url;
+    } catch (e) {
+      setStripeConnectError(e instanceof Error ? e.message : "Something went wrong");
+      setStripeConnectBusy(false);
+    }
   };
 
   // After Hosted Link completes, Plaid redirects the user back with
@@ -1864,9 +1924,26 @@ const CustomerApp = () => {
           }}>Z</span>
         ),
       },
+      {
+        id: "ACH",
+        name: "Bank account (ACH)",
+        placeholder: "",
+        label: "",
+        logo: (
+          <span style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: "3.6rem", height: "3.6rem", borderRadius: "0.8rem",
+            background: "var(--brand)", color: "white", fontSize: "2rem",
+            flexShrink: 0,
+          }}>🏦</span>
+        ),
+      },
     ];
     const selectedId = payoutMethods[0];
     const selectedMethod = methods.find(m => m.id === selectedId);
+    const isAch = selectedId === "ACH";
+    const achStatus = application.stripe_connect_status;
+    const achReady = isAch && achStatus === "ready";
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
@@ -1916,7 +1993,8 @@ const CustomerApp = () => {
               );
             })}
           </div>
-          {selectedMethod && (
+          {/* PayPal / Cash App / Zelle — handle-based payout */}
+          {selectedMethod && !isAch && (
             <div style={{ marginBottom: "1.6rem" }}>
               <label style={{ fontSize: "1.35rem", fontWeight: 600, display: "block", marginBottom: "0.6rem", color: "var(--ink)" }}>
                 {selectedMethod.label}
@@ -1930,7 +2008,7 @@ const CustomerApp = () => {
               />
             </div>
           )}
-          {selectedMethod && payoutContact.trim() && (
+          {selectedMethod && !isAch && payoutContact.trim() && (
             <div style={{
               background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
               borderRadius: "var(--r-lg)", padding: "1.6rem 1.8rem", marginBottom: "1.6rem",
@@ -1943,17 +2021,69 @@ const CustomerApp = () => {
               </p>
             </div>
           )}
+          {/* ACH — hosted Stripe Connect onboarding for ID + bank verification. */}
+          {isAch && (
+            <div style={{ marginBottom: "1.6rem" }}>
+              {achReady ? (
+                <div style={{
+                  background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                  borderRadius: "var(--r-lg)", padding: "1.6rem 1.8rem",
+                }}>
+                  <p style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--brand)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
+                    ✓ Direct deposit ready
+                  </p>
+                  <p style={{ fontSize: "1.5rem", color: "var(--ink)", margin: 0, lineHeight: 1.5 }}>
+                    We'll send your advance via ACH straight to your bank account.
+                  </p>
+                </div>
+              ) : (
+                <div style={{
+                  background: "var(--white)", border: "1.5px solid var(--border)",
+                  borderRadius: "var(--r-lg)", padding: "1.8rem 2rem",
+                }}>
+                  <p style={{ fontSize: "1.45rem", color: "var(--ink)", margin: "0 0 0.8rem", lineHeight: 1.5 }}>
+                    We'll send your advance to your bank account via ACH. To set it up, we need a few quick details on Stripe's secure form (about 2 minutes):
+                  </p>
+                  <ul style={{ margin: "0 0 1.2rem", paddingLeft: "2rem", fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.7 }}>
+                    <li>Confirm your name, SSN, and address</li>
+                    <li>Add your bank account (routing + account number)</li>
+                  </ul>
+                  <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>
+                    Stripe handles this directly — your bank details never touch our servers.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           {payoutError && <p className={styles.error}>{payoutError}</p>}
-          <button
-            style={{ width: "100%" }}
-            disabled={payoutBusy || !selectedMethod || !payoutContact.trim()}
-            onClick={async () => {
-              await submitPayoutPreference();
-              if (application) await loadApplication(application.id);
-            }}
-          >
-            {payoutBusy ? "Saving…" : "Yes, this is correct →"}
-          </button>
+          {stripeConnectError && <p className={styles.error}>{stripeConnectError}</p>}
+          {/* CTA: handle-based methods save inline; ACH redirects to Stripe. */}
+          {isAch ? (
+            <button
+              style={{ width: "100%" }}
+              disabled={stripeConnectBusy || payoutBusy}
+              onClick={achReady
+                ? async () => { await submitPayoutPreference(); if (application) await loadApplication(application.id); }
+                : startStripeConnectOnboarding}
+            >
+              {stripeConnectBusy
+                ? "Redirecting to Stripe…"
+                : achReady
+                  ? "Continue →"
+                  : "Set up direct deposit →"}
+            </button>
+          ) : (
+            <button
+              style={{ width: "100%" }}
+              disabled={payoutBusy || !selectedMethod || !payoutContact.trim()}
+              onClick={async () => {
+                await submitPayoutPreference();
+                if (application) await loadApplication(application.id);
+              }}
+            >
+              {payoutBusy ? "Saving…" : "Yes, this is correct →"}
+            </button>
+          )}
         </div>
         <StatesFooter />
       </main>
