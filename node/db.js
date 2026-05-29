@@ -31,6 +31,10 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS referred_by TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS limit_freeze_until DATE;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS due_date_reminder_sent_at TIMESTAMPTZ;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS transfer_id TEXT;
 `).catch(() => {});
 
 pool.query(`
