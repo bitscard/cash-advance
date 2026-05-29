@@ -1920,6 +1920,153 @@ app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async fu
   }
 });
 
+// ── Stripe Financial Connections (bank link, transactions, ACH debit) ────────
+// FC is Stripe's bank-linking product. We use it as a Plaid replacement for:
+//   1. Income verification (transactions feature)
+//   2. ACH debit on repayment day (payment_method feature creates a
+//      chargeable us_bank_account PaymentMethod on the platform Customer)
+//   3. Pre-attaching the bank as external_account on the Connect Express
+//      account so ACH payouts have a destination without re-linking
+//
+// Three-step backend flow:
+//   1. POST /stripe/fc/create-session  → creates session, returns client_secret
+//   2. Frontend uses stripe.collectFinancialConnectionsAccounts(clientSecret)
+//      to launch the embedded bank-link UI
+//   3. POST /stripe/fc/complete  → retrieves session, saves account info
+//      + payment method, optionally subscribes to transactions feature
+app.post('/api/advance/applications/:id/stripe/fc/create-session', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // FC sessions are scoped to a customer. Create one if we don't have it.
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const session = await stripe.financialConnections.sessions.create({
+      account_holder: { type: 'customer', customer: customerId },
+      // payment_method → creates us_bank_account PM (chargeable)
+      // transactions → enables income classification reads
+      // balances → optional but useful for overdraft checks
+      permissions: ['payment_method', 'transactions', 'balances'],
+      filters: { countries: ['US'] },
+    });
+    await db.saveStripeFcSession(request.params.id, session.id);
+    console.log('[stripe/fc/create-session]', { application_id: row.id, session_id: session.id });
+    response.json({ client_secret: session.client_secret, session_id: session.id });
+  } catch (err) {
+    console.log('[stripe/fc/create-session] error', err.message);
+    next(err);
+  }
+});
+
+app.post('/api/advance/applications/:id/stripe/fc/complete', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row || !row.stripe_fc_session_id) {
+      return response.status(400).json({ error: { error_message: 'No FC session for this application' } });
+    }
+    const session = await stripe.financialConnections.sessions.retrieve(row.stripe_fc_session_id);
+    const accounts = session.accounts?.data || [];
+    if (accounts.length === 0) {
+      return response.json({ status: 'pending', application: db.publicApp(row) });
+    }
+    // Take the first linked bank account. If the user linked multiple
+    // (rare), we use the first; the frontend can show a picker later.
+    const fcAccount = accounts[0];
+
+    // payment_method permission means Stripe auto-creates a us_bank_account
+    // PaymentMethod on the customer for this FC account. Find it via the
+    // accounts endpoint or list customer PMs filtered by us_bank_account.
+    let bankPmId = null;
+    try {
+      const pms = await stripe.paymentMethods.list({
+        customer: row.stripe_customer_id,
+        type: 'us_bank_account',
+        limit: 10,
+      });
+      // Match by FC account id (Stripe stamps it on the PM).
+      const match = pms.data.find(pm => pm.us_bank_account?.financial_connections_account === fcAccount.id);
+      bankPmId = match?.id || pms.data[0]?.id || null;
+    } catch (e) {
+      console.log('[stripe/fc/complete] could not list PMs', e.message);
+    }
+
+    if (!bankPmId) {
+      // FC linked but PM not created — this means payment_method permission
+      // wasn't granted by the user, or sync is still in flight. Re-poll
+      // later or surface a clear error.
+      return response.status(400).json({
+        error: { error_message: 'Bank was linked but a chargeable payment method was not created. Try again or contact support.' },
+      });
+    }
+
+    let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccount.id, bankPmId);
+
+    // Subscribe to transactions so we can pull them later for income
+    // classification. Idempotent — Stripe ignores if already subscribed.
+    if (!updated.stripe_fc_subscribed_at) {
+      try {
+        await stripe.financialConnections.accounts.subscribe(fcAccount.id, {
+          features: ['transactions'],
+        });
+        updated = await db.markStripeFcSubscribed(row.id) || updated;
+        console.log('[stripe/fc/complete] subscribed to transactions', { account_id: fcAccount.id });
+      } catch (e) {
+        console.log('[stripe/fc/complete] subscribe failed (non-fatal)', e.message);
+      }
+    }
+
+    await db.addMessage(row.id, 'system', 'Bank account connected via Stripe. A reviewer will check your application and respond here.');
+    addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
+      .catch(err => console.log('[mailchimp review] error:', err.message));
+
+    response.json({ status: 'connected', application: db.publicApp(updated) });
+  } catch (err) {
+    console.log('[stripe/fc/complete] error', err.message);
+    next(err);
+  }
+});
+
+// Helper used by income classification + the admin bank snapshot to read
+// transactions from FC. Returns an array of transactions in chronological
+// order. Stripe's API caps each page at 100 — paginate up to ~3 months
+// of history (matches our existing Plaid window).
+async function fetchFcTransactions(fcAccountId) {
+  const transactions = [];
+  let starting_after = undefined;
+  for (let i = 0; i < 10; i++) {
+    const page = await stripe.financialConnections.transactions.list({
+      account: fcAccountId,
+      limit: 100,
+      ...(starting_after ? { starting_after } : {}),
+    });
+    transactions.push(...page.data);
+    if (!page.has_more || page.data.length === 0) break;
+    starting_after = page.data[page.data.length - 1].id;
+  }
+  return transactions;
+}
+module.exports.fetchFcTransactions = fetchFcTransactions;
+
 // Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
 // Fails open (ok: true) when balance is unavailable so card-only users are unaffected.
 async function checkOverdraft(accessToken, amountCents) {
