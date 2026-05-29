@@ -16,7 +16,7 @@ Key design choices:
 
 | Choice | Rationale |
 | --- | --- |
-| **State-gated eligibility (35 of 50 US states live)** | Lending laws vary by state; ineligible users go on a waitlist instead of being blocked outright. |
+| **State-gated eligibility (36 of 50 US states live)** | Lending laws vary by state; ineligible users go on a waitlist instead of being blocked outright. |
 | **Invite-only with a master gate code** | Word-of-mouth growth; `neworleans` is the master code that unlocks signup regardless of personal referral. |
 | **Plaid for income verification, Stripe for money movement** | Plaid handles the read-only bank connection (Hosted Link flow); Stripe handles ACH debits, card fallback, and the $3.99/mo subscription (created at funded-time with `billing_cycle_anchor` set to first repayment day). |
 | **3-layer income classification** | Plaid PFC codes → keyword blocklist → Claude Haiku fallback. Cuts false positives (refunds, transfers, SSI/VA benefits) from being counted as wages. |
@@ -579,7 +579,7 @@ The marketing team wires Customer Journeys against these tag names. **Keep them 
 | `password` | bcrypt hashed; minimum length enforced client-side (6) | Signup handler |
 | `dob` | Required; age ≥ 18 calculated against today | Signup |
 | `ssn` | 9 digits after stripping dashes; passes `isPlausibleSSN` (no 000/666/9xx area, no 00 group, no 0000 serial, no all-same-digit, not in the hardcoded fake list); not a duplicate in any active status (`intake`, `bank_connected`, `reviewing`, `approved`, `funded`, `repayment_scheduled`, `repayment_failed`). `TEST_SSNS` env bypass for QA. | Signup, `isPlausibleSSN` |
-| `state` | Must be in the 50-state list; eligibility = `ELIGIBLE_STATES` (35 states) determines `pending_payment` vs `waitlisted` | Signup |
+| `state` | Must be in the 50-state list; eligibility = `ELIGIBLE_STATES` (36 states) determines `pending_payment` vs `waitlisted` | Signup |
 | `income_sources[].pay_frequency` | One of `weekly / biweekly / semimonthly / monthly / daily / <freetext>` | Signup |
 | `income_sources[].payday` | A future date | Client; not strictly enforced server-side |
 | `requested_amount` | Always 25 on signup; on reapply derived from `repayment_count` + freeze | Reapply handler |
@@ -631,7 +631,7 @@ Vitest + React Testing Library + Playwright. `npm test`, `npm run e2e`.
 
 | Layer | Files | What's covered |
 | --- | --- | --- |
-| **Unit (8 cases)** | `src/__tests__/unit/*.test.ts` | `dataUtilities.ts` transform samples + cross-file consistency check that backend `ELIGIBLE_STATES`, frontend `ELIGIBLE_STATES`, T&Cs `STATE_PROVISIONS`, and Privacy `ELIGIBLE_STATES` all match (35 states). |
+| **Unit (8 cases)** | `src/__tests__/unit/*.test.ts` | `dataUtilities.ts` transform samples + cross-file consistency check that backend `ELIGIBLE_STATES`, frontend `ELIGIBLE_STATES`, T&Cs `STATE_PROVISIONS`, and Privacy `ELIGIBLE_STATES` all match (36 states). |
 | **Component (18 cases)** | `src/__tests__/components/*.test.tsx` | `TermsPage` renders all 35 state subsections; `PrivacyPage` state callouts; `ConsentPage` 7 sections + the 4-item "I hereby" list; `StatesFooter` legal links; signup-form consent line links all three legal docs. |
 | **E2E (~27 across chromium / webkit / iphone)** | `e2e/*.spec.ts` | Landing hero + $300 weekly raffle (regression for the Cancún copy swap); `/terms`, `/privacy`, `/consent` route content; mobile viewport rendering at iPhone 13. |
 

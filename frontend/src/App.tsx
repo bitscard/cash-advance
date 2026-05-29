@@ -141,7 +141,7 @@ const ELIGIBLE_STATES = new Set([
   "Alabama", "Alaska", "Arizona", "Colorado", "Delaware", "Florida", "Georgia",
   "Hawaii", "Idaho", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
   "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Jersey",
-  "New Mexico", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
   "Pennsylvania", "Rhode Island", "South Dakota", "Tennessee", "Texas",
   "Vermont", "Virginia", "Washington", "West Virginia", "Wyoming",
 ]);
@@ -1149,7 +1149,7 @@ const CustomerApp = () => {
                     {[
                       ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
                       ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
-                      ["What states is advance available in?", "Currently 35 US states. If we're not in your state yet, you can join the waitlist."],
+                      ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
                       ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
                       ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
                       ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
@@ -1533,7 +1533,7 @@ const CustomerApp = () => {
                 We're coming to<br />{stateName}!
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                Advance is live in 35 states today. We're expanding fast — {stateName} is on the roadmap.
+                Advance is live in 36 states today. We're expanding fast — {stateName} is on the roadmap.
                 You'll get an email the moment we go live.
               </p>
             </div>
@@ -4058,7 +4058,7 @@ const OauthReturn = () => {
 
 const StatesFooter = () => (
   <div className={styles.statesFooter}>
-    <p className={styles.statesFooterTitle}>Available in 35 states</p>
+    <p className={styles.statesFooterTitle}>Available in 36 states</p>
     <p style={{ fontSize: "1.2rem", maxWidth: "60rem", margin: "0 auto", lineHeight: 1.5 }}>
       AL · AK · AZ · CO · DE · FL · GA · HI · ID · IA · KY · ME · MI · MN · MS · MT · NE · NH · NJ · NM · NC · ND · OH · OK · OR · PA · RI · SD · TN · TX · VT · VA · WA · WV · WY
     </p>

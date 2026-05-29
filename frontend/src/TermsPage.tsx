@@ -24,6 +24,7 @@ const STATE_PROVISIONS: { state: string; venue: string; regulator: string }[] = 
   { state: "New Hampshire", venue: "Manchester", regulator: "New Hampshire Banking Department" },
   { state: "New Jersey", venue: "Newark", regulator: "New Jersey Department of Banking and Insurance" },
   { state: "New Mexico", venue: "Albuquerque", regulator: "New Mexico Financial Institutions Division" },
+  { state: "New York", venue: "New York County", regulator: "New York State Department of Financial Services (NY DFS)" },
   { state: "North Carolina", venue: "Charlotte", regulator: "North Carolina Office of the Commissioner of Banks" },
   { state: "North Dakota", venue: "Fargo", regulator: "North Dakota Department of Financial Institutions" },
   { state: "Ohio", venue: "Columbus", regulator: "Ohio Division of Financial Institutions" },
