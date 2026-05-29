@@ -1200,74 +1200,115 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
   try {
     const application = await db.getApplicationById(request.params.id);
     if (!application) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    if (!application.access_token) {
+    const hasFc = !!application.stripe_fc_account_id;
+    const hasPlaid = !!application.access_token;
+    if (!hasFc && !hasPlaid) {
       return response.status(400).json({ error: { error_message: 'No bank account connected yet.' } });
     }
 
-    // 1. Accounts + balances
     let accounts = [];
-    try {
-      const acctResp = await client.accountsBalance.get({ access_token: application.access_token });
-      accounts = acctResp.data.accounts.map(a => ({
-        id: a.account_id,
-        display_name: a.name,
-        institution_name: '',
-        last4: a.mask || null,
-        routing_number: null,
-        category: a.subtype || a.type,
-        balance: {
-          available: a.balances.available != null ? Math.round(a.balances.available * 100) : null,
-          current:   a.balances.current  != null ? Math.round(a.balances.current  * 100) : null,
-        },
-      }));
-    } catch (e) {
-      console.log('[bank_snapshot] accounts error:', e.message);
-    }
+    let rawTxs = [];
 
-    // 2. Routing number via Plaid Auth
-    try {
-      const authResp = await client.authGet({ access_token: application.access_token });
-      const achNumbers = authResp.data.numbers.ach;
-      accounts = accounts.map(a => {
-        const ach = achNumbers.find(n => n.account_id === a.id);
-        return ach ? { ...a, routing_number: ach.routing } : a;
-      });
-    } catch (e) {
-      console.log('[bank_snapshot] auth error (non-fatal):', e.message);
-    }
-
-    // 3. Transactions via transactionsSync (with personal_finance_category)
-    let txs = [];
-    try {
-      let cursor, hasMore = true, iter = 0;
-      while (hasMore && iter < 10) {
-        const syncResp = await client.transactionsSync({
-          access_token: application.access_token,
-          cursor,
-          count: 500,
-          options: { include_personal_finance_category: true },
-        });
-        txs = txs.concat(syncResp.data.added || []);
-        cursor = syncResp.data.next_cursor;
-        hasMore = syncResp.data.has_more;
-        iter++;
+    if (hasFc) {
+      // ── FC path ──────────────────────────────────────────────
+      try {
+        const fcAcct = await stripe.financialConnections.accounts.retrieve(application.stripe_fc_account_id);
+        const balanceCents = fcAcct.balance?.current?.usd
+          ? fcAcct.balance.current.usd  // already cents
+          : null;
+        accounts = [{
+          id: fcAcct.id,
+          display_name: fcAcct.display_name || fcAcct.institution_name || 'Bank Account',
+          institution_name: fcAcct.institution_name || '',
+          last4: fcAcct.last4 || null,
+          routing_number: null,  // not exposed by FC default API
+          category: fcAcct.subcategory || fcAcct.category,
+          balance: { available: balanceCents, current: balanceCents },
+        }];
+      } catch (e) {
+        console.log('[bank_snapshot fc] account fetch error', e.message);
       }
-      console.log('[bank_snapshot] transactions count:', txs.length);
-    } catch (e) {
-      console.log('[bank_snapshot] transactions error:', e.message);
+      try {
+        const fcTxs = await fetchFcTransactions(application.stripe_fc_account_id);
+        const { adaptFcTransactions } = require('./fcTransactionAdapter');
+        const plaidShaped = adaptFcTransactions(fcTxs);
+        // Same normalization as Plaid path (sign flip + cents) below.
+        rawTxs = plaidShaped.map(tx => ({
+          id: tx.transaction_id,
+          description: tx.merchant_name || tx.name || '',
+          amount: Math.round(-tx.amount * 100),
+          currency: (tx.iso_currency_code || 'usd').toLowerCase(),
+          date: tx.date,
+          category: '',
+          pfc: tx.personal_finance_category?.primary || null,
+        }));
+        console.log('[bank_snapshot fc] transactions count:', rawTxs.length);
+      } catch (e) {
+        console.log('[bank_snapshot fc] transactions error', e.message);
+      }
+    } else {
+      // ── Plaid path (legacy, kept for users mid-flight) ───────
+      // 1. Accounts + balances
+      try {
+        const acctResp = await client.accountsBalance.get({ access_token: application.access_token });
+        accounts = acctResp.data.accounts.map(a => ({
+          id: a.account_id,
+          display_name: a.name,
+          institution_name: '',
+          last4: a.mask || null,
+          routing_number: null,
+          category: a.subtype || a.type,
+          balance: {
+            available: a.balances.available != null ? Math.round(a.balances.available * 100) : null,
+            current:   a.balances.current  != null ? Math.round(a.balances.current  * 100) : null,
+          },
+        }));
+      } catch (e) {
+        console.log('[bank_snapshot plaid] accounts error:', e.message);
+      }
+      // 2. Routing number via Plaid Auth
+      try {
+        const authResp = await client.authGet({ access_token: application.access_token });
+        const achNumbers = authResp.data.numbers.ach;
+        accounts = accounts.map(a => {
+          const ach = achNumbers.find(n => n.account_id === a.id);
+          return ach ? { ...a, routing_number: ach.routing } : a;
+        });
+      } catch (e) {
+        console.log('[bank_snapshot plaid] auth error (non-fatal):', e.message);
+      }
+      // 3. Transactions via transactionsSync (with personal_finance_category)
+      let txs = [];
+      try {
+        let cursor, hasMore = true, iter = 0;
+        while (hasMore && iter < 10) {
+          const syncResp = await client.transactionsSync({
+            access_token: application.access_token,
+            cursor,
+            count: 500,
+            options: { include_personal_finance_category: true },
+          });
+          txs = txs.concat(syncResp.data.added || []);
+          cursor = syncResp.data.next_cursor;
+          hasMore = syncResp.data.has_more;
+          iter++;
+        }
+        console.log('[bank_snapshot plaid] transactions count:', txs.length);
+      } catch (e) {
+        console.log('[bank_snapshot plaid] transactions error:', e.message);
+      }
+      // Plaid: positive amount = money leaving (debit), negative = money coming in (credit)
+      // Normalise: positive = credit/income, negative = debit/spend (matches UI expectations)
+      rawTxs = txs.map(tx => ({
+        id: tx.transaction_id,
+        description: tx.merchant_name || tx.name || '',
+        amount: Math.round(-tx.amount * 100),
+        currency: (tx.iso_currency_code || 'usd').toLowerCase(),
+        date: tx.date,
+        category: (tx.category || []).join(', '),
+        pfc: tx.personal_finance_category?.primary || null,
+      }));
     }
-
-    // Plaid: positive amount = money leaving (debit), negative = money coming in (credit)
-    // Normalise: positive = credit/income, negative = debit/spend (matches UI expectations)
-    const rawTxs = txs.map(tx => ({
-      id: tx.transaction_id,
-      description: tx.merchant_name || tx.name || '',
-      amount: Math.round(-tx.amount * 100),
-      currency: (tx.iso_currency_code || 'usd').toLowerCase(),
-      date: tx.date,
-      category: (tx.category || []).join(', '),
-      pfc: tx.personal_finance_category?.primary || null,
-    }));
 
     // Classify incoming transactions through all layers
     const incoming = rawTxs.filter(tx => tx.amount > 0);
@@ -1311,7 +1352,21 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // Get account details via Plaid balance (Auth not required)
+    // Prefer FC if present; fall back to Plaid for users mid-flight on the legacy path.
+    if (row.stripe_fc_account_id) {
+      try {
+        const fc = await stripe.financialConnections.accounts.retrieve(row.stripe_fc_account_id);
+        return response.json({
+          bank_name: fc.display_name || fc.institution_name || 'Bank Account',
+          routing_number: 'Not available',  // FC default API doesn't expose; would need ownership permission
+          last4: fc.last4 || '----',
+          account_type: fc.subcategory || fc.category || 'unknown',
+          account_holder_type: 'individual',
+        });
+      } catch (e) {
+        console.log('[payment-method-details fc] error', e.message);
+      }
+    }
     if (row.access_token) {
       let bankName = 'Bank Account', last4 = '----', accountType = 'unknown', routingNumber = 'Not available';
       try {
@@ -1321,14 +1376,14 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
         last4 = acct?.mask || '----';
         accountType = acct?.subtype || acct?.type || 'unknown';
       } catch (e) {
-        console.log('[payment-method-details] balance error (non-fatal):', e.message);
+        console.log('[payment-method-details plaid] balance error (non-fatal):', e.message);
       }
       try {
         const authResp = await client.authGet({ access_token: row.access_token });
         const ach = authResp.data.numbers.ach[0];
         if (ach?.routing) routingNumber = ach.routing;
       } catch (e) {
-        console.log('[payment-method-details] auth error (non-fatal):', e.message);
+        console.log('[payment-method-details plaid] auth error (non-fatal):', e.message);
       }
       return response.json({ bank_name: bankName, routing_number: routingNumber, last4, account_type: accountType, account_holder_type: 'individual' });
     }
