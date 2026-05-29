@@ -1862,12 +1862,14 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
           })() : undefined,
           ssn_last_4: row.ssn ? row.ssn.replace(/-/g, '').slice(-4) : (row.ssn_last4 || undefined),
         },
-        // Auto-accept the Connect platform's terms of service on
-        // behalf of the user. They've already agreed to ours; this
-        // means Stripe doesn't make them click through another ToS.
-        tos_acceptance: {
-          service_agreement: 'recipient',
-        },
+        // NOTE: we initially tried tos_acceptance.service_agreement=
+        // 'recipient' here, but Stripe rejects it for US platforms
+        // creating US accounts. That service_agreement is only valid
+        // for cross-border payouts (US platform → non-US recipient or
+        // vice versa). For domestic US accounts we fall back to the
+        // default 'full' agreement, which the hosted onboarding
+        // displays during the flow. The business_profile prefilling
+        // above still reduces the questions the recipient sees.
         metadata: { application_id: row.id },
       });
       accountId = account.id;
