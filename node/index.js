@@ -2082,29 +2082,64 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
     // (rare), we use the first; the frontend can show a picker later.
     const fcAccount = accounts[0];
 
-    // payment_method permission means Stripe auto-creates a us_bank_account
-    // PaymentMethod on the customer for this FC account. Find it via the
-    // accounts endpoint or list customer PMs filtered by us_bank_account.
+    // Resolving the us_bank_account PaymentMethod for this FC account is
+    // surprisingly fiddly across Stripe API versions. Three strategies in
+    // order of preference:
+    //
+    //   1. fcAccount.payment_method — newer API surfaces it directly on
+    //      the linked account. Cheapest path.
+    //   2. paymentMethods.list filtered by customer + type — find the
+    //      one whose us_bank_account.financial_connections_account
+    //      matches our FC account id.
+    //   3. paymentMethods.create — explicitly mint a PM from the FC
+    //      account. Works on all API versions, attaches to customer.
     let bankPmId = null;
-    try {
-      const pms = await stripe.paymentMethods.list({
-        customer: row.stripe_customer_id,
-        type: 'us_bank_account',
-        limit: 10,
-      });
-      // Match by FC account id (Stripe stamps it on the PM).
-      const match = pms.data.find(pm => pm.us_bank_account?.financial_connections_account === fcAccount.id);
-      bankPmId = match?.id || pms.data[0]?.id || null;
-    } catch (e) {
-      console.log('[stripe/fc/complete] could not list PMs', e.message);
+
+    // Strategy 1: direct field on the FC account
+    if (fcAccount.payment_method) {
+      bankPmId = fcAccount.payment_method;
+      console.log('[stripe/fc/complete] PM via fcAccount.payment_method', { pm: bankPmId });
+    }
+
+    // Strategy 2: list customer's us_bank_account PMs and match
+    if (!bankPmId) {
+      try {
+        const pms = await stripe.paymentMethods.list({
+          customer: row.stripe_customer_id,
+          type: 'us_bank_account',
+          limit: 20,
+        });
+        const exactMatch = pms.data.find(pm => pm.us_bank_account?.financial_connections_account === fcAccount.id);
+        const fallback = pms.data[0];
+        bankPmId = exactMatch?.id || fallback?.id || null;
+        if (bankPmId) console.log('[stripe/fc/complete] PM via list', { pm: bankPmId, exact: !!exactMatch });
+      } catch (e) {
+        console.log('[stripe/fc/complete] paymentMethods.list failed', e.message);
+      }
+    }
+
+    // Strategy 3: explicitly create the PM from the FC account
+    if (!bankPmId) {
+      try {
+        const created = await stripe.paymentMethods.create({
+          type: 'us_bank_account',
+          us_bank_account: { financial_connections_account: fcAccount.id },
+        });
+        // Attach to the customer so charges off-session work
+        await stripe.paymentMethods.attach(created.id, { customer: row.stripe_customer_id });
+        bankPmId = created.id;
+        console.log('[stripe/fc/complete] PM via create+attach', { pm: bankPmId });
+      } catch (e) {
+        console.log('[stripe/fc/complete] paymentMethods.create failed', e.message);
+      }
     }
 
     if (!bankPmId) {
-      // FC linked but PM not created — this means payment_method permission
-      // wasn't granted by the user, or sync is still in flight. Re-poll
-      // later or surface a clear error.
+      // Save what we DO have — at least the FC account id — so the user
+      // can retry without losing the bank link. Then return an error.
+      await db.saveStripeFcLinkedAccount(row.id, fcAccount.id, null);
       return response.status(400).json({
-        error: { error_message: 'Bank was linked but a chargeable payment method was not created. Try again or contact support.' },
+        error: { error_message: 'Bank was linked but a chargeable payment method was not created. Please try again or contact support.' },
       });
     }
 
