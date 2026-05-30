@@ -2023,6 +2023,30 @@ app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async fu
 //      to launch the embedded bank-link UI
 //   3. POST /stripe/fc/complete  → retrieves session, saves account info
 //      + payment method, optionally subscribes to transactions feature
+// Switched from the low-level FinancialConnectionsSession API to the
+// high-level SetupIntent + us_bank_account API. Why:
+//
+//   FinancialConnectionsSession is the raw primitive — it gives you a
+//   FC account back, but PaymentMethod creation is a SEPARATE
+//   downstream step that fails silently across API versions in ways
+//   that are basically impossible to debug from the outside (PM exists
+//   but not attached, or attached to a different customer, or only
+//   created if specific permissions were granted by the user, etc.).
+//
+//   SetupIntent with payment_method_types: ['us_bank_account'] uses FC
+//   under the hood but handles the entire pipeline atomically — bank
+//   link → FC account → PaymentMethod → attached to customer — in one
+//   confirmable object. Either it's `succeeded` with a populated
+//   payment_method, or it isn't. No silent multi-step failures.
+//
+// Endpoints (same URLs, different semantics underneath):
+//   POST /stripe/fc/create-session
+//     → creates a SetupIntent for us_bank_account, returns client_secret
+//
+//   POST /stripe/fc/complete
+//     → retrieves the SetupIntent, extracts the PaymentMethod (always
+//       there when status='succeeded'), saves it as the chargeable PM
+//       AND extracts the underlying FC account id for transaction reads
 app.post('/api/advance/applications/:id/stripe/fc/create-session', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
@@ -2033,7 +2057,6 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // FC sessions are scoped to a customer. Create one if we don't have it.
     let customerId = row.stripe_customer_id;
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -2045,17 +2068,33 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
       await db.saveStripeCustomer(row.id, customerId);
     }
 
-    const session = await stripe.financialConnections.sessions.create({
-      account_holder: { type: 'customer', customer: customerId },
-      // payment_method → creates us_bank_account PM (chargeable)
-      // transactions → enables income classification reads
-      // balances → optional but useful for overdraft checks
-      permissions: ['payment_method', 'transactions', 'balances'],
-      filters: { countries: ['US'] },
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      payment_method_types: ['us_bank_account'],
+      payment_method_options: {
+        us_bank_account: {
+          // FC handles the actual bank-link UI under the hood. We ask
+          // for the permissions we'll need downstream: 'payment_method'
+          // (auto-creates the PM), 'transactions' (income classification
+          // reads), 'balances' (overdraft pre-check).
+          financial_connections: {
+            permissions: ['payment_method', 'transactions', 'balances'],
+          },
+          // verification_method: 'automatic' = Stripe handles micro-deposits
+          // when FC isn't available for that bank. 'instant' = FC only.
+          // 'automatic' is more permissive and what we want.
+          verification_method: 'automatic',
+        },
+      },
+      usage: 'off_session',
+      metadata: { application_id: row.id },
     });
-    await db.saveStripeFcSession(request.params.id, session.id);
-    console.log('[stripe/fc/create-session]', { application_id: row.id, session_id: session.id });
-    response.json({ client_secret: session.client_secret, session_id: session.id });
+    // We store the SetupIntent ID in the existing stripe_fc_session_id
+    // column — semantically it's still "the bank-link session", and
+    // we avoid a schema migration.
+    await db.saveStripeFcSession(request.params.id, setupIntent.id);
+    console.log('[stripe/fc/create-session] setup_intent created', { application_id: row.id, setup_intent_id: setupIntent.id });
+    response.json({ client_secret: setupIntent.client_secret, setup_intent_id: setupIntent.id });
   } catch (err) {
     console.log('[stripe/fc/create-session] error', err.message);
     next(err);
@@ -2071,89 +2110,50 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row || !row.stripe_fc_session_id) {
-      return response.status(400).json({ error: { error_message: 'No FC session for this application' } });
-    }
-    const session = await stripe.financialConnections.sessions.retrieve(row.stripe_fc_session_id);
-    const accounts = session.accounts?.data || [];
-    if (accounts.length === 0) {
-      return response.json({ status: 'pending', application: db.publicApp(row) });
-    }
-    // Take the first linked bank account. If the user linked multiple
-    // (rare), we use the first; the frontend can show a picker later.
-    const fcAccount = accounts[0];
-
-    // Resolving the us_bank_account PaymentMethod for this FC account is
-    // surprisingly fiddly across Stripe API versions. Three strategies in
-    // order of preference:
-    //
-    //   1. fcAccount.payment_method — newer API surfaces it directly on
-    //      the linked account. Cheapest path.
-    //   2. paymentMethods.list filtered by customer + type — find the
-    //      one whose us_bank_account.financial_connections_account
-    //      matches our FC account id.
-    //   3. paymentMethods.create — explicitly mint a PM from the FC
-    //      account. Works on all API versions, attaches to customer.
-    let bankPmId = null;
-
-    // Strategy 1: direct field on the FC account
-    if (fcAccount.payment_method) {
-      bankPmId = fcAccount.payment_method;
-      console.log('[stripe/fc/complete] PM via fcAccount.payment_method', { pm: bankPmId });
+      return response.status(400).json({ error: { error_message: 'No bank-link session for this application' } });
     }
 
-    // Strategy 2: list customer's us_bank_account PMs and match
-    if (!bankPmId) {
-      try {
-        const pms = await stripe.paymentMethods.list({
-          customer: row.stripe_customer_id,
-          type: 'us_bank_account',
-          limit: 20,
-        });
-        const exactMatch = pms.data.find(pm => pm.us_bank_account?.financial_connections_account === fcAccount.id);
-        const fallback = pms.data[0];
-        bankPmId = exactMatch?.id || fallback?.id || null;
-        if (bankPmId) console.log('[stripe/fc/complete] PM via list', { pm: bankPmId, exact: !!exactMatch });
-      } catch (e) {
-        console.log('[stripe/fc/complete] paymentMethods.list failed', e.message);
-      }
-    }
+    // Retrieve the SetupIntent. If it's 'succeeded', the payment_method is
+    // guaranteed to be populated and attached to the customer.
+    const setupIntent = await stripe.setupIntents.retrieve(row.stripe_fc_session_id, {
+      expand: ['payment_method'],
+    });
+    console.log('[stripe/fc/complete] setup_intent status', { id: setupIntent.id, status: setupIntent.status, has_pm: !!setupIntent.payment_method });
 
-    // Strategy 3: explicitly create the PM from the FC account
-    if (!bankPmId) {
-      try {
-        const created = await stripe.paymentMethods.create({
-          type: 'us_bank_account',
-          us_bank_account: { financial_connections_account: fcAccount.id },
-        });
-        // Attach to the customer so charges off-session work
-        await stripe.paymentMethods.attach(created.id, { customer: row.stripe_customer_id });
-        bankPmId = created.id;
-        console.log('[stripe/fc/complete] PM via create+attach', { pm: bankPmId });
-      } catch (e) {
-        console.log('[stripe/fc/complete] paymentMethods.create failed', e.message);
-      }
-    }
-
-    if (!bankPmId) {
-      // Save what we DO have — at least the FC account id — so the user
-      // can retry without losing the bank link. Then return an error.
-      await db.saveStripeFcLinkedAccount(row.id, fcAccount.id, null);
+    if (setupIntent.status !== 'succeeded') {
+      // Frontend will retry — status could be 'requires_action', 'processing',
+      // or 'requires_confirmation'. We return a non-200 so the user sees a
+      // clear retry prompt rather than a silent half-state.
       return response.status(400).json({
-        error: { error_message: 'Bank was linked but a chargeable payment method was not created. Please try again or contact support.' },
+        error: { error_message: `Bank link is not finalized yet (status: ${setupIntent.status}). Please try again.` },
       });
     }
 
-    let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccount.id, bankPmId);
+    const pm = setupIntent.payment_method;
+    if (!pm || !pm.id) {
+      return response.status(400).json({
+        error: { error_message: 'Bank link succeeded but no payment method was returned. Please try again or contact support.' },
+      });
+    }
 
-    // Subscribe to transactions so we can pull them later for income
-    // classification. Idempotent — Stripe ignores if already subscribed.
-    if (!updated.stripe_fc_subscribed_at) {
+    const bankPmId = pm.id;
+    // The FC account id is on the us_bank_account PM. We need it for
+    // transactions reads later.
+    const fcAccountId = pm.us_bank_account?.financial_connections_account || null;
+    console.log('[stripe/fc/complete] saving', { application_id: row.id, pm: bankPmId, fc_account: fcAccountId });
+
+    let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccountId, bankPmId);
+
+    // Subscribe to transactions for income classification. Only meaningful
+    // if we have a real FC account id; some banks return verified bank
+    // accounts via micro-deposit instead, which don't expose transactions.
+    if (fcAccountId && !updated.stripe_fc_subscribed_at) {
       try {
-        await stripe.financialConnections.accounts.subscribe(fcAccount.id, {
+        await stripe.financialConnections.accounts.subscribe(fcAccountId, {
           features: ['transactions'],
         });
         updated = await db.markStripeFcSubscribed(row.id) || updated;
-        console.log('[stripe/fc/complete] subscribed to transactions', { account_id: fcAccount.id });
+        console.log('[stripe/fc/complete] subscribed to transactions', { account_id: fcAccountId });
       } catch (e) {
         console.log('[stripe/fc/complete] subscribe failed (non-fatal)', e.message);
       }
