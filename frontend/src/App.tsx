@@ -732,7 +732,7 @@ const CustomerApp = () => {
       const stripe = await stripePromise;
       if (!stripe) throw new Error("Could not load Stripe");
 
-      // 1. Create FC session on backend
+      // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled)
       const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/create-session`), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -740,29 +740,61 @@ const CustomerApp = () => {
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
 
-      // 2. Launch Stripe's embedded FC flow (Plaid-powered under the hood
-      // but Stripe-branded). User links their bank without leaving our app.
-      // Cast to any because some @stripe/stripe-js minor versions don't
-      // include the FC methods in their type defs even though the runtime
-      // method is available since v2.x.
-      const stripeWithFc = stripe as unknown as {
-        collectFinancialConnectionsAccounts: (args: { clientSecret: string }) => Promise<{
-          financialConnectionsSession?: unknown;
+      // 2. collectBankAccountForSetup launches FC under the hood and walks
+      //    the user through bank selection + auth. Returns a SetupIntent
+      //    with payment_method populated (or null if user cancelled).
+      //
+      //    Cast for types — @stripe/stripe-js may not declare these
+      //    methods in older minor versions; runtime support is fine.
+      const stripeBank = stripe as unknown as {
+        collectBankAccountForSetup: (args: {
+          clientSecret: string;
+          params: {
+            payment_method_type: "us_bank_account";
+            payment_method_data: {
+              billing_details: { name?: string; email?: string };
+            };
+          };
+        }) => Promise<{
+          setupIntent?: { id: string; status: string; payment_method?: string | { id: string } };
+          error?: { message?: string; code?: string };
+        }>;
+        confirmUsBankAccountSetup: (clientSecret: string) => Promise<{
+          setupIntent?: { id: string; status: string };
           error?: { message?: string; code?: string };
         }>;
       };
-      const result = await stripeWithFc.collectFinancialConnectionsAccounts({
+
+      const collectResult = await stripeBank.collectBankAccountForSetup({
         clientSecret: sessionData.client_secret,
+        params: {
+          payment_method_type: "us_bank_account",
+          payment_method_data: {
+            billing_details: {
+              name: application.customer.name,
+              email: application.customer.email,
+            },
+          },
+        },
       });
-      if (result.error) {
-        if (result.error.code === "session_expired") {
+      if (collectResult.error) {
+        if (collectResult.error.code === "setup_intent_unexpected_state") {
           throw new Error("Your bank-linking session expired. Please try again.");
         }
-        throw new Error(result.error.message || "Bank linking was cancelled.");
+        throw new Error(collectResult.error.message || "Bank linking was cancelled.");
       }
 
-      // 3. Tell backend the session is done — it retrieves the linked
-      // account(s) + saves the PaymentMethod for repayment.
+      // 3. If the SetupIntent is requires_confirmation, confirm it.
+      //    Confirmation finalizes PM creation + attachment.
+      if (collectResult.setupIntent?.status === "requires_confirmation") {
+        const confirmResult = await stripeBank.confirmUsBankAccountSetup(sessionData.client_secret);
+        if (confirmResult.error) {
+          throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
+        }
+      }
+
+      // 4. Tell the backend to retrieve the SetupIntent and save the
+      //    PaymentMethod + FC account id.
       const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
