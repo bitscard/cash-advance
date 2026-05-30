@@ -1249,191 +1249,253 @@ const CustomerApp = () => {
     // ── Referral gate ────────────────────────────────────────────────────────
     if (view === "referral") {
       return (
-        <main className={styles.page}>
-          <NavBar />
-          <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-                <p className={styles.benefitsHeaderKicker}>Invite-only early access</p>
-                <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                  You got the hook-up?
-                </h1>
-                <p className={styles.benefitsHeaderSub}>
-                  Advance is growing through word of mouth. Enter your invite code below to get started.
-                </p>
-              </div>
-              <div style={{ flexShrink: 0, opacity: 0.92 }}>
-                <AlienMascot flag="usa" size={160} />
+        <div className={styles.ldPage}>
+          <header className={styles.ldNav}>
+            <div className={styles.ldNavInner}>
+              <a className={styles.ldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
+                <span className={styles.ldBrandMark}>
+                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                    <circle cx="11" cy="11" r="10" fill="#fff" />
+                    <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                advance<span className={styles.ldBrandDot}>.</span>
+              </a>
+              <div className={styles.ldNavCtas}>
+                <a href="/loan" className={styles.ldLinkBtn}>Sign in</a>
               </div>
             </div>
-          </div>
-          <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-            <div style={{ marginBottom: "2rem" }}>
-              <label style={{ fontSize: "1.5rem", fontWeight: 600, display: "block", marginBottom: "0.8rem", color: "var(--ink)" }}>
-                Enter your invite code
-              </label>
-              <div style={{ position: "relative" }}>
+          </header>
+
+          <main className={styles.ldGate}>
+            <div className={styles.ldGateInner}>
+              <span className={styles.ldEyebrow}>
+                <span className={styles.ldEyebrowDot} aria-hidden="true" />
+                Invite-only early access
+              </span>
+              <h1 className={styles.ldGateH1}>You got the hook-up?</h1>
+              <p className={styles.ldGateLead}>
+                Advance is growing through word of mouth. Enter the code from whoever invited you to continue.
+              </p>
+
+              <div className={styles.ldGateCard}>
+                <label htmlFor="gate-code-input" className={styles.ldGateLabel}>
+                  Your invite code
+                </label>
                 <input
+                  id="gate-code-input"
                   type="text"
-                  placeholder="Enter your code"
                   autoComplete="off"
+                  placeholder="Enter your code"
                   value={gateCode}
                   onChange={(e) => { setGateCode(e.target.value); setGateValid(null); setError(null); }}
                   onKeyDown={(e) => e.key === "Enter" && document.getElementById("gate-continue")?.click()}
-                  style={{ width: "100%", fontSize: "1.6rem", padding: "1.2rem 1.4rem", borderRadius: "var(--r-sm)", border: `1.5px solid ${gateValid === false ? "#dc2626" : gateValid === true ? "#16a34a" : "var(--border)"}` }}
+                  className={`${styles.ldGateInput} ${gateValid === false ? styles.ldGateInputInvalid : ""} ${gateValid === true ? styles.ldGateInputValid : ""}`}
                 />
                 {gateValid === true && (
-                  <span style={{ position: "absolute", right: "1.2rem", top: "50%", transform: "translateY(-50%)", fontSize: "1.3rem", color: "#16a34a", fontWeight: 600, pointerEvents: "none" }}>
-                    ✓ {gateReferrerName ? `Referred by ${gateReferrerName}` : "Code accepted"}
-                  </span>
+                  <p className={styles.ldGateValidMsg}>
+                    <span aria-hidden="true">✓</span> {gateReferrerName ? `Referred by ${gateReferrerName}` : "Code accepted"}
+                  </p>
                 )}
+                {gateValid === false && (
+                  <p className={styles.ldGateInvalidMsg}>
+                    That code isn&apos;t recognized. Check with whoever referred you and try again.
+                  </p>
+                )}
+                {error && <p className={styles.ldGateError}>{error}</p>}
+                <button
+                  id="gate-continue"
+                  type="button"
+                  className={styles.ldGateBtn}
+                  disabled={!gateCode.trim() || gateBusy}
+                  onClick={async () => {
+                    const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
+                    if (!code) return;
+                    setGateBusy(true);
+                    setError(null);
+                    try {
+                      const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
+                      const data = await res.json();
+                      setGateValid(data.valid);
+                      setGateReferrerName(data.valid ? data.referrer_name : null);
+                      if (data.valid) {
+                        setForm(f => ({ ...f, referralCode: code }));
+                        setView("signup");
+                      }
+                    } catch {
+                      setError("Could not verify code. Please try again.");
+                    } finally {
+                      setGateBusy(false);
+                    }
+                  }}
+                >
+                  {gateBusy ? "Checking…" : <>Continue <span aria-hidden="true">→</span></>}
+                </button>
               </div>
-              {gateValid === false && (
-                <p style={{ fontSize: "1.3rem", color: "#dc2626", marginTop: "0.6rem" }}>
-                  That code isn't recognized. Check with whoever referred you and try again.
-                </p>
-              )}
+
+              <p className={styles.ldGateFootNote}>
+                Already have an account? <a href="/loan" className={styles.ldGateFootLink}>Sign in →</a>
+              </p>
+
+              <ul className={styles.ldGateTrust} aria-label="What you get">
+                <li>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  No credit check
+                </li>
+                <li>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  0% interest
+                </li>
+                <li>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Cancel anytime
+                </li>
+              </ul>
             </div>
-            {error && <p className={styles.error}>{error}</p>}
-            <button
-              id="gate-continue"
-              style={{ width: "100%" }}
-              disabled={!gateCode.trim() || gateBusy}
-              onClick={async () => {
-                const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
-                if (!code) return;
-                setGateBusy(true);
-                setError(null);
-                try {
-                  const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
-                  const data = await res.json();
-                  setGateValid(data.valid);
-                  setGateReferrerName(data.valid ? data.referrer_name : null);
-                  if (data.valid) {
-                    setForm(f => ({ ...f, referralCode: code }));
-                    setView("signup");
-                  }
-                } catch {
-                  setError("Could not verify code. Please try again.");
-                } finally {
-                  setGateBusy(false);
-                }
-              }}
-            >
-              {gateBusy ? "Checking…" : "Continue →"}
-            </button>
-            <p style={{ fontSize: "1.3rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
-              Already have an account?{" "}
-              <a href="/loan" style={{ color: "var(--brand)", fontWeight: 600 }}>Sign in →</a>
-            </p>
-          </div>
-          <StatesFooter />
-        </main>
+          </main>
+        </div>
       );
     }
 
     // ── Signup ────────────────────────────────────────────────────────────────
     return (
-      <main className={styles.page}>
-        <NavBar />
+      <div className={styles.ldPage}>
         {isDateFocused && <div className={styles.backdrop} />}
-        <section className={styles.chatOnly} style={{ paddingTop: "3.2rem" }}>
-          <div className={styles.signupCard}>
-            <div className={styles.signupCardHeader}>
-              <div className={styles.progressSteps}>
-                <div className={`${styles.progressStep} ${styles.active}`}>
-                  <div className={styles.progressStepDot}>1</div>
-                  <span className={styles.progressStepLabel}>Your info</span>
-                </div>
-                <div className={styles.progressStep}>
-                  <div className={styles.progressStepDot}>2</div>
-                  <span className={styles.progressStepLabel}>Connect bank</span>
-                </div>
-                <div className={styles.progressStep}>
-                  <div className={styles.progressStepDot}>3</div>
-                  <span className={styles.progressStepLabel}>Get funded</span>
-                </div>
-              </div>
-              <p className={styles.kicker}>Step 1 of 3</p>
-              <h1>Tell us about yourself</h1>
-              <p>Takes 2 minutes. Trusted by 700,000+ people. Never sold or shared.</p>
-              <p style={{ marginTop: "0.6rem", fontSize: "1.3rem", color: "var(--brand)", fontWeight: 600 }}>
-                🔒 No hard credit check — ever. Zero impact on your credit score.
+
+        <header className={styles.ldNav}>
+          <div className={styles.ldNavInner}>
+            <a className={styles.ldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
+              <span className={styles.ldBrandMark}>
+                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="10" fill="#fff" />
+                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              advance<span className={styles.ldBrandDot}>.</span>
+            </a>
+            <a href="/loan" className={styles.ldLinkBtn}>Sign in</a>
+          </div>
+        </header>
+
+        <main className={styles.ldSignup}>
+          <div className={styles.ldSignupInner}>
+            <ol className={styles.ldSignupProgress} aria-label="Signup progress">
+              <li className={`${styles.ldSignupStep} ${styles.ldSignupStepActive}`}>
+                <span className={styles.ldSignupStepDot}>1</span>
+                <span className={styles.ldSignupStepLabel}>Your info</span>
+              </li>
+              <li className={styles.ldSignupStepBar} aria-hidden="true" />
+              <li className={styles.ldSignupStep}>
+                <span className={styles.ldSignupStepDot}>2</span>
+                <span className={styles.ldSignupStepLabel}>Connect bank</span>
+              </li>
+              <li className={styles.ldSignupStepBar} aria-hidden="true" />
+              <li className={styles.ldSignupStep}>
+                <span className={styles.ldSignupStepDot}>3</span>
+                <span className={styles.ldSignupStepLabel}>Get funded</span>
+              </li>
+            </ol>
+
+            <div className={styles.ldSignupHeader}>
+              <span className={styles.ldEyebrow}>
+                <span className={styles.ldEyebrowDot} aria-hidden="true" />
+                Step 1 of 3
+              </span>
+              <h1 className={styles.ldSignupH1}>Tell us about yourself</h1>
+              <p className={styles.ldSignupLead}>Takes about 2 minutes.</p>
+              <p className={styles.ldSignupReassure}>
+                <span aria-hidden="true">🔒</span> No hard credit check — ever. Zero impact on your credit score.
               </p>
             </div>
-            <div className={styles.signupCardBody}>
-              <form className={styles.intakeComposer} onSubmit={handleSignupSubmit}>
-                <div className={styles.intakeGrid}>
-                  <label>
-                    Full name
-                    <input required value={form.name} placeholder="Jane Smith"
+
+            <form className={styles.ldSignupForm} onSubmit={handleSignupSubmit}>
+              <section className={styles.ldSignupSection}>
+                <h2 className={styles.ldSignupSectionTitle}>Personal information</h2>
+                <div className={styles.ldSignupGrid}>
+                  <label className={styles.ldSignupField}>
+                    <span className={styles.ldSignupFieldLabel}>Full name</span>
+                    <input className={styles.ldSignupInput} required value={form.name} placeholder="Jane Smith"
                       onChange={(event) => setForm({ ...form, name: event.target.value })} />
                   </label>
-                  <label>
-                    Email address
-                    <input required type="email" value={form.email} placeholder="jane@example.com"
+                  <label className={styles.ldSignupField}>
+                    <span className={styles.ldSignupFieldLabel}>Email address</span>
+                    <input className={styles.ldSignupInput} required type="email" value={form.email} placeholder="jane@example.com"
                       onChange={(event) => setForm({ ...form, email: event.target.value })} />
                   </label>
-                  <label>
-                    Phone number
-                    <input required value={form.phone} placeholder="(555) 000-0000"
+                  <label className={styles.ldSignupField}>
+                    <span className={styles.ldSignupFieldLabel}>Phone number</span>
+                    <input className={styles.ldSignupInput} required value={form.phone} placeholder="(555) 000-0000"
                       onChange={(event) => setForm({ ...form, phone: event.target.value })} />
                   </label>
-                  <label>
-                    Date of birth
-                    <input required type="date" value={form.dob}
+                  <label className={styles.ldSignupField}>
+                    <span className={styles.ldSignupFieldLabel}>Date of birth</span>
+                    <input className={styles.ldSignupInput} required type="date" value={form.dob}
                       max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
                       onChange={(event) => setForm({ ...form, dob: event.target.value })} />
                   </label>
-                  <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "1rem" }}>
-                    {form.income_sources.map((src, i) => (
-                      <div key={i} style={{ border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "1.2rem 1.4rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <strong style={{ fontSize: "1.4rem" }}>
-                            {form.income_sources.length > 1 ? `Income source ${i + 1}` : "Income source"}
-                          </strong>
-                          {form.income_sources.length > 1 && (
-                            <button type="button" onClick={() => removeSource(i)}
-                              style={{ fontSize: "1.2rem", color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                        <label>
-                          Employer
-                          <input required value={src.employer} placeholder="Acme Corp"
-                            onChange={e => updateSource(i, "employer", e.target.value)} />
-                        </label>
-                        <label>
-                          Next payday <span style={{ color: "var(--muted)", fontWeight: 400 }}>(future dates only)</span>
-                          <input required min={today} type="date" value={src.payday}
-                            onChange={e => updateSource(i, "payday", e.target.value)} />
-                        </label>
-                        {/* Pay frequency removed from signup — we derive it
-                            from Plaid (or Stripe FC) transaction patterns later.
-                            Backend stays tolerant of null pay_frequency. */}
-                      </div>
-                    ))}
-                    <button type="button" onClick={addSource}
-                      style={{ alignSelf: "flex-start", fontSize: "1.3rem", background: "none", border: "1.5px solid var(--border)", borderRadius: "var(--r-sm)", padding: "0.6rem 1.2rem", cursor: "pointer" }}>
-                      + Add another income source
-                    </button>
-                  </div>
-                  <label>
-                    State
+                  <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
+                    <span className={styles.ldSignupFieldLabel}>State</span>
                     <select
+                      className={styles.ldSignupSelect}
                       required
                       value={form.state}
                       onChange={(e) => setForm({ ...form, state: e.target.value })}
-                      style={{ display: "block", width: "100%", padding: "1rem 1.2rem", borderRadius: "var(--r-sm)", border: "1.5px solid var(--border)", fontSize: "1.5rem", background: "var(--white)", color: form.state ? "var(--ink)" : "var(--muted)", appearance: "auto" }}
                     >
                       <option value="" disabled>Select state…</option>
                       {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </label>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    Social Security Number
+                </div>
+              </section>
+
+              <section className={styles.ldSignupSection}>
+                <h2 className={styles.ldSignupSectionTitle}>Income</h2>
+                <div className={styles.ldSignupIncomeList}>
+                  {form.income_sources.map((src, i) => (
+                    <div key={i} className={styles.ldSignupIncomeCard}>
+                      <div className={styles.ldSignupIncomeHead}>
+                        <strong>{form.income_sources.length > 1 ? `Income source ${i + 1}` : "Income source"}</strong>
+                        {form.income_sources.length > 1 && (
+                          <button type="button" onClick={() => removeSource(i)} className={styles.ldSignupIncomeRemove}>
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <div className={styles.ldSignupGrid}>
+                        <label className={styles.ldSignupField}>
+                          <span className={styles.ldSignupFieldLabel}>Employer</span>
+                          <input className={styles.ldSignupInput} required value={src.employer} placeholder="Acme Corp"
+                            onChange={e => updateSource(i, "employer", e.target.value)} />
+                        </label>
+                        <label className={styles.ldSignupField}>
+                          <span className={styles.ldSignupFieldLabel}>
+                            Next payday <span className={styles.ldSignupHint}>(future dates only)</span>
+                          </span>
+                          <input className={styles.ldSignupInput} required min={today} type="date" value={src.payday}
+                            onChange={e => updateSource(i, "payday", e.target.value)} />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addSource} className={styles.ldSignupAddSource}>
+                    <span aria-hidden="true">+</span> Add another income source
+                  </button>
+                </div>
+              </section>
+
+              <section className={styles.ldSignupSection}>
+                <h2 className={styles.ldSignupSectionTitle}>Verification &amp; security</h2>
+                <div className={styles.ldSignupGrid}>
+                  <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
+                    <span className={styles.ldSignupFieldLabel}>Social Security Number</span>
                     <input
+                      className={styles.ldSignupInput}
                       required
                       type="text"
                       inputMode="numeric"
@@ -1451,44 +1513,41 @@ const CustomerApp = () => {
                       }}
                     />
                   </label>
-                  <label>
-                    Create a password
-                    <input required type="password" minLength={6} placeholder="Min. 6 characters"
+                  <label className={styles.ldSignupField}>
+                    <span className={styles.ldSignupFieldLabel}>Create a password</span>
+                    <input className={styles.ldSignupInput} required type="password" minLength={6} placeholder="Min. 6 characters"
                       autoComplete="new-password"
                       value={form.password}
                       onChange={(event) => setForm({ ...form, password: event.target.value })} />
                   </label>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    Confirm password
-                    <input required type="password" autoComplete="new-password"
+                  <label className={styles.ldSignupField}>
+                    <span className={styles.ldSignupFieldLabel}>Confirm password</span>
+                    <input className={styles.ldSignupInput} required type="password" autoComplete="new-password"
                       value={form.confirmPassword}
                       onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
                   </label>
                 </div>
-                {error && <p className={styles.error}>{error}</p>}
-                <p style={{ fontSize: "1.25rem", color: "var(--muted)", margin: "1.2rem 0 0.8rem", lineHeight: 1.6 }}>
-                  By submitting this form and creating an account, you confirm that you have read, understood, and agree to be bound by our{" "}
-                  <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
-                    Terms &amp; Conditions
-                  </a>
-                  ,{" "}
-                  <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
-                    Privacy Policy
-                  </a>
-                  , and{" "}
-                  <a href="/consent" target="_blank" rel="noopener noreferrer" style={{ color: "var(--brand)", fontWeight: 600 }}>
-                    Consent to the Use of Electronic Documents and Signatures
-                  </a>
-                  , including the state-specific provisions that apply to your state of residence. We never pull your credit and we will never send your account to collections.
-                </p>
-                <div className={styles.intakeFooter}>
-                  <button disabled={isBusy}>{isBusy ? "Creating account…" : "Continue →"}</button>
-                </div>
-              </form>
-            </div>
+              </section>
+
+              {error && <p className={styles.ldSignupError}>{error}</p>}
+
+              <p className={styles.ldSignupTerms}>
+                By submitting this form and creating an account, you confirm that you have read, understood, and agree to be bound by our{" "}
+                <a href="/terms" target="_blank" rel="noopener noreferrer" className={styles.ldSignupTermsLink}>Terms &amp; Conditions</a>
+                ,{" "}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className={styles.ldSignupTermsLink}>Privacy Policy</a>
+                , and{" "}
+                <a href="/consent" target="_blank" rel="noopener noreferrer" className={styles.ldSignupTermsLink}>Consent to the Use of Electronic Documents and Signatures</a>
+                , including the state-specific provisions that apply to your state of residence. We never pull your credit and we will never send your account to collections.
+              </p>
+
+              <button disabled={isBusy} className={styles.ldSignupSubmit}>
+                {isBusy ? "Creating account…" : <>Continue <span aria-hidden="true">→</span></>}
+              </button>
+            </form>
           </div>
-        </section>
-      </main>
+        </main>
+      </div>
     );
 
   }
@@ -3728,59 +3787,155 @@ const LoanApp = () => {
   const canPayoff = !!rep && rep.status === "pending" &&
     (application.status === "repayment_scheduled" || application.status === "funded");
 
-  return (
-    <main className={styles.page}>
-      <NavBar onLogout={logout} />
-      <section className={styles.chatOnly}>
-        <section className={styles.loanDashboard}>
-          <div className={styles.loanHeader}>
-            <div>
-              <p className={styles.kicker}>Your loan</p>
-              <h2>{application.customer.name}</h2>
-              <p>{application.customer.email}</p>
-              <p style={{ marginTop: "0.4rem", fontSize: "1.4rem", color: "var(--muted)" }}>
-                Approved for a <strong style={{ color: "var(--brand)" }}>$25 cash advance</strong>
-              </p>
-            </div>
-            <div className={styles.loanHeaderRight}>
-              <div className={styles.status}>{statusLabel[application.status]}</div>
-            </div>
-          </div>
+  const firstName = (application.customer.name || "").trim().split(/\s+/)[0] || "there";
+  const initials = (application.customer.name || "?").trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase() || "?";
+  const positiveStatuses = ["approved", "funded", "repaid"];
+  const inProgressStatuses = ["reviewing", "repayment_scheduled", "bank_connected"];
+  const negativeStatuses = ["denied", "expired", "repayment_failed", "subscription_failed", "written_off"];
+  const statusTone = positiveStatuses.includes(application.status)
+    ? "positive"
+    : negativeStatuses.includes(application.status)
+      ? "negative"
+      : inProgressStatuses.includes(application.status)
+        ? "progress"
+        : "neutral";
+  const showPayoutSection = application.status === "approved"
+    || application.status === "funded"
+    || application.status === "repayment_scheduled"
+    || application.status === "repaid";
+  const showCardSetup = application.status === "approved"
+    || application.status === "funded"
+    || application.status === "repayment_scheduled";
 
-          <div className={styles.loanGrid}>
-            <section className={styles.panel}>
-              <h3>Loan details</h3>
-              <dl>
-                <dt>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
-                <dd>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
-                <dt>Next payday</dt><dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
-                <dt>Bank</dt><dd>{application.plaid_connected ? "Connected" : "Not connected"}</dd>
+  return (
+    <div className={styles.ldPage}>
+      <header className={styles.ldDashNav}>
+        <div className={styles.ldDashNavInner}>
+          <a className={styles.ldBrand} href="/" onClick={(e) => { e.preventDefault(); window.location.href = "/"; }}>
+            <span className={styles.ldBrandMark}>
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="10" fill="#fff" />
+                <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            advance<span className={styles.ldBrandDot}>.</span>
+          </a>
+          <div className={styles.ldDashNavRight}>
+            <div className={styles.ldDashNavUser}>
+              <span className={styles.ldDashAvatar} aria-hidden="true">{initials}</span>
+              <span className={styles.ldDashNavUserText}>
+                <span className={styles.ldDashNavUserName}>{application.customer.name}</span>
+                <span className={styles.ldDashNavUserEmail}>{application.customer.email}</span>
+              </span>
+            </div>
+            <button type="button" className={styles.ldDashSignOut} onClick={logout}>Sign out</button>
+          </div>
+        </div>
+      </header>
+
+      <main className={styles.ldDash}>
+        <div className={styles.ldDashInner}>
+          {/* Hero — greeting, amount, status */}
+          <section className={styles.ldDashHero} data-status={statusTone}>
+            <div className={styles.ldDashHeroBgGlow} aria-hidden="true" />
+            <div className={styles.ldDashHeroBgGrid} aria-hidden="true" />
+            <div className={styles.ldDashHeroContent}>
+              <p className={styles.ldDashGreeting}>Hi, {firstName} <span aria-hidden="true">👋</span></p>
+              <p className={styles.ldDashHeroLabel}>You&apos;re approved for</p>
+              <p className={styles.ldDashAmount}>$25</p>
+              <div className={styles.ldDashStatus} data-tone={statusTone}>
+                <span className={styles.ldDashStatusDot} aria-hidden="true" />
+                {statusLabel[application.status]}
+              </div>
+            </div>
+          </section>
+
+          {/* Detail cards */}
+          <div className={styles.ldDashGrid}>
+            {/* Loan details */}
+            <section className={styles.ldDashCard}>
+              <header className={styles.ldDashCardHead}>
+                <span className={styles.ldDashCardIcon} aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
+                    <path d="M3 10h18" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                </span>
+                <h2 className={styles.ldDashCardTitle}>Loan details</h2>
+              </header>
+              <dl className={styles.ldDashDl}>
+                <div className={styles.ldDashDlRow}>
+                  <dt>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
+                  <dd>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
+                </div>
+                <div className={styles.ldDashDlRow}>
+                  <dt>Next payday</dt>
+                  <dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
+                </div>
+                <div className={styles.ldDashDlRow}>
+                  <dt>Bank</dt>
+                  <dd>
+                    {application.plaid_connected ? (
+                      <span className={styles.ldDashChipOk}>
+                        <span aria-hidden="true">✓</span> Connected
+                      </span>
+                    ) : (
+                      <span className={styles.ldDashChipNeutral}>Not connected</span>
+                    )}
+                  </dd>
+                </div>
               </dl>
             </section>
 
-            <section className={styles.panel}>
-              <h3>Repayment</h3>
+            {/* Repayment */}
+            <section className={styles.ldDashCard}>
+              <header className={styles.ldDashCardHead}>
+                <span className={styles.ldDashCardIcon} aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 7h16M4 12h10M4 17h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <h2 className={styles.ldDashCardTitle}>Repayment</h2>
+              </header>
+
               {application.status === "repaid" ? (
-                <p className={styles.paidNote}>Repayment collected — thank you!</p>
+                <p className={styles.ldDashNoteOk}>
+                  <span aria-hidden="true">✓</span> Repayment collected — thank you!
+                </p>
               ) : application.plaid_connected ? (
-                // Bank verified via Plaid — card required for repayment
                 <>
-                  <p className={styles.paidNote}>✓ Bank verified via Plaid.</p>
+                  <p className={styles.ldDashNoteOk}>
+                    <span aria-hidden="true">✓</span> Bank verified via Plaid.
+                  </p>
                   {rep && (
-                    <dl style={{ marginTop: "1.2rem" }}>
-                      <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
-                      <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
+                    <dl className={styles.ldDashDl} style={{ marginTop: "16px" }}>
+                      <div className={styles.ldDashDlRow}>
+                        <dt>Due date</dt>
+                        <dd className={styles.ldDashDueDate}>{rep.due_date}</dd>
+                      </div>
+                      <div className={styles.ldDashDlRow}>
+                        <dt>Status</dt>
+                        <dd>
+                          {rep.status === "paid" ? (
+                            <span className={styles.ldDashChipOk}><span aria-hidden="true">✓</span> Paid</span>
+                          ) : (
+                            <span className={styles.ldDashChipProgress}>Pending</span>
+                          )}
+                        </dd>
+                      </div>
                     </dl>
                   )}
-                  {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") && (
-                    <div style={{ marginTop: "1.6rem" }}>
+                  {showCardSetup && (
+                    <div style={{ marginTop: "20px" }}>
                       {application.stripe_card_saved ? (
-                        <p className={styles.paidNote}>✓ Card on file — repayment will be collected automatically on the due date.</p>
+                        <p className={styles.ldDashNoteOk}>
+                          <span aria-hidden="true">✓</span> Card on file — repayment will be collected automatically on the due date.
+                        </p>
                       ) : !stripeKey ? (
-                        <p className={styles.error}>Card payments are not configured yet.</p>
+                        <p className={styles.ldDashError}>Card payments are not configured yet.</p>
                       ) : (
                         <>
-                          <p style={{ marginBottom: "1rem", fontWeight: 600 }}>Add a card to complete repayment setup:</p>
+                          <p className={styles.ldDashCardPrompt}>Add a card to complete repayment setup:</p>
                           <Elements stripe={stripePromise}>
                             <SaveCardForm
                               applicationId={application.id}
@@ -3794,19 +3949,32 @@ const LoanApp = () => {
                   )}
                 </>
               ) : application.stripe_card_saved ? (
-                // Card-only (old flow)
                 <>
                   {rep && (
-                    <dl>
-                      <dt>Due date</dt><dd className={styles.dueDate}>{rep.due_date}</dd>
-                      <dt>Status</dt><dd>{rep.status === "paid" ? "Paid" : "Pending"}</dd>
+                    <dl className={styles.ldDashDl}>
+                      <div className={styles.ldDashDlRow}>
+                        <dt>Due date</dt>
+                        <dd className={styles.ldDashDueDate}>{rep.due_date}</dd>
+                      </div>
+                      <div className={styles.ldDashDlRow}>
+                        <dt>Status</dt>
+                        <dd>
+                          {rep.status === "paid" ? (
+                            <span className={styles.ldDashChipOk}><span aria-hidden="true">✓</span> Paid</span>
+                          ) : (
+                            <span className={styles.ldDashChipProgress}>Pending</span>
+                          )}
+                        </dd>
+                      </div>
                     </dl>
                   )}
-                  <p className={styles.paidNote}>Card saved — repayment will be collected automatically on the due date.</p>
+                  <p className={styles.ldDashNoteOk}>
+                    <span aria-hidden="true">✓</span> Card saved — repayment will be collected automatically on the due date.
+                  </p>
                 </>
-              ) : (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled") ? (
+              ) : showCardSetup ? (
                 <>
-                  <p><strong>Set up repayment.</strong> Save a card to complete your repayment setup.</p>
+                  <p className={styles.ldDashCardPrompt}><strong>Set up repayment.</strong> Save a card to complete your repayment setup.</p>
                   {stripeKey && (
                     <Elements stripe={stripePromise}>
                       <SaveCardForm
@@ -3818,68 +3986,97 @@ const LoanApp = () => {
                   )}
                 </>
               ) : (
-                <p className={styles.muted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
+                <p className={styles.ldDashMuted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
               )}
-              {error && <p className={styles.error}>{error}</p>}
-
-              {(application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled" || application.status === "repaid") && (
-                <div style={{ marginTop: "2rem", borderTop: "1px solid var(--border)", paddingTop: "1.6rem" }}>
-                  <p style={{ fontWeight: 700, marginBottom: "0.8rem", color: "var(--ink)" }}>How should we send you the money?</p>
-                  <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1.2rem" }}>Select one or more and enter your contact info.</p>
-                  <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap" }}>
-                    {["PayPal", "CashApp", "Zelle", "Bank transfer"].map(method => (
-                      <button
-                        key={method}
-                        type="button"
-                        onClick={() => togglePayoutMethod(method)}
-                        style={{
-                          padding: "0.8rem 1.6rem",
-                          borderRadius: "var(--pill)",
-                          border: `2px solid ${payoutMethods.includes(method) ? "var(--brand)" : "var(--border)"}`,
-                          background: payoutMethods.includes(method) ? "var(--brand-tint2)" : "var(--white)",
-                          color: payoutMethods.includes(method) ? "var(--brand)" : "var(--ink-2)",
-                          fontWeight: 600,
-                          fontSize: "1.4rem",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {method === "Bank transfer" ? "🏦 Bank transfer" : method}
-                      </button>
-                    ))}
-                  </div>
-                  {isBankTransferPayout ? (
-                    <p style={{ marginTop: "1.2rem", fontSize: "1.35rem", color: "var(--brand)", fontWeight: 600 }}>
-                      ✓ We'll send funds directly to your connected bank account — no extra info needed.
-                      {!application.plaid_connected && (
-                        <span style={{ color: "#c0392b", display: "block", marginTop: "0.4rem" }}>
-                          You'll need to connect your bank first from this page.
-                        </span>
-                      )}
-                    </p>
-                  ) : (
-                    <label style={{ display: "block", marginTop: "1.2rem" }}>
-                      <span style={{ fontSize: "1.35rem", fontWeight: 600, color: "var(--ink-2)", display: "block", marginBottom: "0.4rem" }}>
-                        {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
-                      </span>
-                      <input
-                        value={payoutContact}
-                        placeholder="e.g. @username or email@example.com"
-                        onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
-                      />
-                    </label>
-                  )}
-                  {payoutError && <p className={styles.error}>{payoutError}</p>}
-                  {payoutSaved && <p className={styles.paidNote}>✓ Payout preference saved!</p>}
-                  <button disabled={payoutBusy} onClick={submitPayoutPreference} style={{ marginTop: "1.2rem" }}>
-                    {payoutBusy ? "Saving…" : "Submit"}
-                  </button>
-                </div>
-              )}
+              {error && <p className={styles.ldDashError}>{error}</p>}
             </section>
           </div>
-        </section>
-      </section>
-    </main>
+
+          {/* Payout section — full width below the grid */}
+          {showPayoutSection && (
+            <section className={styles.ldDashCard}>
+              <header className={styles.ldDashCardHead}>
+                <span className={styles.ldDashCardIcon} aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" strokeWidth="2" />
+                  </svg>
+                </span>
+                <div className={styles.ldDashCardHeadText}>
+                  <h2 className={styles.ldDashCardTitle}>How should we send you the money?</h2>
+                  <p className={styles.ldDashCardSub}>Select one or more and enter your contact info.</p>
+                </div>
+              </header>
+
+              <div className={styles.ldDashPayoutMethods}>
+                {[
+                  { id: "PayPal", label: "PayPal", emoji: "🅿️" },
+                  { id: "CashApp", label: "Cash App", emoji: "💚" },
+                  { id: "Zelle", label: "Zelle", emoji: "💜" },
+                  { id: "Bank transfer", label: "Bank transfer", emoji: "🏦" },
+                ].map(method => {
+                  const selected = payoutMethods.includes(method.id);
+                  return (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => togglePayoutMethod(method.id)}
+                      className={styles.ldDashPayoutMethod}
+                      data-selected={selected}
+                    >
+                      <span className={styles.ldDashPayoutMethodEmoji} aria-hidden="true">{method.emoji}</span>
+                      <span>{method.label}</span>
+                      {selected && (
+                        <span className={styles.ldDashPayoutMethodCheck} aria-hidden="true">✓</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {isBankTransferPayout ? (
+                <div className={styles.ldDashPayoutBankNote}>
+                  <p>
+                    <span aria-hidden="true">✓</span> We&apos;ll send funds directly to your connected bank account — no extra info needed.
+                  </p>
+                  {!application.plaid_connected && (
+                    <p className={styles.ldDashPayoutBankWarn}>
+                      You&apos;ll need to connect your bank first from this page.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <label className={styles.ldDashField}>
+                  <span className={styles.ldDashFieldLabel}>
+                    {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
+                  </span>
+                  <input
+                    className={styles.ldDashInput}
+                    value={payoutContact}
+                    placeholder="e.g. @username or email@example.com"
+                    onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
+                  />
+                </label>
+              )}
+
+              {payoutError && <p className={styles.ldDashError}>{payoutError}</p>}
+              {payoutSaved && (
+                <p className={styles.ldDashNoteOk}>
+                  <span aria-hidden="true">✓</span> Payout preference saved!
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={payoutBusy}
+                onClick={submitPayoutPreference}
+                className={styles.ldDashSubmit}
+              >
+                {payoutBusy ? "Saving…" : <>Submit <span aria-hidden="true">→</span></>}
+              </button>
+            </section>
+          )}
+        </div>
+      </main>
+    </div>
   );
 };
 
