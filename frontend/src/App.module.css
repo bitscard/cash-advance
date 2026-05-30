@@ -3607,3 +3607,1025 @@ dd {
   margin: 24px auto 0;
   font-size: 18px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Invite-code gate page (view === "referral")
+═══════════════════════════════════════════════════════════════════════ */
+.ldGate {
+  background: linear-gradient(180deg, var(--ld-bg-warm) 0%, var(--ld-bg) 70%);
+  min-height: calc(100vh - 72px);
+  padding: 72px 24px 96px;
+  display: flex;
+  justify-content: center;
+}
+.ldGateInner {
+  width: 100%;
+  max-width: 560px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* Eyebrow on the gate page is on a light cream background — the default
+   ldEyebrow is styled for the dark landing hero (pale mint on translucent
+   white), which is unreadable here. Recolor to brand-on-tint. */
+.ldGate .ldEyebrow {
+  color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.08);
+  border: 1px solid rgba(13, 82, 52, 0.16);
+  margin-bottom: 36px;
+}
+.ldGate .ldEyebrowDot {
+  background: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
+}
+.ldGateH1 {
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  line-height: 1.08;
+  margin: 0 0 22px;
+  color: var(--ld-ink);
+}
+.ldGateLead {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ld-muted);
+  margin: 0 0 44px;
+  max-width: 460px;
+}
+
+.ldGateCard {
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--ld-line);
+  border-radius: 20px;
+  padding: 32px 28px 28px;
+  box-shadow:
+    0 1px 0 rgba(13, 82, 52, 0.04),
+    0 24px 60px -28px rgba(10, 20, 16, 0.18),
+    0 8px 24px -12px rgba(10, 20, 16, 0.10);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ldGateLabel {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+}
+.ldPage .ldGateInput {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ld-ink);
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ldPage .ldGateInput::placeholder { color: #9aa8a1; }
+.ldPage .ldGateInput:hover { border-color: #c8d2cc; }
+.ldPage .ldGateInput:focus {
+  border-color: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.12);
+}
+.ldPage .ldGateInputValid {
+  border-color: #1f9b5e;
+  background: #f4fbf6;
+}
+.ldPage .ldGateInputValid:focus {
+  box-shadow: 0 0 0 4px rgba(31, 155, 94, 0.15);
+}
+.ldPage .ldGateInputInvalid {
+  border-color: #d6404e;
+  background: #fdf6f6;
+}
+.ldPage .ldGateInputInvalid:focus {
+  box-shadow: 0 0 0 4px rgba(214, 64, 78, 0.15);
+}
+
+.ldGateValidMsg {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1f9b5e;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ldGateInvalidMsg {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #b6303d;
+  line-height: 1.45;
+}
+.ldGateError {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #9b2530;
+  background: #fdecee;
+  border: 1px solid #f6c8ce;
+  border-radius: 10px;
+}
+
+.ldPage .ldGateBtn {
+  margin-top: 8px;
+  width: 100%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  border: 0;
+  border-radius: 12px;
+  padding: 15px 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 22px -10px rgba(13, 82, 52, 0.45);
+}
+.ldPage .ldGateBtn:hover:not(:disabled) {
+  background: #0a4329;
+  box-shadow: 0 12px 28px -12px rgba(13, 82, 52, 0.55);
+}
+.ldPage .ldGateBtn:active:not(:disabled) { transform: translateY(1px); }
+.ldPage .ldGateBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.ldGateFootNote {
+  margin: 32px 0 0;
+  font-size: 14px;
+  color: var(--ld-muted);
+}
+.ldGateFootLink {
+  color: var(--ld-brand);
+  font-weight: 700;
+  text-decoration: none;
+}
+.ldGateFootLink:hover { text-decoration: underline; }
+
+.ldGateTrust {
+  list-style: none;
+  padding: 0;
+  margin: 48px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 24px;
+  font-size: 13.5px;
+  color: var(--ld-muted);
+}
+.ldGateTrust li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ldGateTrust svg {
+  color: var(--ld-brand);
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .ldGate { padding: 48px 18px 72px; min-height: calc(100vh - 64px); }
+  .ldGate .ldEyebrow { margin-bottom: 28px; }
+  .ldGateH1 { font-size: clamp(28px, 8vw, 40px); margin-bottom: 18px; }
+  .ldGateLead { font-size: 15.5px; margin-bottom: 36px; }
+  .ldGateCard { padding: 24px 20px 22px; border-radius: 18px; }
+  .ldGateFootNote { margin-top: 26px; }
+  .ldGateTrust { margin-top: 36px; gap: 8px 18px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Signup form page (view === "signup", Step 1 of 3)
+═══════════════════════════════════════════════════════════════════════ */
+.ldSignup {
+  background: linear-gradient(180deg, var(--ld-bg-warm) 0%, var(--ld-bg) 280px);
+  min-height: calc(100vh - 72px);
+  padding: 56px 24px 96px;
+}
+.ldSignupInner {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* Progress bar */
+.ldSignupProgress {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.ldSignupStep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.ldSignupStepDot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  color: var(--ld-muted);
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.ldSignupStepLabel {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-muted);
+  white-space: nowrap;
+}
+.ldSignupStepActive .ldSignupStepDot {
+  background: var(--ld-brand);
+  border-color: var(--ld-brand);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.12);
+}
+.ldSignupStepActive .ldSignupStepLabel {
+  color: var(--ld-ink);
+}
+.ldSignupStepBar {
+  flex: 1;
+  height: 2px;
+  background: var(--ld-line);
+  margin: 0 14px;
+  list-style: none;
+}
+
+/* Header */
+.ldSignupHeader {
+  margin-bottom: 32px;
+}
+/* Eyebrow on the signup page is on a light cream background — the default
+   ldEyebrow is styled for the dark landing hero (pale mint on translucent
+   white), unreadable here. Recolor to brand-on-tint for proper contrast. */
+.ldSignup .ldEyebrow {
+  color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.08);
+  border: 1px solid rgba(13, 82, 52, 0.16);
+  margin-bottom: 18px;
+}
+.ldSignup .ldEyebrowDot {
+  background: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
+}
+.ldSignupH1 {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0 0 10px;
+  color: var(--ld-ink);
+}
+.ldSignupLead {
+  font-size: 16px;
+  color: var(--ld-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.ldSignupReassure {
+  margin: 12px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.08);
+  padding: 8px 14px;
+  border-radius: 999px;
+}
+
+/* Form */
+.ldSignupForm {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.ldSignupSection {
+  background: #fff;
+  border: 1px solid var(--ld-line);
+  border-radius: 18px;
+  padding: 28px 28px 24px;
+  box-shadow: 0 1px 0 rgba(13, 82, 52, 0.03);
+}
+.ldSignupSectionTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  margin: 0 0 20px;
+  letter-spacing: -0.005em;
+}
+
+.ldSignupGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.ldSignupField {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.ldSignupFieldFull { grid-column: 1 / -1; }
+.ldSignupFieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+}
+.ldSignupHint {
+  font-weight: 400;
+  color: var(--ld-muted);
+  font-size: 12.5px;
+}
+
+.ldPage .ldSignupInput,
+.ldPage .ldSignupSelect {
+  width: 100%;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ld-ink);
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  border-radius: 11px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ldPage .ldSignupInput::placeholder { color: #9aa8a1; }
+.ldPage .ldSignupInput:hover,
+.ldPage .ldSignupSelect:hover { border-color: #c8d2cc; }
+.ldPage .ldSignupInput:focus,
+.ldPage .ldSignupSelect:focus {
+  border-color: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.12);
+}
+.ldPage .ldSignupSelect {
+  appearance: auto;
+  -webkit-appearance: menulist;
+  background-image: none;
+  cursor: pointer;
+}
+.ldPage .ldSignupInput[type="date"] { font-variant-numeric: tabular-nums; }
+
+/* Income source cards */
+.ldSignupIncomeList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ldSignupIncomeCard {
+  border: 1.5px dashed var(--ld-line);
+  border-radius: 14px;
+  padding: 18px 18px 16px;
+  background: var(--ld-bg-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ldSignupIncomeHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ldSignupIncomeHead strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.ldPage .ldSignupIncomeRemove {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-muted);
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.ldPage .ldSignupIncomeRemove:hover {
+  color: #b6303d;
+  background: rgba(182, 48, 61, 0.08);
+}
+.ldPage .ldSignupAddSource {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-brand);
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.ldPage .ldSignupAddSource:hover {
+  border-color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.04);
+}
+
+/* Error + terms */
+.ldSignupError {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #9b2530;
+  background: #fdecee;
+  border: 1px solid #f6c8ce;
+  border-radius: 10px;
+}
+.ldSignupTerms {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ld-muted);
+}
+.ldSignupTermsLink {
+  color: var(--ld-brand);
+  font-weight: 600;
+  text-decoration: none;
+}
+.ldSignupTermsLink:hover { text-decoration: underline; }
+
+/* Submit */
+.ldPage .ldSignupSubmit {
+  width: 100%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  border: 0;
+  border-radius: 12px;
+  padding: 16px 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  box-shadow: 0 10px 26px -12px rgba(13, 82, 52, 0.45);
+}
+.ldPage .ldSignupSubmit:hover:not(:disabled) {
+  background: #0a4329;
+  box-shadow: 0 14px 32px -14px rgba(13, 82, 52, 0.55);
+}
+.ldPage .ldSignupSubmit:active:not(:disabled) { transform: translateY(1px); }
+.ldPage .ldSignupSubmit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .ldSignup { padding: 32px 16px 72px; }
+  .ldSignupInner { max-width: 100%; }
+  .ldSignupProgress { margin-bottom: 28px; }
+  .ldSignupStepLabel { display: none; }
+  .ldSignupStepBar { margin: 0 8px; }
+  .ldSignupSection { padding: 22px 20px 20px; border-radius: 16px; }
+  .ldSignupGrid { grid-template-columns: 1fr; gap: 14px; }
+  .ldSignupH1 { font-size: clamp(24px, 7vw, 32px); }
+  .ldSignupLead { font-size: 15px; }
+  .ldPage .ldSignupInput,
+  .ldPage .ldSignupSelect { font-size: 16px; padding: 13px 14px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Loan dashboard (authenticated /loan view)
+═══════════════════════════════════════════════════════════════════════ */
+
+/* Nav — branded top bar with user chip + sign out */
+.ldDashNav {
+  background: #fff;
+  border-bottom: 1px solid var(--ld-line);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: saturate(180%) blur(8px);
+}
+.ldDashNavInner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ldDashNavRight {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ldDashNavUser {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ldDashAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--ld-brand) 0%, #0a4329 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(13, 82, 52, 0.25);
+}
+.ldDashNavUserText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  text-align: left;
+  min-width: 0;
+}
+.ldDashNavUserName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.ldDashNavUserEmail {
+  font-size: 12px;
+  color: var(--ld-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.ldPage .ldDashSignOut {
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  background: #fff;
+  border: 1px solid var(--ld-line);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.ldPage .ldDashSignOut:hover {
+  border-color: var(--ld-ink);
+  background: var(--ld-ink);
+  color: #fff;
+}
+
+/* Page body */
+.ldDash {
+  background: linear-gradient(180deg, var(--ld-bg-warm) 0%, var(--ld-bg) 360px);
+  min-height: calc(100vh - 66px);
+  padding: 32px 24px 96px;
+}
+.ldDashInner {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Hero — dark emerald card with the approved amount */
+.ldDashHero {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0a4329 0%, var(--ld-brand) 55%, #08361f 100%);
+  color: #fff;
+  padding: 44px 40px 40px;
+  box-shadow:
+    0 1px 0 rgba(13, 82, 52, 0.04),
+    0 28px 60px -28px rgba(13, 82, 52, 0.55),
+    0 12px 28px -16px rgba(10, 20, 16, 0.20);
+}
+.ldDashHeroBgGlow {
+  position: absolute;
+  top: -120px;
+  right: -80px;
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(200, 240, 214, 0.22) 0%, transparent 65%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+.ldDashHeroBgGrid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(ellipse 80% 80% at 70% 30%, #000 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 70% 30%, #000 30%, transparent 80%);
+  pointer-events: none;
+}
+.ldDashHeroContent {
+  position: relative;
+  z-index: 1;
+}
+.ldDashGreeting {
+  margin: 0 0 22px;
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.80);
+  letter-spacing: -0.005em;
+}
+.ldDashHeroLabel {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(200, 240, 214, 0.85);
+}
+.ldDashAmount {
+  margin: 0 0 24px;
+  font-size: clamp(56px, 9vw, 84px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status pill — color by tone */
+.ldDashStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+.ldDashStatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c8f0d6;
+  box-shadow: 0 0 0 4px rgba(200, 240, 214, 0.22);
+  flex-shrink: 0;
+}
+.ldDashStatus[data-tone="positive"] .ldDashStatusDot { background: #6ee7a7; box-shadow: 0 0 0 4px rgba(110, 231, 167, 0.25); }
+.ldDashStatus[data-tone="progress"] .ldDashStatusDot { background: #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.25); }
+.ldDashStatus[data-tone="negative"] {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+.ldDashStatus[data-tone="negative"] .ldDashStatusDot { background: #fca5a5; box-shadow: 0 0 0 4px rgba(252, 165, 165, 0.25); }
+
+/* Grid of detail cards */
+.ldDashGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Detail card */
+.ldDashCard {
+  background: #fff;
+  border: 1px solid var(--ld-line);
+  border-radius: 18px;
+  padding: 26px 26px 24px;
+  box-shadow: 0 1px 0 rgba(13, 82, 52, 0.03);
+}
+.ldDashCardHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.ldDashCardHeadText { flex: 1; }
+.ldDashCardIcon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(13, 82, 52, 0.08);
+  color: var(--ld-brand);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ldDashCardTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+  line-height: 1.4;
+}
+.ldDashCardSub {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--ld-muted);
+  line-height: 1.5;
+}
+
+/* Definition list rows */
+.ldDashDl {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ldDashDlRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ld-line);
+}
+.ldDashDlRow:first-child { padding-top: 0; }
+.ldDashDlRow:last-child { border-bottom: 0; padding-bottom: 0; }
+.ldDashDlRow dt {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-muted);
+  letter-spacing: -0.005em;
+}
+.ldDashDlRow dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  text-align: right;
+}
+.ldDashDueDate {
+  font-variant-numeric: tabular-nums;
+  color: var(--ld-brand);
+}
+
+/* Chips for status values within rows */
+.ldDashChipOk,
+.ldDashChipNeutral,
+.ldDashChipProgress {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: -0.005em;
+}
+.ldDashChipOk {
+  color: #0d5234;
+  background: rgba(13, 82, 52, 0.10);
+  border: 1px solid rgba(13, 82, 52, 0.18);
+}
+.ldDashChipNeutral {
+  color: #6c7a72;
+  background: #f1f4f2;
+  border: 1px solid var(--ld-line);
+}
+.ldDashChipProgress {
+  color: #92580c;
+  background: rgba(251, 191, 36, 0.16);
+  border: 1px solid rgba(251, 191, 36, 0.30);
+}
+
+/* Notes inside cards */
+.ldDashNoteOk {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0d5234;
+  background: rgba(13, 82, 52, 0.06);
+  border: 1px solid rgba(13, 82, 52, 0.14);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+.ldDashError {
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #9b2530;
+  background: #fdecee;
+  border: 1px solid #f6c8ce;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+.ldDashMuted {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ld-muted);
+  line-height: 1.55;
+}
+.ldDashCardPrompt {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--ld-ink);
+  line-height: 1.5;
+}
+
+/* Payout method tiles */
+.ldDashPayoutMethods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.ldPage .ldDashPayoutMethod {
+  position: relative;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  text-align: left;
+}
+.ldPage .ldDashPayoutMethod:hover {
+  border-color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.03);
+}
+.ldPage .ldDashPayoutMethod[data-selected="true"] {
+  border-color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.08);
+  color: var(--ld-brand);
+  box-shadow: 0 0 0 3px rgba(13, 82, 52, 0.10);
+}
+.ldDashPayoutMethodEmoji {
+  font-size: 18px;
+  line-height: 1;
+}
+.ldDashPayoutMethodCheck {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ldDashPayoutBankNote {
+  background: rgba(13, 82, 52, 0.06);
+  border: 1px solid rgba(13, 82, 52, 0.14);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ld-ink);
+  margin-bottom: 14px;
+}
+.ldDashPayoutBankNote p { margin: 0; }
+.ldDashPayoutBankNote p:first-child {
+  font-weight: 600;
+  color: #0d5234;
+}
+.ldDashPayoutBankWarn {
+  margin-top: 6px !important;
+  color: #b6303d;
+  font-weight: 600;
+}
+
+/* Payout contact input */
+.ldDashField {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.ldDashFieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+}
+.ldPage .ldDashInput {
+  width: 100%;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ld-ink);
+  background: #fff;
+  border: 1.5px solid var(--ld-line);
+  border-radius: 11px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ldPage .ldDashInput::placeholder { color: #9aa8a1; }
+.ldPage .ldDashInput:hover { border-color: #c8d2cc; }
+.ldPage .ldDashInput:focus {
+  border-color: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.12);
+}
+
+/* Submit */
+.ldPage .ldDashSubmit {
+  margin-top: 4px;
+  background: var(--ld-brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  border: 0;
+  border-radius: 11px;
+  padding: 13px 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+  box-shadow: 0 8px 22px -10px rgba(13, 82, 52, 0.45);
+}
+.ldPage .ldDashSubmit:hover:not(:disabled) {
+  background: #0a4329;
+  box-shadow: 0 12px 28px -12px rgba(13, 82, 52, 0.55);
+}
+.ldPage .ldDashSubmit:active:not(:disabled) { transform: translateY(1px); }
+.ldPage .ldDashSubmit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (max-width: 760px) {
+  .ldDashNavInner { padding: 12px 18px; gap: 12px; }
+  .ldDashNavUserText { display: none; }
+  .ldDashNavUser { gap: 0; }
+  .ldDash { padding: 20px 16px 80px; }
+  .ldDashInner { gap: 18px; }
+  .ldDashHero { padding: 32px 24px 28px; border-radius: 18px; }
+  .ldDashAmount { font-size: clamp(48px, 14vw, 64px); margin-bottom: 18px; }
+  .ldDashGreeting { margin-bottom: 16px; }
+  .ldDashGrid { grid-template-columns: 1fr; gap: 16px; }
+  .ldDashCard { padding: 22px 20px 20px; border-radius: 16px; }
+  .ldDashPayoutMethods { grid-template-columns: 1fr 1fr; }
+}
