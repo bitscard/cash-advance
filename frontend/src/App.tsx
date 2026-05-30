@@ -2127,69 +2127,34 @@ const CustomerApp = () => {
               </p>
             </div>
           )}
-          {/* ACH — hosted Stripe Connect onboarding for ID + bank verification. */}
+          {/* ACH — no longer triggers Connect onboarding here. The bank
+              link happens at Step 4 (via Stripe FC), and identity
+              verification (Stripe Connect Express) is triggered AFTER
+              the bank is linked so the bank pre-attach actually works.
+              At Step 2 we just save the preference. */}
           {isAch && (
-            <div style={{ marginBottom: "1.6rem" }}>
-              {achReady ? (
-                <div style={{
-                  background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-                  borderRadius: "var(--r-lg)", padding: "1.6rem 1.8rem",
-                }}>
-                  <p style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--brand)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
-                    ✓ Direct deposit ready
-                  </p>
-                  <p style={{ fontSize: "1.5rem", color: "var(--ink)", margin: 0, lineHeight: 1.5 }}>
-                    We'll send your advance via ACH straight to your bank account.
-                  </p>
-                </div>
-              ) : (
-                <div style={{
-                  background: "var(--white)", border: "1.5px solid var(--border)",
-                  borderRadius: "var(--r-lg)", padding: "1.8rem 2rem",
-                }}>
-                  <p style={{ fontSize: "1.45rem", color: "var(--ink)", margin: "0 0 0.8rem", lineHeight: 1.5 }}>
-                    We'll send your advance to your bank account via ACH. To set it up, we need a few quick details on Stripe's secure form (about 2 minutes):
-                  </p>
-                  <ul style={{ margin: "0 0 1.2rem", paddingLeft: "2rem", fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.7 }}>
-                    <li>Confirm your name, SSN, and address</li>
-                    <li>Add your bank account (routing + account number)</li>
-                  </ul>
-                  <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>
-                    Stripe handles this directly — your bank details never touch our servers.
-                  </p>
-                </div>
-              )}
+            <div style={{ marginBottom: "1.6rem", background: "var(--white)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", padding: "1.8rem 2rem" }}>
+              <p style={{ fontSize: "1.45rem", color: "var(--ink)", margin: "0 0 0.8rem", lineHeight: 1.5 }}>
+                We'll send your advance via ACH straight to your bank account. You'll connect your bank in the next step — one secure connection covers everything (income verification, payout, repayment).
+              </p>
+              <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>
+                After connecting your bank, we'll ask for a quick identity check (~30 seconds) so we can legally send you money.
+              </p>
             </div>
           )}
           {payoutError && <p className={styles.error}>{payoutError}</p>}
-          {stripeConnectError && <p className={styles.error}>{stripeConnectError}</p>}
-          {/* CTA: handle-based methods save inline; ACH redirects to Stripe. */}
-          {isAch ? (
-            <button
-              style={{ width: "100%" }}
-              disabled={stripeConnectBusy || payoutBusy}
-              onClick={achReady
-                ? async () => { await submitPayoutPreference(); if (application) await loadApplication(application.id); }
-                : startStripeConnectOnboarding}
-            >
-              {stripeConnectBusy
-                ? "Redirecting to Stripe…"
-                : achReady
-                  ? "Continue →"
-                  : "Set up direct deposit →"}
-            </button>
-          ) : (
-            <button
-              style={{ width: "100%" }}
-              disabled={payoutBusy || !selectedMethod || !payoutContact.trim()}
-              onClick={async () => {
-                await submitPayoutPreference();
-                if (application) await loadApplication(application.id);
-              }}
-            >
-              {payoutBusy ? "Saving…" : "Yes, this is correct →"}
-            </button>
-          )}
+          {/* All payout methods now save inline at Step 2 — Connect is
+              triggered later, after FC. */}
+          <button
+            style={{ width: "100%" }}
+            disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim())}
+            onClick={async () => {
+              await submitPayoutPreference();
+              if (application) await loadApplication(application.id);
+            }}
+          >
+            {payoutBusy ? "Saving…" : isAch ? "Continue →" : "Yes, this is correct →"}
+          </button>
         </div>
         <StatesFooter />
       </main>
@@ -2312,19 +2277,31 @@ const CustomerApp = () => {
   // becomes a no-op when stripe_fc_account_id is set).
   const hasBankPm = !!application.stripe_payment_method_id;
   const hasCardPm = !!application.stripe_card_pm_id;
-  if (preBankActive && !hasBankPm && !hasCardPm) {
+  const isAchPayout = application.payout_methods === "ACH";
+  const needsBankLink = !hasBankPm && !hasCardPm;
+  const needsConnectIdentity = isAchPayout && hasBankPm && application.stripe_connect_status !== "ready";
+
+  if (preBankActive && (needsBankLink || needsConnectIdentity)) {
+    // Phase 4a: bank not linked yet → show FC link UI
+    // Phase 4b: bank linked, but ACH user needs Connect identity → show identity-verify UI
+    const showFc = needsBankLink;
+    const showConnect = !needsBankLink && needsConnectIdentity;
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
         <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
-              <p className={styles.benefitsHeaderKicker}>Step 4 of 6 · Bank account &amp; membership</p>
+              <p className={styles.benefitsHeaderKicker}>
+                Step 4 of 6 · {showConnect ? "Identity verification" : "Bank account & membership"}
+              </p>
               <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
-                Connect your bank.
+                {showConnect ? <>One quick<br />identity check.</> : <>Connect your bank.</>}
               </h1>
               <p className={styles.benefitsHeaderSub}>
-                We use your bank to verify your income, send your advance, and collect repayment — all from one secure connection.
+                {showConnect
+                  ? "We legally need to verify it's you before we can send money to your bank. Takes about 30 seconds on Stripe's secure form."
+                  : "We use your bank to verify your income, send your advance, and collect repayment — all from one secure connection."}
               </p>
             </div>
             <div style={{ flexShrink: 0, opacity: 0.92 }}>
@@ -2333,60 +2310,107 @@ const CustomerApp = () => {
           </div>
         </div>
         <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-          {/* What the bank will be used for — set expectations clearly. */}
-          <div style={{
-            background: "var(--white)", border: "2px solid var(--brand)",
-            borderRadius: "var(--r-lg)", padding: "1.8rem 2rem", marginBottom: "2rem",
-          }}>
-            <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.8rem" }}>
-              Your bank will be used for
-            </p>
-            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-              <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
-                <span>Income verification <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(read-only)</span></span>
-                <strong style={{ color: "var(--ink)" }}>Free</strong>
-              </li>
-              <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
-                <span>Each advance repayment <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(on your payday)</span></span>
-                <strong style={{ color: "var(--ink)" }}>$25–$30</strong>
-              </li>
-              <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
-                <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts on first repayment, then monthly)</span></span>
-                <strong style={{ color: "var(--ink)" }}>$3.99/mo</strong>
-              </li>
-            </ul>
-            <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: "1rem 0 0", lineHeight: 1.5 }}>
-              Membership and repayments are separate charges. Cancel membership any time. We never charge interest, late fees, or hidden fees.
-            </p>
-          </div>
+          {showFc && (
+            <>
+              {/* What the bank will be used for — set expectations clearly. */}
+              <div style={{
+                background: "var(--white)", border: "2px solid var(--brand)",
+                borderRadius: "var(--r-lg)", padding: "1.8rem 2rem", marginBottom: "2rem",
+              }}>
+                <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.8rem" }}>
+                  Your bank will be used for
+                </p>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                  <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
+                    <span>Income verification <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(read-only)</span></span>
+                    <strong style={{ color: "var(--ink)" }}>Free</strong>
+                  </li>
+                  <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
+                    <span>Each advance repayment <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(on your payday)</span></span>
+                    <strong style={{ color: "var(--ink)" }}>$25–$30</strong>
+                  </li>
+                  <li style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "1.45rem", color: "var(--ink-2)" }}>
+                    <span>Monthly membership <span style={{ color: "var(--muted)", fontSize: "1.2rem" }}>(starts on first repayment, then monthly)</span></span>
+                    <strong style={{ color: "var(--ink)" }}>$3.99/mo</strong>
+                  </li>
+                </ul>
+                <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: "1rem 0 0", lineHeight: 1.5 }}>
+                  Membership and repayments are separate charges. Cancel membership any time. We never charge interest, late fees, or hidden fees.
+                </p>
+              </div>
 
-          {fcError && <p className={styles.error}>{fcError}</p>}
+              {fcError && <p className={styles.error}>{fcError}</p>}
 
-          <button
-            style={{ width: "100%" }}
-            disabled={fcBusy || !stripeKey}
-            onClick={startStripeFcLink}
-          >
-            {fcBusy ? "Opening secure bank link…" : "Connect bank →"}
-          </button>
+              <button
+                style={{ width: "100%" }}
+                disabled={fcBusy || !stripeKey}
+                onClick={startStripeFcLink}
+              >
+                {fcBusy ? "Opening secure bank link…" : "Connect bank →"}
+              </button>
 
-          {!stripeKey && (
-            <p className={styles.error} style={{ marginTop: "1rem" }}>
-              Bank linking is not configured yet.
-            </p>
+              {!stripeKey && (
+                <p className={styles.error} style={{ marginTop: "1rem" }}>
+                  Bank linking is not configured yet.
+                </p>
+              )}
+
+              <div style={{
+                background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                borderRadius: "var(--r-lg)", padding: "1.4rem 1.8rem", marginTop: "2rem",
+              }}>
+                <p style={{ fontSize: "1.4rem", color: "var(--ink)", margin: 0, lineHeight: 1.6 }}>
+                  ✅ <strong>As long as you receive regular income, you should be approved.</strong>
+                </p>
+              </div>
+              <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
+                🔒 Bank linking is powered by Stripe. Your credentials are never shared with us.
+              </p>
+            </>
           )}
 
-          <div style={{
-            background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-            borderRadius: "var(--r-lg)", padding: "1.4rem 1.8rem", marginTop: "2rem",
-          }}>
-            <p style={{ fontSize: "1.4rem", color: "var(--ink)", margin: 0, lineHeight: 1.6 }}>
-              ✅ <strong>As long as you receive regular income, you should be approved.</strong>
-            </p>
-          </div>
-          <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
-            🔒 Bank linking is powered by Stripe. Your credentials are never shared with us.
-          </p>
+          {showConnect && (
+            <>
+              {/* Bank-linked confirmation + identity-verify CTA. */}
+              <div style={{
+                background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
+                borderRadius: "var(--r-lg)", padding: "1.6rem 1.8rem", marginBottom: "1.6rem",
+              }}>
+                <p style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--brand)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
+                  ✓ Bank connected
+                </p>
+                <p style={{ fontSize: "1.5rem", color: "var(--ink)", margin: 0, lineHeight: 1.5 }}>
+                  We have your bank for income verification, repayment, and ACH payouts. One more step.
+                </p>
+              </div>
+
+              <div style={{
+                background: "var(--white)", border: "1.5px solid var(--border)",
+                borderRadius: "var(--r-lg)", padding: "1.8rem 2rem", marginBottom: "1.6rem",
+              }}>
+                <p style={{ fontSize: "1.45rem", color: "var(--ink)", margin: "0 0 0.8rem", lineHeight: 1.5 }}>
+                  Stripe will ask you to confirm:
+                </p>
+                <ul style={{ margin: "0 0 0.8rem", paddingLeft: "2rem", fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.7 }}>
+                  <li>Name, date of birth, last 4 of SSN (we pre-fill)</li>
+                  <li>Address</li>
+                </ul>
+                <p style={{ fontSize: "1.2rem", color: "var(--muted)", margin: 0 }}>
+                  Your bank is already attached — no need to re-enter routing/account numbers.
+                </p>
+              </div>
+
+              {stripeConnectError && <p className={styles.error}>{stripeConnectError}</p>}
+
+              <button
+                style={{ width: "100%" }}
+                disabled={stripeConnectBusy}
+                onClick={startStripeConnectOnboarding}
+              >
+                {stripeConnectBusy ? "Redirecting to Stripe…" : "Verify identity →"}
+              </button>
+            </>
+          )}
         </div>
         <StatesFooter />
       </main>
