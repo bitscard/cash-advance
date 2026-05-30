@@ -35,6 +35,8 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_account_id TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS transfer_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_session_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_subscribed_at TIMESTAMPTZ;
 `).catch(() => {});
 
 pool.query(`
@@ -74,9 +76,20 @@ const publicApp = (row) => ({
   requested_amount: parseFloat(row.requested_amount),
   payday: fmtDate(row.payday),
   status: row.status,
-  plaid_connected: Boolean(row.stripe_fc_account_id || row.access_token),
+  // plaid_connected = ONLY the legacy Plaid path. FC bank-linked users
+  // have stripe_fc_account_id set; UI code that needs "is bank linked,
+  // any path" should check `bank_linked` below or both fields directly.
+  // Splitting these prevents the new flow from collapsing prematurely
+  // (FC link at Step 4 was killing the preBank gate which is what
+  // shows Steps 5 + 6 to the user).
+  plaid_connected: Boolean(row.access_token),
+  bank_linked: Boolean(row.stripe_fc_account_id || row.access_token),
   // stripe_card_saved: new flow uses stripe_card_pm_id; old card-only users have no fc_account_id
   stripe_card_saved: Boolean(row.stripe_card_pm_id || (row.stripe_payment_method_id && !row.stripe_fc_account_id)),
+  // Frontend needs raw PM/account IDs to gate the FC-vs-Plaid step rendering.
+  stripe_payment_method_id: row.stripe_payment_method_id || null,
+  stripe_card_pm_id: row.stripe_card_pm_id || null,
+  stripe_fc_account_id: row.stripe_fc_account_id || null,
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -230,11 +243,15 @@ async function getDueMemberships() {
 }
 
 async function getDueApplications() {
+  // Match any application with at least one chargeable payment method.
+  // Order of preference is handled in the charge endpoint
+  // (bank PM via FC > card PM > legacy bank PM). This filter only
+  // ensures the application has something we can charge.
   const { rows } = await pool.query(
     `SELECT * FROM applications
      WHERE repayment_due_date <= CURRENT_DATE
        AND repayment_status = 'pending'
-       AND stripe_payment_method_id IS NOT NULL
+       AND (stripe_payment_method_id IS NOT NULL OR stripe_card_pm_id IS NOT NULL)
        AND stripe_customer_id IS NOT NULL`
   );
   return rows;
@@ -415,6 +432,45 @@ async function saveTransferId(id, transferId) {
   return rows[0] || null;
 }
 
+// Stripe Financial Connections helpers.
+// Replaces Plaid for bank linking. One FC session can give us:
+//   - a chargeable us_bank_account PaymentMethod (saved as
+//     stripe_payment_method_id for the existing repayment cron)
+//   - transaction reads for income classification (stripe_fc_account_id)
+//   - a bank_account token attachable to a Connect external_account
+async function saveStripeFcSession(id, sessionId) {
+  const { rows } = await pool.query(
+    `UPDATE applications SET stripe_fc_session_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+    [sessionId, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveStripeFcLinkedAccount(id, fcAccountId, bankPmId) {
+  // We deliberately write the FC-derived bank PM to the existing
+  // stripe_payment_method_id column so the repayment cron picks it up
+  // without any additional refactoring. Status stays 'intake' so the
+  // user can continue through delivery picker + (for ACH payout) the
+  // Connect Express identity step. Status flips to 'bank_connected'
+  // either when admin marks bank-verified manually or when the Plaid
+  // flow completes for legacy users.
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET stripe_fc_account_id=$1, stripe_payment_method_id=$2, updated_at=NOW()
+     WHERE id=$3 RETURNING *`,
+    [fcAccountId, bankPmId, id],
+  );
+  return rows[0] || null;
+}
+
+async function markStripeFcSubscribed(id) {
+  const { rows } = await pool.query(
+    `UPDATE applications SET stripe_fc_subscribed_at=NOW(), updated_at=NOW() WHERE id=$1 RETURNING *`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   // Export the pool so test teardown can close all connections cleanly.
   pool,
@@ -452,4 +508,7 @@ module.exports = {
   saveStripeConnectAccount,
   setStripeConnectStatusByAccountId,
   saveTransferId,
+  saveStripeFcSession,
+  saveStripeFcLinkedAccount,
+  markStripeFcSubscribed,
 };

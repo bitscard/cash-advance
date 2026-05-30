@@ -1136,6 +1136,17 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
       ? 'Same-day delivery selected — funds sent the same day. A $5 fee will be added to your repayment.'
       : '3–5 day delivery selected — funds arrive within 3–5 business days. No extra charge.';
     await db.addMessage(row.id, 'system', note);
+
+    // FC users: bank was already linked at Step 4, so reaching the
+    // delivery save means they've completed all pre-bank steps. Flip
+    // status to 'bank_connected' so admin sees them in the review
+    // queue. Legacy Plaid users get this flip from setAccessToken.
+    if (updated.stripe_fc_account_id && updated.status === 'intake') {
+      updated = await db.updateApplicationStatus(updated.id, 'bank_connected') || updated;
+      await db.addMessage(updated.id, 'system', 'Bank account verified via Stripe. A reviewer will check your application and respond here.');
+      console.log('[delivery] FC user — status flipped to bank_connected', { application_id: updated.id });
+    }
+
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -1200,74 +1211,115 @@ app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (req
   try {
     const application = await db.getApplicationById(request.params.id);
     if (!application) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    if (!application.access_token) {
+    const hasFc = !!application.stripe_fc_account_id;
+    const hasPlaid = !!application.access_token;
+    if (!hasFc && !hasPlaid) {
       return response.status(400).json({ error: { error_message: 'No bank account connected yet.' } });
     }
 
-    // 1. Accounts + balances
     let accounts = [];
-    try {
-      const acctResp = await client.accountsBalance.get({ access_token: application.access_token });
-      accounts = acctResp.data.accounts.map(a => ({
-        id: a.account_id,
-        display_name: a.name,
-        institution_name: '',
-        last4: a.mask || null,
-        routing_number: null,
-        category: a.subtype || a.type,
-        balance: {
-          available: a.balances.available != null ? Math.round(a.balances.available * 100) : null,
-          current:   a.balances.current  != null ? Math.round(a.balances.current  * 100) : null,
-        },
-      }));
-    } catch (e) {
-      console.log('[bank_snapshot] accounts error:', e.message);
-    }
+    let rawTxs = [];
 
-    // 2. Routing number via Plaid Auth
-    try {
-      const authResp = await client.authGet({ access_token: application.access_token });
-      const achNumbers = authResp.data.numbers.ach;
-      accounts = accounts.map(a => {
-        const ach = achNumbers.find(n => n.account_id === a.id);
-        return ach ? { ...a, routing_number: ach.routing } : a;
-      });
-    } catch (e) {
-      console.log('[bank_snapshot] auth error (non-fatal):', e.message);
-    }
-
-    // 3. Transactions via transactionsSync (with personal_finance_category)
-    let txs = [];
-    try {
-      let cursor, hasMore = true, iter = 0;
-      while (hasMore && iter < 10) {
-        const syncResp = await client.transactionsSync({
-          access_token: application.access_token,
-          cursor,
-          count: 500,
-          options: { include_personal_finance_category: true },
-        });
-        txs = txs.concat(syncResp.data.added || []);
-        cursor = syncResp.data.next_cursor;
-        hasMore = syncResp.data.has_more;
-        iter++;
+    if (hasFc) {
+      // ── FC path ──────────────────────────────────────────────
+      try {
+        const fcAcct = await stripe.financialConnections.accounts.retrieve(application.stripe_fc_account_id);
+        const balanceCents = fcAcct.balance?.current?.usd
+          ? fcAcct.balance.current.usd  // already cents
+          : null;
+        accounts = [{
+          id: fcAcct.id,
+          display_name: fcAcct.display_name || fcAcct.institution_name || 'Bank Account',
+          institution_name: fcAcct.institution_name || '',
+          last4: fcAcct.last4 || null,
+          routing_number: null,  // not exposed by FC default API
+          category: fcAcct.subcategory || fcAcct.category,
+          balance: { available: balanceCents, current: balanceCents },
+        }];
+      } catch (e) {
+        console.log('[bank_snapshot fc] account fetch error', e.message);
       }
-      console.log('[bank_snapshot] transactions count:', txs.length);
-    } catch (e) {
-      console.log('[bank_snapshot] transactions error:', e.message);
+      try {
+        const fcTxs = await fetchFcTransactions(application.stripe_fc_account_id);
+        const { adaptFcTransactions } = require('./fcTransactionAdapter');
+        const plaidShaped = adaptFcTransactions(fcTxs);
+        // Same normalization as Plaid path (sign flip + cents) below.
+        rawTxs = plaidShaped.map(tx => ({
+          id: tx.transaction_id,
+          description: tx.merchant_name || tx.name || '',
+          amount: Math.round(-tx.amount * 100),
+          currency: (tx.iso_currency_code || 'usd').toLowerCase(),
+          date: tx.date,
+          category: '',
+          pfc: tx.personal_finance_category?.primary || null,
+        }));
+        console.log('[bank_snapshot fc] transactions count:', rawTxs.length);
+      } catch (e) {
+        console.log('[bank_snapshot fc] transactions error', e.message);
+      }
+    } else {
+      // ── Plaid path (legacy, kept for users mid-flight) ───────
+      // 1. Accounts + balances
+      try {
+        const acctResp = await client.accountsBalance.get({ access_token: application.access_token });
+        accounts = acctResp.data.accounts.map(a => ({
+          id: a.account_id,
+          display_name: a.name,
+          institution_name: '',
+          last4: a.mask || null,
+          routing_number: null,
+          category: a.subtype || a.type,
+          balance: {
+            available: a.balances.available != null ? Math.round(a.balances.available * 100) : null,
+            current:   a.balances.current  != null ? Math.round(a.balances.current  * 100) : null,
+          },
+        }));
+      } catch (e) {
+        console.log('[bank_snapshot plaid] accounts error:', e.message);
+      }
+      // 2. Routing number via Plaid Auth
+      try {
+        const authResp = await client.authGet({ access_token: application.access_token });
+        const achNumbers = authResp.data.numbers.ach;
+        accounts = accounts.map(a => {
+          const ach = achNumbers.find(n => n.account_id === a.id);
+          return ach ? { ...a, routing_number: ach.routing } : a;
+        });
+      } catch (e) {
+        console.log('[bank_snapshot plaid] auth error (non-fatal):', e.message);
+      }
+      // 3. Transactions via transactionsSync (with personal_finance_category)
+      let txs = [];
+      try {
+        let cursor, hasMore = true, iter = 0;
+        while (hasMore && iter < 10) {
+          const syncResp = await client.transactionsSync({
+            access_token: application.access_token,
+            cursor,
+            count: 500,
+            options: { include_personal_finance_category: true },
+          });
+          txs = txs.concat(syncResp.data.added || []);
+          cursor = syncResp.data.next_cursor;
+          hasMore = syncResp.data.has_more;
+          iter++;
+        }
+        console.log('[bank_snapshot plaid] transactions count:', txs.length);
+      } catch (e) {
+        console.log('[bank_snapshot plaid] transactions error:', e.message);
+      }
+      // Plaid: positive amount = money leaving (debit), negative = money coming in (credit)
+      // Normalise: positive = credit/income, negative = debit/spend (matches UI expectations)
+      rawTxs = txs.map(tx => ({
+        id: tx.transaction_id,
+        description: tx.merchant_name || tx.name || '',
+        amount: Math.round(-tx.amount * 100),
+        currency: (tx.iso_currency_code || 'usd').toLowerCase(),
+        date: tx.date,
+        category: (tx.category || []).join(', '),
+        pfc: tx.personal_finance_category?.primary || null,
+      }));
     }
-
-    // Plaid: positive amount = money leaving (debit), negative = money coming in (credit)
-    // Normalise: positive = credit/income, negative = debit/spend (matches UI expectations)
-    const rawTxs = txs.map(tx => ({
-      id: tx.transaction_id,
-      description: tx.merchant_name || tx.name || '',
-      amount: Math.round(-tx.amount * 100),
-      currency: (tx.iso_currency_code || 'usd').toLowerCase(),
-      date: tx.date,
-      category: (tx.category || []).join(', '),
-      pfc: tx.personal_finance_category?.primary || null,
-    }));
 
     // Classify incoming transactions through all layers
     const incoming = rawTxs.filter(tx => tx.amount > 0);
@@ -1311,7 +1363,21 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // Get account details via Plaid balance (Auth not required)
+    // Prefer FC if present; fall back to Plaid for users mid-flight on the legacy path.
+    if (row.stripe_fc_account_id) {
+      try {
+        const fc = await stripe.financialConnections.accounts.retrieve(row.stripe_fc_account_id);
+        return response.json({
+          bank_name: fc.display_name || fc.institution_name || 'Bank Account',
+          routing_number: 'Not available',  // FC default API doesn't expose; would need ownership permission
+          last4: fc.last4 || '----',
+          account_type: fc.subcategory || fc.category || 'unknown',
+          account_holder_type: 'individual',
+        });
+      } catch (e) {
+        console.log('[payment-method-details fc] error', e.message);
+      }
+    }
     if (row.access_token) {
       let bankName = 'Bank Account', last4 = '----', accountType = 'unknown', routingNumber = 'Not available';
       try {
@@ -1321,14 +1387,14 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
         last4 = acct?.mask || '----';
         accountType = acct?.subtype || acct?.type || 'unknown';
       } catch (e) {
-        console.log('[payment-method-details] balance error (non-fatal):', e.message);
+        console.log('[payment-method-details plaid] balance error (non-fatal):', e.message);
       }
       try {
         const authResp = await client.authGet({ access_token: row.access_token });
         const ach = authResp.data.numbers.ach[0];
         if (ach?.routing) routingNumber = ach.routing;
       } catch (e) {
-        console.log('[payment-method-details] auth error (non-fatal):', e.message);
+        console.log('[payment-method-details plaid] auth error (non-fatal):', e.message);
       }
       return response.json({ bank_name: bankName, routing_number: routingNumber, last4, account_type: accountType, account_holder_type: 'individual' });
     }
@@ -1834,6 +1900,13 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
           transfers: { requested: true },
         },
         business_type: 'individual',
+        // If the user already linked their bank via Stripe Financial
+        // Connections at Step 4, pass the resulting PaymentMethod as the
+        // external_account. Stripe accepts a us_bank_account PM here and
+        // turns it into the connected account's bank for payouts — which
+        // means the hosted onboarding can SKIP the bank step entirely.
+        // We attach as a separate API call below (rather than inline) so
+        // we can degrade gracefully if Stripe rejects the cross-attach.
         // Pre-fill the platform-perspective fields. Without these,
         // Stripe's hosted onboarding asks the recipient to provide a
         // business name / website / product description — which makes
@@ -1876,6 +1949,22 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
       accountId = account.id;
       await db.saveStripeConnectAccount(row.id, accountId, 'onboarding');
       console.log('[stripe/connect] account created', { application_id: row.id, account_id: accountId });
+
+      // Pre-attach the FC-verified bank as the Connect account's
+      // external_account so the hosted onboarding can skip the bank step.
+      // Best-effort: if Stripe rejects the cross-attach (e.g., FC PM
+      // can't be reused for Connect), the user just types bank info
+      // manually in the hosted form. No regression.
+      if (row.stripe_payment_method_id) {
+        try {
+          await stripe.accounts.createExternalAccount(accountId, {
+            external_account: row.stripe_payment_method_id,
+          });
+          console.log('[stripe/connect] external_account pre-attached', { application_id: row.id });
+        } catch (e) {
+          console.log('[stripe/connect] external_account pre-attach failed (non-fatal — user will enter bank in hosted form)', e.message);
+        }
+      }
     }
 
     const origin = (request.body && request.body.origin) || request.headers.origin || 'http://localhost:3000';
@@ -1919,6 +2008,153 @@ app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async fu
     next(err);
   }
 });
+
+// ── Stripe Financial Connections (bank link, transactions, ACH debit) ────────
+// FC is Stripe's bank-linking product. We use it as a Plaid replacement for:
+//   1. Income verification (transactions feature)
+//   2. ACH debit on repayment day (payment_method feature creates a
+//      chargeable us_bank_account PaymentMethod on the platform Customer)
+//   3. Pre-attaching the bank as external_account on the Connect Express
+//      account so ACH payouts have a destination without re-linking
+//
+// Three-step backend flow:
+//   1. POST /stripe/fc/create-session  → creates session, returns client_secret
+//   2. Frontend uses stripe.collectFinancialConnectionsAccounts(clientSecret)
+//      to launch the embedded bank-link UI
+//   3. POST /stripe/fc/complete  → retrieves session, saves account info
+//      + payment method, optionally subscribes to transactions feature
+app.post('/api/advance/applications/:id/stripe/fc/create-session', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // FC sessions are scoped to a customer. Create one if we don't have it.
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const session = await stripe.financialConnections.sessions.create({
+      account_holder: { type: 'customer', customer: customerId },
+      // payment_method → creates us_bank_account PM (chargeable)
+      // transactions → enables income classification reads
+      // balances → optional but useful for overdraft checks
+      permissions: ['payment_method', 'transactions', 'balances'],
+      filters: { countries: ['US'] },
+    });
+    await db.saveStripeFcSession(request.params.id, session.id);
+    console.log('[stripe/fc/create-session]', { application_id: row.id, session_id: session.id });
+    response.json({ client_secret: session.client_secret, session_id: session.id });
+  } catch (err) {
+    console.log('[stripe/fc/create-session] error', err.message);
+    next(err);
+  }
+});
+
+app.post('/api/advance/applications/:id/stripe/fc/complete', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row || !row.stripe_fc_session_id) {
+      return response.status(400).json({ error: { error_message: 'No FC session for this application' } });
+    }
+    const session = await stripe.financialConnections.sessions.retrieve(row.stripe_fc_session_id);
+    const accounts = session.accounts?.data || [];
+    if (accounts.length === 0) {
+      return response.json({ status: 'pending', application: db.publicApp(row) });
+    }
+    // Take the first linked bank account. If the user linked multiple
+    // (rare), we use the first; the frontend can show a picker later.
+    const fcAccount = accounts[0];
+
+    // payment_method permission means Stripe auto-creates a us_bank_account
+    // PaymentMethod on the customer for this FC account. Find it via the
+    // accounts endpoint or list customer PMs filtered by us_bank_account.
+    let bankPmId = null;
+    try {
+      const pms = await stripe.paymentMethods.list({
+        customer: row.stripe_customer_id,
+        type: 'us_bank_account',
+        limit: 10,
+      });
+      // Match by FC account id (Stripe stamps it on the PM).
+      const match = pms.data.find(pm => pm.us_bank_account?.financial_connections_account === fcAccount.id);
+      bankPmId = match?.id || pms.data[0]?.id || null;
+    } catch (e) {
+      console.log('[stripe/fc/complete] could not list PMs', e.message);
+    }
+
+    if (!bankPmId) {
+      // FC linked but PM not created — this means payment_method permission
+      // wasn't granted by the user, or sync is still in flight. Re-poll
+      // later or surface a clear error.
+      return response.status(400).json({
+        error: { error_message: 'Bank was linked but a chargeable payment method was not created. Try again or contact support.' },
+      });
+    }
+
+    let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccount.id, bankPmId);
+
+    // Subscribe to transactions so we can pull them later for income
+    // classification. Idempotent — Stripe ignores if already subscribed.
+    if (!updated.stripe_fc_subscribed_at) {
+      try {
+        await stripe.financialConnections.accounts.subscribe(fcAccount.id, {
+          features: ['transactions'],
+        });
+        updated = await db.markStripeFcSubscribed(row.id) || updated;
+        console.log('[stripe/fc/complete] subscribed to transactions', { account_id: fcAccount.id });
+      } catch (e) {
+        console.log('[stripe/fc/complete] subscribe failed (non-fatal)', e.message);
+      }
+    }
+
+    await db.addMessage(row.id, 'system', 'Bank account connected via Stripe. A reviewer will check your application and respond here.');
+    addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
+      .catch(err => console.log('[mailchimp review] error:', err.message));
+
+    response.json({ status: 'connected', application: db.publicApp(updated) });
+  } catch (err) {
+    console.log('[stripe/fc/complete] error', err.message);
+    next(err);
+  }
+});
+
+// Helper used by income classification + the admin bank snapshot to read
+// transactions from FC. Returns an array of transactions in chronological
+// order. Stripe's API caps each page at 100 — paginate up to ~3 months
+// of history (matches our existing Plaid window).
+async function fetchFcTransactions(fcAccountId) {
+  const transactions = [];
+  let starting_after = undefined;
+  for (let i = 0; i < 10; i++) {
+    const page = await stripe.financialConnections.transactions.list({
+      account: fcAccountId,
+      limit: 100,
+      ...(starting_after ? { starting_after } : {}),
+    });
+    transactions.push(...page.data);
+    if (!page.has_more || page.data.length === 0) break;
+    starting_after = page.data[page.data.length - 1].id;
+  }
+  return transactions;
+}
+module.exports.fetchFcTransactions = fetchFcTransactions;
 
 // Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
 // Fails open (ok: true) when balance is unavailable so card-only users are unaffected.
