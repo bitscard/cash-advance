@@ -1666,6 +1666,17 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
               },
             }],
             default_payment_method: paymentMethodId,
+            // payment_settings is REQUIRED for us_bank_account subscriptions.
+            // Without it Stripe defaults to card-shaped invoice handling
+            // and the recurring charges fail. Leaving the explicit config
+            // here forever so this doesn't regress.
+            payment_settings: {
+              payment_method_types: ['us_bank_account'],
+              payment_method_options: {
+                us_bank_account: { verification_method: 'instant' },
+              },
+              save_default_payment_method: 'on_subscription',
+            },
             billing_cycle_anchor: anchor,
             proration_behavior: 'none',
             metadata: { application_id: updated.id },
@@ -2227,6 +2238,41 @@ function computeChargeAmountCents(row) {
   return Math.round((baseAmount + instantFee) * 100);
 }
 
+// Force the user's membership subscription to bill RIGHT NOW.
+// Called after a successful advance charge so the $3.99 membership
+// PaymentIntent fires alongside the $25 (or whatever) advance PI in
+// Stripe → Payments — within seconds of each other rather than
+// hours/days apart on Stripe's own schedule.
+//
+// Safe to call even if the subscription's current period was already
+// billed: Stripe returns 'invoice_no_customer_balance_available' or
+// similar, we swallow and move on.
+async function forceBillSubscriptionNow(row) {
+  if (!row.subscription_id || !row.stripe_customer_id) {
+    return { ok: false, reason: 'no subscription on file' };
+  }
+  try {
+    // Create-and-finalize an invoice on the subscription's current
+    // period. auto_advance:true makes Stripe charge it as soon as it
+    // finalizes (no separate finalize/pay step needed).
+    const invoice = await stripe.invoices.create({
+      customer: row.stripe_customer_id,
+      subscription: row.subscription_id,
+      auto_advance: true,
+      description: `Bits Cash Advance — monthly membership ($3.99) — billed alongside advance repayment`,
+      metadata: { application_id: row.id, trigger: 'advance-charge-companion' },
+    });
+    console.log('[forceBillSubscription] invoice created', { application_id: row.id, invoice_id: invoice.id, status: invoice.status });
+    return { ok: true, invoice };
+  } catch (err) {
+    // Common reasons: nothing to invoice (already billed this period),
+    // or the subscription is in a non-billable state. None are fatal —
+    // the next scheduled invoice fires on its own anchor date.
+    console.log('[forceBillSubscription] skipped', { application_id: row.id, reason: err.message });
+    return { ok: false, reason: err.message };
+  }
+}
+
 app.post('/api/advance/admin/applications/:id/charge', async function (request, response, next) {
   if (!requireAdmin(request, response)) return;
   try {
@@ -2272,6 +2318,15 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
       await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);
     }
 
+    // Fire the $3.99 membership invoice right now too — so admin sees
+    // both PaymentIntents appear in Stripe Payments seconds apart.
+    if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
+      const billResult = await forceBillSubscriptionNow(row);
+      if (billResult.ok) {
+        await db.addMessage(row.id, 'system', `Membership invoice ($3.99) initiated alongside advance repayment.`);
+      }
+    }
+
     const updated = await db.getApplicationById(request.params.id);
     response.json({ application: db.publicApp(updated), status: paymentIntent.status });
   } catch (err) {
@@ -2281,6 +2336,66 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
       await db.addMessage(request.params.id, 'system', `Payment failed: ${err.message}`);
       return response.status(402).json({ error: { error_message: err.message } });
     }
+    next(err);
+  }
+});
+
+// Backfill: create the $3.99 monthly subscription for an existing user
+// who's missing one. Used when a user was funded BEFORE the subscription-
+// creation code was added (or before the payment_settings config was
+// added and the previous attempt failed silently). Idempotent — if the
+// user already has a subscription_id, returns it without creating a new one.
+app.post('/api/advance/admin/applications/:id/membership/setup', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (row.subscription_id) {
+      return response.json({ application: db.publicApp(row), already: true, subscription_id: row.subscription_id });
+    }
+    if (!row.stripe_customer_id || !row.stripe_payment_method_id) {
+      return response.status(400).json({ error: { error_message: 'User needs a Stripe customer + bank PaymentMethod before membership can be set up.' } });
+    }
+
+    // Anchor: prefer the user's first repayment date; fall back to today
+    // if they don't have one yet (which would be unusual for backfill).
+    const anchorDate = row.repayment_due_date
+      ? new Date(row.repayment_due_date).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const anchor = Math.floor(new Date(`${anchorDate}T00:00:00Z`).getTime() / 1000);
+
+    const sub = await stripe.subscriptions.create({
+      customer: row.stripe_customer_id,
+      items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+          unit_amount: MEMBERSHIP_PRICE_CENTS,
+          recurring: { interval: 'month' },
+        },
+      }],
+      default_payment_method: row.stripe_payment_method_id,
+      payment_settings: {
+        payment_method_types: ['us_bank_account'],
+        payment_method_options: {
+          us_bank_account: { verification_method: 'instant' },
+        },
+        save_default_payment_method: 'on_subscription',
+      },
+      billing_cycle_anchor: anchor,
+      proration_behavior: 'none',
+      metadata: { application_id: row.id, backfilled: 'true' },
+    });
+
+    const nextBilling = sub.current_period_end
+      ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+      : anchorDate;
+    const updated = await db.saveSubscription(row.id, sub.id, 'active', nextBilling);
+    await db.addMessage(row.id, 'system', `Membership ($3.99/mo) set up. First billing on ${anchorDate}.`);
+    console.log('[admin/membership/setup] subscription backfilled', { application_id: row.id, subscription_id: sub.id, anchor: anchorDate });
+    response.json({ application: db.publicApp(updated), subscription_id: sub.id });
+  } catch (err) {
+    console.log('[admin/membership/setup] error', err.message);
     next(err);
   }
 });
@@ -2322,6 +2437,11 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
           await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
         } else if (paymentIntent.status === 'processing') {
           await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);
+        }
+
+        // Fire $3.99 membership invoice alongside the advance.
+        if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
+          await forceBillSubscriptionNow(row);
         }
 
         results.push({ id: row.id, name: row.name, status: paymentIntent.status });
