@@ -243,15 +243,13 @@ async function getDueMemberships() {
 }
 
 async function getDueApplications() {
-  // Match any application with at least one chargeable payment method.
-  // Order of preference is handled in the charge endpoint
-  // (bank PM via FC > card PM > legacy bank PM). This filter only
-  // ensures the application has something we can charge.
+  // ACH-only collection (card fallback removed). Bank PaymentMethod
+  // comes from the FC bank-link at Step 4.
   const { rows } = await pool.query(
     `SELECT * FROM applications
      WHERE repayment_due_date <= CURRENT_DATE
        AND repayment_status = 'pending'
-       AND (stripe_payment_method_id IS NOT NULL OR stripe_card_pm_id IS NOT NULL)
+       AND stripe_payment_method_id IS NOT NULL
        AND stripe_customer_id IS NOT NULL`
   );
   return rows;

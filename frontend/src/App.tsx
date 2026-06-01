@@ -496,17 +496,18 @@ const CustomerApp = () => {
     }
   }, [application?.delivery_type, application?.status, trustScreenSeen]);
 
-  // Hydrate card/payout local state from the application so the post-approval
+  // Hydrate payout local state from the application so the post-approval
   // flow doesn't re-prompt for things the user already saved during pre-bank
-  // onboarding.
+  // onboarding. cardSaved is now a synonym for "has FC bank PM" since card
+  // was removed; we keep the variable name for diff clarity.
   useEffect(() => {
-    if (application?.stripe_card_saved) setCardSaved(true);
+    if (application?.stripe_payment_method_id) setCardSaved(true);
     if (application?.payout_methods && application?.payout_contact) {
       setPayoutMethods(application.payout_methods.split(','));
       setPayoutContact(application.payout_contact);
       setPayoutSaved(true);
     }
-  }, [application?.stripe_card_saved, application?.payout_methods, application?.payout_contact]);
+  }, [application?.stripe_payment_method_id, application?.payout_methods, application?.payout_contact]);
 
 
 
@@ -524,10 +525,11 @@ const CustomerApp = () => {
       if (!res.ok) throw new Error(data.error?.error_message || "Could not save delivery preference");
       setApplication(data.application);
       setShowDeliveryModal(false);
-      // Skip the post-approval payout/card step entirely if pre-bank onboarding
-      // already captured both — go straight to the confirmation screen.
+      // Skip the post-approval payout step entirely if pre-bank onboarding
+      // already captured everything — bank PM (FC) + payout — go straight
+      // to the confirmation screen.
       const alreadyCaptured =
-        data.application.stripe_card_saved &&
+        data.application.stripe_payment_method_id &&
         data.application.payout_methods &&
         data.application.payout_contact;
       if (alreadyCaptured) setShowConfirmation(true);
@@ -2575,9 +2577,9 @@ const CustomerApp = () => {
 
   // ── Authenticated application view ────────────────────────────────────────
   const needsBank = !application.plaid_connected;
-  // Bank verifies income via Plaid; card is required for repayment
-  const needsCard = application.plaid_connected && !application.stripe_card_saved &&
-    (application.status === "approved" || application.status === "funded" || application.status === "repayment_scheduled");
+  // needsCard is permanently false — card backup was removed; ACH-only.
+  // Kept as a variable for diff clarity; can be inlined later.
+  const needsCard = false;
 
   return (
     <main className={styles.page}>
@@ -2724,46 +2726,20 @@ const CustomerApp = () => {
             )}
           </div>
 
-          {/* Section 2: Card for repayment */}
-          <div style={{
-            background: "var(--white)", border: "1.5px solid var(--border)",
-            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "2.4rem",
-          }}>
-            <p style={{ fontWeight: 700, fontSize: "1.5rem", color: "var(--ink)", marginBottom: "0.4rem" }}>
-              Add a card for repayment
-            </p>
-            <p style={{ fontSize: "1.35rem", color: "var(--muted)", marginBottom: "1.6rem" }}>
-              We'll charge this card on your repayment date. Your card is never charged upfront.
-            </p>
-            {cardSaved ? (
-              <p className={styles.paidNote}>✓ Card saved — repayment will be collected automatically on your due date.</p>
-            ) : stripeKey ? (
-              <Elements stripe={stripePromise}>
-                <SaveCardForm
-                  applicationId={application.id}
-                  authToken={token}
-                  onSaved={() => {
-                    loadApplication(application.id);
-                    setCardSaved(true);
-                  }}
-                />
-              </Elements>
-            ) : (
-              <p className={styles.error}>Card payments are not configured.</p>
-            )}
-          </div>
+          {/* Card-for-repayment section removed — ACH-only collection.
+              Repayment is debited from the FC-linked bank PaymentMethod
+              that was set up at Step 4. No backup card on file. */}
 
-          {/* Continue — only when both are done */}
           <button
-            disabled={!payoutSaved || !cardSaved}
+            disabled={!payoutSaved}
             style={{ width: "100%" }}
             onClick={() => { setShowPayoutStep(false); setShowConfirmation(true); }}
           >
             Continue →
           </button>
-          {(!payoutSaved || !cardSaved) && (
+          {!payoutSaved && (
             <p style={{ textAlign: "center", fontSize: "1.3rem", color: "var(--muted)", marginTop: "0.8rem" }}>
-              {!payoutSaved && !cardSaved ? "Save your payout info and card to continue." : !payoutSaved ? "Save your payout info to continue." : "Save your card to continue."}
+              Save your payout info to continue.
             </p>
           )}
         </div>
@@ -4066,26 +4042,13 @@ const LoanApp = () => {
                       </div>
                     </dl>
                   )}
-                  {showCardSetup && (
+                  {/* Card setup removed — ACH-only collection.
+                      Repayment is debited from the FC-linked bank on the due date. */}
+                  {showCardSetup && application.stripe_payment_method_id && (
                     <div style={{ marginTop: "20px" }}>
-                      {application.stripe_card_saved ? (
-                        <p className={styles.ldDashNoteOk}>
-                          <span aria-hidden="true">✓</span> Card on file — repayment will be collected automatically on the due date.
-                        </p>
-                      ) : !stripeKey ? (
-                        <p className={styles.ldDashError}>Card payments are not configured yet.</p>
-                      ) : (
-                        <>
-                          <p className={styles.ldDashCardPrompt}>Add a card to complete repayment setup:</p>
-                          <Elements stripe={stripePromise}>
-                            <SaveCardForm
-                              applicationId={application.id}
-                              authToken={token}
-                              onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
-                            />
-                          </Elements>
-                        </>
-                      )}
+                      <p className={styles.ldDashNoteOk}>
+                        <span aria-hidden="true">✓</span> Bank on file — repayment will be collected automatically via ACH on the due date.
+                      </p>
                     </div>
                   )}
                 </>
@@ -4110,21 +4073,8 @@ const LoanApp = () => {
                     </dl>
                   )}
                   <p className={styles.ldDashNoteOk}>
-                    <span aria-hidden="true">✓</span> Card saved — repayment will be collected automatically on the due date.
+                    <span aria-hidden="true">✓</span> Bank on file — repayment will be collected automatically via ACH on the due date.
                   </p>
-                </>
-              ) : showCardSetup ? (
-                <>
-                  <p className={styles.ldDashCardPrompt}><strong>Set up repayment.</strong> Save a card to complete your repayment setup.</p>
-                  {stripeKey && (
-                    <Elements stripe={stripePromise}>
-                      <SaveCardForm
-                        applicationId={application.id}
-                        authToken={token}
-                        onSaved={() => loadMe({ Authorization: `Bearer ${token}` })}
-                      />
-                    </Elements>
-                  )}
                 </>
               ) : (
                 <p className={styles.ldDashMuted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>

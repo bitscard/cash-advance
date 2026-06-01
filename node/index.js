@@ -1647,10 +1647,10 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
       if (
         !updated.subscription_id &&
         updated.stripe_customer_id &&
-        (updated.stripe_payment_method_id || updated.stripe_card_pm_id)
+        updated.stripe_payment_method_id
       ) {
         try {
-          const paymentMethodId = updated.stripe_payment_method_id || updated.stripe_card_pm_id;
+          const paymentMethodId = updated.stripe_payment_method_id;
           // billing_cycle_anchor is unix seconds. We anchor at the START of
           // the repayment day in UTC (so any reasonable global TZ has the
           // membership charge land on the right calendar date).
@@ -2233,12 +2233,13 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // Bank ACH is primary; card is fallback
+    // ACH-only collection. Card fallback removed — users no longer
+    // collect a card during onboarding, so any failure here is terminal
+    // and flips the application to repayment_failed (handled in the
+    // outer catch block below).
     const bankPmId = row.stripe_payment_method_id;
-    const cardPmId = row.stripe_card_pm_id;
-    const primaryPmId = bankPmId || cardPmId;
 
-    if (!row.stripe_customer_id || !primaryPmId) {
+    if (!row.stripe_customer_id || !bankPmId) {
       return response.status(400).json({ error: { error_message: 'No payment method on file for this application' } });
     }
 
@@ -2252,34 +2253,14 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
       return response.status(402).json({ error: { error_message: overdraft.reason } });
     }
 
-    let paymentIntent = null;
-
-    try {
-      paymentIntent = await stripe.paymentIntents.create({
-        amount, currency: 'usd',
-        customer: row.stripe_customer_id,
-        payment_method: primaryPmId,
-        off_session: true, confirm: true,
-        description: `Cash advance repayment — ${row.name}`,
-        metadata: { application_id: row.id },
-      });
-    } catch (primaryErr) {
-      // If bank failed and a card backup exists, try the card
-      if ((primaryErr.type === 'StripeCardError' || primaryErr.type === 'StripeInvalidRequestError')
-          && cardPmId && cardPmId !== primaryPmId) {
-        await db.addMessage(row.id, 'system', `Direct debit failed: ${primaryErr.message}. Retrying with backup card.`);
-        paymentIntent = await stripe.paymentIntents.create({
-          amount, currency: 'usd',
-          customer: row.stripe_customer_id,
-          payment_method: cardPmId,
-          off_session: true, confirm: true,
-          description: `Cash advance repayment (card backup) — ${row.name}`,
-          metadata: { application_id: row.id },
-        });
-      } else {
-        throw primaryErr;
-      }
-    }
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount, currency: 'usd',
+      customer: row.stripe_customer_id,
+      payment_method: bankPmId,
+      off_session: true, confirm: true,
+      description: `Cash advance repayment — ${row.name}`,
+      metadata: { application_id: row.id },
+    });
 
     await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
 
@@ -2313,9 +2294,7 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
     for (const row of due) {
       const amount = computeChargeAmountCents(row);
       const bankPmId = row.stripe_payment_method_id;
-      const cardPmId = row.stripe_card_pm_id;
-      const primaryPmId = bankPmId || cardPmId;
-      if (!primaryPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
+      if (!bankPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
         // Overdraft check before charging
         const overdraft = await checkOverdraft(row.access_token, amount);
@@ -2325,30 +2304,16 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
           continue;
         }
 
-        let paymentIntent = null;
-        try {
-          paymentIntent = await stripe.paymentIntents.create({
-            amount, currency: 'usd',
-            customer: row.stripe_customer_id,
-            payment_method: primaryPmId,
-            off_session: true, confirm: true,
-            description: `Cash advance repayment — ${row.name}`,
-            metadata: { application_id: row.id },
-          });
-        } catch (primaryErr) {
-          if ((primaryErr.type === 'StripeCardError' || primaryErr.type === 'StripeInvalidRequestError')
-              && cardPmId && cardPmId !== primaryPmId) {
-            await db.addMessage(row.id, 'system', `Direct debit failed: ${primaryErr.message}. Retrying with backup card.`);
-            paymentIntent = await stripe.paymentIntents.create({
-              amount, currency: 'usd',
-              customer: row.stripe_customer_id,
-              payment_method: cardPmId,
-              off_session: true, confirm: true,
-              description: `Cash advance repayment (card backup) — ${row.name}`,
-              metadata: { application_id: row.id },
-            });
-          } else { throw primaryErr; }
-        }
+        // ACH-only collection. No card fallback — any failure flips
+        // the application to repayment_failed (handled in catch block).
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount, currency: 'usd',
+          customer: row.stripe_customer_id,
+          payment_method: bankPmId,
+          off_session: true, confirm: true,
+          description: `Cash advance repayment — ${row.name}`,
+          metadata: { application_id: row.id },
+        });
 
         await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
 
