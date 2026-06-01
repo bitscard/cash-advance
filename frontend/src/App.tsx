@@ -625,6 +625,27 @@ const CustomerApp = () => {
     for (const [i, src] of form.income_sources.entries()) {
       const label = form.income_sources.length > 1 ? ` (source ${i + 1})` : "";
       // Pay frequency no longer collected — derived from bank transactions later.
+      // Payday: must be set, in the future, and within 30 days.
+      if (!src.payday) {
+        setError(`Please enter your next payday${label}`);
+        return;
+      }
+      const paydayDate = new Date(src.payday + "T00:00:00");
+      if (Number.isNaN(paydayDate.getTime())) {
+        setError(`Please enter a valid payday${label}`);
+        return;
+      }
+      const nowMs = new Date(today + "T00:00:00").getTime();
+      const maxMs = new Date(thirtyDaysFromNow + "T00:00:00").getTime();
+      const paydayMs = paydayDate.getTime();
+      if (paydayMs < nowMs) {
+        setError(`Your next payday must be today or later${label}`);
+        return;
+      }
+      if (paydayMs > maxMs) {
+        setError(`Your next payday must be within the next 30 days${label}. If your next paycheck is further out, you can apply for an advance closer to that date.`);
+        return;
+      }
     }
     if (!form.state) {
       setError("Please select your state");
@@ -1603,9 +1624,9 @@ const CustomerApp = () => {
                         </label>
                         <label className={styles.ldSignupField}>
                           <span className={styles.ldSignupFieldLabel}>
-                            Next payday <span className={styles.ldSignupHint}>(future dates only)</span>
+                            Next payday <span className={styles.ldSignupHint}>(within the next 30 days)</span>
                           </span>
-                          <input className={styles.ldSignupInput} required min={today} type="date" value={src.payday}
+                          <input className={styles.ldSignupInput} required min={today} max={thirtyDaysFromNow} type="date" value={src.payday}
                             onChange={e => updateSource(i, "payday", e.target.value)} />
                         </label>
                       </div>
