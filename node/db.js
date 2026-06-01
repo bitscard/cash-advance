@@ -258,7 +258,7 @@ async function getDueApplications() {
        AND repayment_status = 'pending'
        AND stripe_payment_method_id IS NOT NULL
        AND stripe_customer_id IS NOT NULL
-       AND COALESCE(repayment_attempt_count, 0) < 3
+       AND COALESCE(repayment_attempt_count, 0) < 5
        AND (repayment_last_attempt_at IS NULL OR repayment_last_attempt_at < NOW() - INTERVAL '23 hours')`
   );
   return rows;

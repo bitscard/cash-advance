@@ -2316,6 +2316,134 @@ function computeChargeAmountCents(row) {
   return Math.round((baseAmount + instantFee) * 100);
 }
 
+// Repayment-collection cascade. The user's spec:
+//   Day 0 (attempt 1): try card → if fails, immediately try ACH same-day
+//                      (no balance check). Both happen in one cron tick.
+//   Day 1-3 (attempts 2-4): retry card daily.
+//   Day 4 (attempt 5): balance check via FC + ACH same-day.
+//   Day 5+ : locked out (status='repayment_failed').
+//
+// One thing worth knowing: between Day 0's ACH (status=processing) and
+// the Day 1+ card retries, the ACH might still be in flight. To avoid
+// double-collecting, we cancel any prior pending ACH PaymentIntent
+// before each card retry. If the cancellation fails (e.g. the ACH
+// already settled), we abort the retry — it was a no-op anyway.
+async function cancelPendingChargeIfAny(row) {
+  if (!row.charge_intent_id) return false;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(row.charge_intent_id);
+    if (pi.status === 'processing' || pi.status === 'requires_payment_method' || pi.status === 'requires_action') {
+      await stripe.paymentIntents.cancel(pi.id);
+      console.log('[cascade] cancelled prior pending PI', { application_id: row.id, pi_id: pi.id });
+      return true;
+    }
+    if (pi.status === 'succeeded') {
+      console.log('[cascade] prior PI already succeeded — skipping retry to avoid double-collect', { application_id: row.id, pi_id: pi.id });
+      return 'already_succeeded';
+    }
+  } catch (e) {
+    console.log('[cascade] could not retrieve/cancel prior PI', { application_id: row.id, error: e.message });
+  }
+  return false;
+}
+
+async function tryCardCharge(row, amount, attemptLabel) {
+  if (!row.stripe_card_pm_id) return { ok: false, reason: 'no card on file' };
+  try {
+    const pi = await stripe.paymentIntents.create({
+      amount, currency: 'usd',
+      customer: row.stripe_customer_id,
+      payment_method: row.stripe_card_pm_id,
+      payment_method_types: ['card'],
+      off_session: true, confirm: true,
+      description: `Cash advance repayment — ${row.name} (${attemptLabel})`,
+      metadata: { application_id: row.id, method: 'card', attempt_label: attemptLabel },
+    });
+    return { ok: pi.status === 'succeeded', pi, method: 'card', status: pi.status };
+  } catch (e) {
+    return { ok: false, reason: e.message, error: e, method: 'card' };
+  }
+}
+
+async function tryAchCharge(row, amount, attemptLabel) {
+  if (!row.stripe_payment_method_id) return { ok: false, reason: 'no bank on file' };
+  try {
+    const pi = await stripe.paymentIntents.create({
+      amount, currency: 'usd',
+      customer: row.stripe_customer_id,
+      payment_method: row.stripe_payment_method_id,
+      payment_method_types: ['us_bank_account'],
+      payment_method_options: {
+        us_bank_account: { preferred_settlement_speed: 'fastest' },  // Same-Day ACH where eligible
+      },
+      off_session: true, confirm: true,
+      description: `Cash advance repayment — ${row.name} (${attemptLabel})`,
+      metadata: { application_id: row.id, method: 'ach', attempt_label: attemptLabel },
+    });
+    // ACH returns 'processing' immediately; 'succeeded' arrives later via webhook.
+    return { ok: pi.status === 'succeeded' || pi.status === 'processing', pi, method: 'ach', status: pi.status };
+  } catch (e) {
+    return { ok: false, reason: e.message, error: e, method: 'ach' };
+  }
+}
+
+// Returns { paid, processing, failed, pi, method, message } describing
+// the result. Caller is responsible for updating DB state.
+async function chargeRepaymentWithCascade(row, amount) {
+  const attemptCount = row.repayment_attempt_count || 0;
+
+  // ── Attempt 1 (Day 0): card-then-ACH waterfall ──────────────────
+  if (attemptCount === 0) {
+    const cardResult = await tryCardCharge(row, amount, 'attempt 1 — card');
+    if (cardResult.ok) {
+      return { paid: true, pi: cardResult.pi, method: 'card', message: `Card charged successfully.` };
+    }
+    // Card failed (or no card) — immediately fall through to ACH same-day.
+    const achResult = await tryAchCharge(row, amount, 'attempt 1 — ACH fallback (no balance check)');
+    if (achResult.ok && achResult.status === 'succeeded') {
+      return { paid: true, pi: achResult.pi, method: 'ach', message: `Card failed; ACH succeeded.` };
+    }
+    if (achResult.ok && achResult.status === 'processing') {
+      return { processing: true, pi: achResult.pi, method: 'ach', message: `Card failed; ACH same-day initiated (~1 business day to settle).` };
+    }
+    return { failed: true, reason: `Both card and ACH failed on initial attempt. Card: ${cardResult.reason}. ACH: ${achResult.reason}.` };
+  }
+
+  // ── Attempts 2-4 (Days 1-3): card-only retries ───────────────────
+  if (attemptCount >= 1 && attemptCount <= 3) {
+    // Cancel any in-flight ACH from a previous attempt so we don't double-collect.
+    const cancelResult = await cancelPendingChargeIfAny(row);
+    if (cancelResult === 'already_succeeded') {
+      return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
+    }
+    const cardResult = await tryCardCharge(row, amount, `attempt ${attemptCount + 1} — card retry ${attemptCount}/3`);
+    if (cardResult.ok) {
+      return { paid: true, pi: cardResult.pi, method: 'card', message: `Card retry ${attemptCount}/3 succeeded.` };
+    }
+    return { failed: true, reason: `Card retry ${attemptCount}/3 failed: ${cardResult.reason}`, error: cardResult.error };
+  }
+
+  // ── Attempt 5 (Day 4): balance check + ACH same-day ─────────────
+  if (attemptCount === 4) {
+    await cancelPendingChargeIfAny(row);
+    const overdraft = await checkOverdraft(row, amount);
+    if (!overdraft.ok) {
+      return { failed: true, reason: `Final ACH skipped — ${overdraft.reason}` };
+    }
+    const achResult = await tryAchCharge(row, amount, 'attempt 5 — final ACH with balance check');
+    if (achResult.ok && achResult.status === 'succeeded') {
+      return { paid: true, pi: achResult.pi, method: 'ach', message: `Final ACH (balance-checked) succeeded.` };
+    }
+    if (achResult.ok && achResult.status === 'processing') {
+      return { processing: true, pi: achResult.pi, method: 'ach', message: `Final ACH (balance-checked) initiated.` };
+    }
+    return { failed: true, reason: `Final ACH attempt failed: ${achResult.reason}`, error: achResult.error };
+  }
+
+  // attempt >= 5 means we've exhausted the cascade.
+  return { failed: true, reason: `All 5 collection attempts exhausted.`, terminal: true };
+}
+
 // Force the user's membership subscription to bill RIGHT NOW.
 // Called after a successful advance charge so the $3.99 membership
 // PaymentIntent fires alongside the $25 (or whatever) advance PI in
@@ -2357,78 +2485,47 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // ACH-only collection. Card fallback removed — users no longer
-    // collect a card during onboarding, so any failure here is terminal
-    // and flips the application to repayment_failed (handled in the
-    // outer catch block below).
-    const bankPmId = row.stripe_payment_method_id;
-
-    if (!row.stripe_customer_id || !bankPmId) {
+    const hasAnyPm = !!(row.stripe_card_pm_id || row.stripe_payment_method_id);
+    if (!row.stripe_customer_id || !hasAnyPm) {
       return response.status(400).json({ error: { error_message: 'No payment method on file for this application' } });
     }
 
     const amount = computeChargeAmountCents(row);
-    console.log('[charge] computed amount', { application_id: row.id, amount_cents: amount, repayment_amount: row.repayment_amount, requested_amount: row.requested_amount, delivery_type: row.delivery_type });
+    console.log('[charge] computed amount', { application_id: row.id, amount_cents: amount, attempt_count: row.repayment_attempt_count });
 
-    // Overdraft check — uses FC balance if available
-    const overdraft = await checkOverdraft(row, amount);
-    if (!overdraft.ok) {
-      await db.addMessage(row.id, 'system', overdraft.reason);
-      return response.status(402).json({ error: { error_message: overdraft.reason } });
-    }
-
-    // Increment the attempt counter BEFORE charging so a Stripe error
-    // doesn't leave the row stuck at attempt 0 forever.
+    // Run the card→ACH cascade. Each call to the cascade represents ONE
+    // cron-tick / admin-button click; the attempt counter is bumped
+    // after the call resolves.
+    const result = await chargeRepaymentWithCascade(row, amount);
     await db.bumpRepaymentAttemptCount(row.id);
-    const attempt = (row.repayment_attempt_count || 0) + 1;
+    const newAttemptCount = (row.repayment_attempt_count || 0) + 1;
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount, currency: 'usd',
-      customer: row.stripe_customer_id,
-      payment_method: bankPmId,
-      off_session: true, confirm: true,
-      description: `Cash advance repayment — ${row.name} (attempt ${attempt})`,
-      metadata: { application_id: row.id, attempt: String(attempt) },
-    });
-
-    await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
-
-    if (paymentIntent.status === 'succeeded') {
+    if (result.paid) {
       await db.markRepaymentPaid(row.id);
       await db.incrementRepaymentCount(row.id);
       await db.resetRepaymentAttemptCount(row.id);
-      await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
-    } else if (paymentIntent.status === 'processing') {
-      await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated (attempt ${attempt}/3). ACH payments settle in 3-5 business days.`);
+      if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
+      await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully via ${result.method || 'card'}.`);
+      await forceBillSubscriptionNow(row);
+      const updated = await db.getApplicationById(request.params.id);
+      return response.json({ application: db.publicApp(updated), status: 'paid', method: result.method });
     }
-
-    // Fire the $3.99 membership invoice right now too — so admin sees
-    // both PaymentIntents appear in Stripe Payments seconds apart.
-    if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
-      const billResult = await forceBillSubscriptionNow(row);
-      if (billResult.ok) {
-        await db.addMessage(row.id, 'system', `Membership invoice ($3.99) initiated alongside advance repayment.`);
-      }
+    if (result.processing) {
+      if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
+      await db.addMessage(row.id, 'system', `${result.message} (attempt ${newAttemptCount}/5)`);
+      await forceBillSubscriptionNow(row);
+      const updated = await db.getApplicationById(request.params.id);
+      return response.json({ application: db.publicApp(updated), status: 'processing' });
     }
-
-    const updated = await db.getApplicationById(request.params.id);
-    response.json({ application: db.publicApp(updated), status: paymentIntent.status });
+    // result.failed
+    if (result.terminal || newAttemptCount >= 5) {
+      await db.updateApplicationStatus(row.id, 'repayment_failed');
+      await db.addMessage(row.id, 'system', `Payment failed after ${newAttemptCount} attempts. ${result.reason}. Account locked from new advances.`);
+      return response.status(402).json({ error: { error_message: result.reason }, attempt: newAttemptCount, terminal: true });
+    }
+    await db.addMessage(row.id, 'system', `Payment attempt ${newAttemptCount}/5 failed. ${result.reason}. We'll retry tomorrow.`);
+    return response.status(402).json({ error: { error_message: result.reason }, attempt: newAttemptCount });
   } catch (err) {
-    if (err.type === 'StripeCardError' || err.type === 'StripeInvalidRequestError') {
-      await db.saveStripeCharge(request.params.id, err.payment_intent?.id || null, 'failed');
-      // Retry pipeline: bump attempt count, only flip to repayment_failed
-      // when we've used all 3 attempts. The cron picks it up again
-      // tomorrow (since attempts < 3 and last_attempt_at > 23h ago).
-      const updated = await db.bumpRepaymentAttemptCount(request.params.id);
-      const attemptCount = updated?.repayment_attempt_count || 1;
-      if (attemptCount >= 3) {
-        await db.updateApplicationStatus(request.params.id, 'repayment_failed');
-        await db.addMessage(request.params.id, 'system', `Payment failed after 3 attempts: ${err.message}. Account locked from new advances — contact support to resolve.`);
-      } else {
-        await db.addMessage(request.params.id, 'system', `Payment attempt ${attemptCount}/3 failed: ${err.message}. We'll retry automatically.`);
-      }
-      return response.status(402).json({ error: { error_message: err.message }, attempt: attemptCount });
-    }
     next(err);
   }
 });
@@ -2502,62 +2599,39 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
 
     for (const row of due) {
       const amount = computeChargeAmountCents(row);
-      const bankPmId = row.stripe_payment_method_id;
-      if (!bankPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
+      const hasAnyPm = !!(row.stripe_card_pm_id || row.stripe_payment_method_id);
+      if (!hasAnyPm) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
-        // Balance check via FC (with refresh) before charging. Skip if
-        // balance is insufficient — cron picks them up again tomorrow
-        // when balance might have replenished.
-        const overdraft = await checkOverdraft(row, amount);
-        if (!overdraft.ok) {
-          await db.addMessage(row.id, 'system', overdraft.reason);
-          results.push({ id: row.id, name: row.name, status: 'skipped_overdraft', reason: overdraft.reason });
-          continue;
-        }
-
-        // Increment attempt count BEFORE the create call so a thrown
-        // error doesn't leave the row stuck at 0 attempts.
+        const result = await chargeRepaymentWithCascade(row, amount);
         await db.bumpRepaymentAttemptCount(row.id);
-        const attempt = (row.repayment_attempt_count || 0) + 1;
+        const newAttemptCount = (row.repayment_attempt_count || 0) + 1;
 
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount, currency: 'usd',
-          customer: row.stripe_customer_id,
-          payment_method: bankPmId,
-          off_session: true, confirm: true,
-          description: `Cash advance repayment — ${row.name} (attempt ${attempt})`,
-          metadata: { application_id: row.id, attempt: String(attempt) },
-        });
-
-        await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
-
-        if (paymentIntent.status === 'succeeded') {
+        if (result.paid) {
           await db.markRepaymentPaid(row.id);
           await db.resetRepaymentAttemptCount(row.id);
-          await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
-        } else if (paymentIntent.status === 'processing') {
-          await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated (attempt ${attempt}/3). ACH payments settle in 3-5 business days.`);
-        }
-
-        // Fire $3.99 membership invoice alongside the advance.
-        if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
+          if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
+          await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected via ${result.method}.`);
           await forceBillSubscriptionNow(row);
+          results.push({ id: row.id, name: row.name, status: 'paid', method: result.method });
+        } else if (result.processing) {
+          if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
+          await db.addMessage(row.id, 'system', `${result.message} (attempt ${newAttemptCount}/5)`);
+          await forceBillSubscriptionNow(row);
+          results.push({ id: row.id, name: row.name, status: 'processing', method: result.method });
+        } else {
+          // failed
+          if (result.terminal || newAttemptCount >= 5) {
+            await db.updateApplicationStatus(row.id, 'repayment_failed');
+            await db.addMessage(row.id, 'system', `Payment failed after ${newAttemptCount} attempts. ${result.reason}. Account locked.`);
+          } else {
+            await db.addMessage(row.id, 'system', `Attempt ${newAttemptCount}/5 failed: ${result.reason}. Retrying tomorrow.`);
+          }
+          results.push({ id: row.id, name: row.name, status: 'failed', reason: result.reason, attempt: newAttemptCount });
         }
-
-        results.push({ id: row.id, name: row.name, status: paymentIntent.status, attempt });
       } catch (err) {
         const msg = err.message || 'Unknown error';
-        await db.saveStripeCharge(row.id, err.payment_intent?.id || null, 'failed');
-        // Retry pipeline — same as the single-charge endpoint.
-        const updated = await db.bumpRepaymentAttemptCount(row.id);
-        const attemptCount = updated?.repayment_attempt_count || 1;
-        if (attemptCount >= 3) {
-          await db.updateApplicationStatus(row.id, 'repayment_failed');
-          await db.addMessage(row.id, 'system', `Payment failed after 3 attempts: ${msg}. Account locked from new advances — contact support to resolve.`);
-        } else {
-          await db.addMessage(row.id, 'system', `Payment attempt ${attemptCount}/3 failed: ${msg}. We'll retry tomorrow.`);
-        }
-        results.push({ id: row.id, name: row.name, status: 'failed', error: msg });
+        await db.addMessage(row.id, 'system', `Cron error during charge: ${msg}`);
+        results.push({ id: row.id, name: row.name, status: 'error', error: msg });
       }
     }
 
