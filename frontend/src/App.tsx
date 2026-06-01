@@ -3130,6 +3130,15 @@ const AdminApp = () => {
   const [tokenInput, setTokenInput] = useState(adminToken);
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Admin tabs: filter the inbox by lifecycle bucket so reviewers can
+  // focus on what's actually their work right now.
+  //   intake   → pre-decision (intake / bank_connected / reviewing)
+  //   approved → post-approve, pre-money (approved / expired)
+  //   funded   → money out the door (funded / repayment_scheduled /
+  //              repaid / repayment_failed / subscription_failed /
+  //              written_off)
+  type AdminTab = "intake" | "approved" | "funded";
+  const [activeTab, setActiveTab] = useState<AdminTab>("intake");
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [snapshot, setSnapshot] = useState<BankSnapshot | null>(null);
@@ -3142,6 +3151,71 @@ const AdminApp = () => {
     total: number; got_advance: number; repaid: number; defaulted: number; active: number;
     referred: Array<{ id: string; name: string; email: string; status: string; repayment_count: number; got_advance: boolean; created_at: string }>;
   } | null>(null);
+
+  // Status → tab bucket mapping. Anything not in these sets falls into
+  // 'intake' as a safe default (e.g. unknown future status values).
+  const TAB_STATUSES: Record<AdminTab, Set<string>> = {
+    intake: new Set(["intake", "bank_connected", "reviewing"]),
+    approved: new Set(["approved", "expired", "denied"]),
+    funded: new Set(["funded", "repayment_scheduled", "repaid", "repayment_failed", "subscription_failed", "written_off"]),
+  };
+  const tabFor = (status: string): AdminTab => {
+    if (TAB_STATUSES.approved.has(status)) return "approved";
+    if (TAB_STATUSES.funded.has(status)) return "funded";
+    return "intake";
+  };
+  const filteredApplications = applications.filter(a => tabFor(a.status) === activeTab);
+  const tabCounts: Record<AdminTab, number> = {
+    intake: applications.filter(a => tabFor(a.status) === "intake").length,
+    approved: applications.filter(a => tabFor(a.status) === "approved").length,
+    funded: applications.filter(a => tabFor(a.status) === "funded").length,
+  };
+
+  // Days-until-due helper. Returns null if no due date set.
+  // Negative = overdue, 0 = today, positive = days from now.
+  const daysUntilDue = (dueDateStr: string | null | undefined): number | null => {
+    if (!dueDateStr) return null;
+    const due = new Date(dueDateStr);
+    if (Number.isNaN(due.getTime())) return null;
+    const now = new Date();
+    // Compare at YYYY-MM-DD granularity so timezones don't off-by-one us.
+    const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    return Math.round((dueDay - today) / 86400000);
+  };
+
+  // Friendly subscription-status badge for the Funded tab.
+  type SubBadge = { label: string; color: string; bg: string };
+  const subscriptionBadge = (app: Application): SubBadge => {
+    // subscription_status reflects what our webhook has seen from
+    // Stripe. 'active' = healthy, 'subscription_failed' = locked out,
+    // 'cancelled' = user-cancelled, anything else = setup not done.
+    if (app.subscription_status === "active" && app.subscription_id) {
+      return { label: "✓ Active subscription", color: "#065f46", bg: "#d1fae5" };
+    }
+    if (app.subscription_status === "subscription_failed") {
+      return { label: "✗ Membership failed", color: "#991b1b", bg: "#fee2e2" };
+    }
+    if (app.subscription_status === "cancelled") {
+      return { label: "⊘ Cancelled", color: "#404040", bg: "#e5e5e5" };
+    }
+    if (app.subscription_id) {
+      return { label: "⋯ Sub setup in progress", color: "#92400e", bg: "#fef3c7" };
+    }
+    return { label: "⚠ No subscription", color: "#92400e", bg: "#fef3c7" };
+  };
+
+  // Friendly due-date phrase for the Funded tab.
+  const dueDatePhrase = (app: Application): string => {
+    if (!app.repayment) return "No repayment scheduled";
+    const days = daysUntilDue(app.repayment.due_date);
+    if (days === null) return "Due date unknown";
+    if (days === 0) return "Due today";
+    if (days === 1) return "Due tomorrow";
+    if (days > 1) return `Due in ${days} days`;
+    if (days === -1) return "Overdue 1 day";
+    return `Overdue ${Math.abs(days)} days`;
+  };
 
   const selected = applications.find((application) => application.id === selectedId) || null;
   const adminHeaders = useMemo<Record<string, string>>(
@@ -3166,8 +3240,14 @@ const AdminApp = () => {
     if (!response.ok) return;
     const data = await response.json();
     setApplications(data.applications);
-    setSelectedId((current) => current || data.applications[0]?.id || null);
-  }, [adminHeaders]);
+    // Default selection: keep the current one if still around, otherwise
+    // pick the first application visible in the currently-active tab.
+    setSelectedId((current) => {
+      if (current && data.applications.some((a: Application) => a.id === current)) return current;
+      const firstInTab = data.applications.find((a: Application) => tabFor(a.status) === activeTab);
+      return firstInTab?.id || data.applications[0]?.id || null;
+    });
+  }, [adminHeaders, activeTab]);
 
   const loadMessages = useCallback(async (id: string) => {
     const response = await fetch(apiUrl(`/api/advance/applications/${id}/messages`));
@@ -3335,19 +3415,85 @@ const AdminApp = () => {
         <section className={styles.adminLayout}>
           <aside className={styles.inbox}>
             <h1>Reviews</h1>
-            {applications.map((application) => (
-              <button
-                key={application.id}
-                className={application.id === selectedId ? styles.activeRow : styles.row}
-                onClick={() => setSelectedId(application.id)}
-              >
-                <span>{application.customer.name || "Unnamed applicant"}</span>
-                <small>{statusLabel[application.status]}</small>
-                <small style={{ color: "var(--muted)", fontSize: "1.2rem" }}>
-                  {new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </small>
-              </button>
-            ))}
+            {/* Tab bar — filters the inbox by lifecycle bucket. Each tab
+                shows a count so reviewers can see backlog at a glance. */}
+            <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+              {(["intake", "approved", "funded"] as AdminTab[]).map(tab => {
+                const active = tab === activeTab;
+                const labels: Record<AdminTab, string> = { intake: "Intake", approved: "Approved", funded: "Funded" };
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(tab);
+                      // If the currently selected app isn't in this tab, auto-pick the first one that is.
+                      const stillVisible = selected && tabFor(selected.status) === tab;
+                      if (!stillVisible) {
+                        const first = applications.find(a => tabFor(a.status) === tab);
+                        setSelectedId(first?.id || null);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: "0.6rem 0.8rem",
+                      fontSize: "1.25rem",
+                      fontWeight: 600,
+                      background: active ? "var(--brand)" : "var(--white)",
+                      color: active ? "white" : "var(--ink)",
+                      border: `1.5px solid ${active ? "var(--brand)" : "var(--border)"}`,
+                      borderRadius: "var(--r-sm)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {labels[tab]} ({tabCounts[tab]})
+                  </button>
+                );
+              })}
+            </div>
+            {filteredApplications.length === 0 && (
+              <p style={{ fontSize: "1.3rem", color: "var(--muted)", padding: "1rem 0", textAlign: "center" }}>
+                No applications in this bucket.
+              </p>
+            )}
+            {filteredApplications.map((application) => {
+              const isFundedTab = activeTab === "funded";
+              const badge = isFundedTab ? subscriptionBadge(application) : null;
+              const due = isFundedTab ? dueDatePhrase(application) : null;
+              return (
+                <button
+                  key={application.id}
+                  className={application.id === selectedId ? styles.activeRow : styles.row}
+                  onClick={() => setSelectedId(application.id)}
+                >
+                  <span>{application.customer.name || "Unnamed applicant"}</span>
+                  <small>{statusLabel[application.status]}</small>
+                  {isFundedTab && badge && (
+                    <small style={{
+                      display: "inline-block",
+                      marginTop: "0.3rem",
+                      padding: "0.15rem 0.6rem",
+                      borderRadius: "10px",
+                      fontSize: "1.05rem",
+                      fontWeight: 600,
+                      background: badge.bg,
+                      color: badge.color,
+                      alignSelf: "flex-start",
+                    }}>
+                      {badge.label}
+                    </small>
+                  )}
+                  {isFundedTab && due && (
+                    <small style={{ color: "var(--muted)", fontSize: "1.15rem", marginTop: "0.15rem" }}>
+                      {due}
+                    </small>
+                  )}
+                  <small style={{ color: "var(--muted)", fontSize: "1.2rem", marginTop: "0.2rem" }}>
+                    {new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </small>
+                </button>
+              );
+            })}
           </aside>
           {selected ? (
             <section className={styles.review}>
