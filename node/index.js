@@ -1883,6 +1883,31 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
     if (!payment_method_id) {
       return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
     }
+    // Debit-only enforcement. Credit cards are silently accepted by
+    // Stripe Elements; we have to retrieve the PaymentMethod after the
+    // fact and check the card.funding field. Reject + detach if it's
+    // anything other than 'debit'. Reasons documented in the user-facing
+    // error message below.
+    try {
+      const pm = await stripe.paymentMethods.retrieve(payment_method_id);
+      const funding = pm?.card?.funding;
+      if (funding && funding !== 'debit') {
+        // Detach so the card doesn't sit on the customer record forever.
+        try { await stripe.paymentMethods.detach(payment_method_id); } catch (_) { /* swallow */ }
+        const label = funding === 'credit' ? 'credit card' : funding === 'prepaid' ? 'prepaid card' : `${funding} card`;
+        return response.status(400).json({
+          error: {
+            error_message: `We only accept debit cards for repayment. You tried a ${label} — please use a debit card from your bank.`,
+            funding,
+          },
+        });
+      }
+    } catch (e) {
+      console.log('[stripe/save-payment-method] funding check error (failing open)', e.message);
+      // Fail open — if we can't retrieve the PM, assume it's valid.
+      // Saving the wrong card-type once isn't a disaster; the cascade
+      // still tries ACH as a fallback.
+    }
     const updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     // We DO NOT create the Stripe subscription here. The first membership
@@ -2391,27 +2416,31 @@ async function tryAchCharge(row, amount, attemptLabel) {
 // the result. Caller is responsible for updating DB state.
 async function chargeRepaymentWithCascade(row, amount) {
   const attemptCount = row.repayment_attempt_count || 0;
+  const hasCard = !!row.stripe_card_pm_id;
 
   // ── Attempt 1 (Day 0): card-then-ACH waterfall ──────────────────
   if (attemptCount === 0) {
-    const cardResult = await tryCardCharge(row, amount, 'attempt 1 — card');
-    if (cardResult.ok) {
-      return { paid: true, pi: cardResult.pi, method: 'card', message: `Card charged successfully.` };
+    // Try card first IF we have one. Skip-card users go straight to ACH.
+    if (hasCard) {
+      const cardResult = await tryCardCharge(row, amount, 'attempt 1 — card');
+      if (cardResult.ok) {
+        return { paid: true, pi: cardResult.pi, method: 'card', message: `Card charged successfully.` };
+      }
     }
-    // Card failed (or no card) — immediately fall through to ACH same-day.
-    const achResult = await tryAchCharge(row, amount, 'attempt 1 — ACH fallback (no balance check)');
+    // No card OR card failed — try ACH same-day (no balance check).
+    const achResult = await tryAchCharge(row, amount, hasCard ? 'attempt 1 — ACH fallback (card failed)' : 'attempt 1 — ACH (no card on file)');
     if (achResult.ok && achResult.status === 'succeeded') {
-      return { paid: true, pi: achResult.pi, method: 'ach', message: `Card failed; ACH succeeded.` };
+      return { paid: true, pi: achResult.pi, method: 'ach', message: hasCard ? `Card failed; ACH succeeded.` : `ACH succeeded.` };
     }
     if (achResult.ok && achResult.status === 'processing') {
-      return { processing: true, pi: achResult.pi, method: 'ach', message: `Card failed; ACH same-day initiated (~1 business day to settle).` };
+      return { processing: true, pi: achResult.pi, method: 'ach', message: hasCard ? `Card failed; ACH same-day initiated.` : `ACH same-day initiated.` };
     }
-    return { failed: true, reason: `Both card and ACH failed on initial attempt. Card: ${cardResult.reason}. ACH: ${achResult.reason}.` };
+    return { failed: true, reason: hasCard ? `Card and ACH both failed.` : `ACH failed: ${achResult.reason}` };
   }
 
-  // ── Attempts 2-4 (Days 1-3): card-only retries ───────────────────
-  if (attemptCount >= 1 && attemptCount <= 3) {
-    // Cancel any in-flight ACH from a previous attempt so we don't double-collect.
+  // ── Attempts 2-4 (Days 1-3): card-only retries, ONLY if card exists ──
+  // Skip-card users branch straight to balance-check ACH on attempts 1+.
+  if (hasCard && attemptCount >= 1 && attemptCount <= 3) {
     const cancelResult = await cancelPendingChargeIfAny(row);
     if (cancelResult === 'already_succeeded') {
       return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
@@ -2423,21 +2452,28 @@ async function chargeRepaymentWithCascade(row, amount) {
     return { failed: true, reason: `Card retry ${attemptCount}/3 failed: ${cardResult.reason}`, error: cardResult.error };
   }
 
-  // ── Attempt 5 (Day 4): balance check + ACH same-day ─────────────
-  if (attemptCount === 4) {
-    await cancelPendingChargeIfAny(row);
+  // ── Attempt 5 (Day 4) for card users OR ALL retry attempts for
+  //    skip-card users: balance check + ACH same-day ──────────────
+  // For card users: this is the final stage after 3 failed card retries.
+  // For skip-card users: this is every retry attempt from attempt 1 on.
+  if ((hasCard && attemptCount === 4) || (!hasCard && attemptCount >= 1 && attemptCount <= 4)) {
+    const cancelResult = await cancelPendingChargeIfAny(row);
+    if (cancelResult === 'already_succeeded') {
+      return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
+    }
     const overdraft = await checkOverdraft(row, amount);
     if (!overdraft.ok) {
-      return { failed: true, reason: `Final ACH skipped — ${overdraft.reason}` };
+      return { failed: true, reason: `ACH retry skipped — ${overdraft.reason}` };
     }
-    const achResult = await tryAchCharge(row, amount, 'attempt 5 — final ACH with balance check');
+    const labelStage = hasCard ? 'final ACH with balance check' : `ACH retry ${attemptCount}/4 with balance check`;
+    const achResult = await tryAchCharge(row, amount, `attempt ${attemptCount + 1} — ${labelStage}`);
     if (achResult.ok && achResult.status === 'succeeded') {
-      return { paid: true, pi: achResult.pi, method: 'ach', message: `Final ACH (balance-checked) succeeded.` };
+      return { paid: true, pi: achResult.pi, method: 'ach', message: `ACH (balance-checked) succeeded.` };
     }
     if (achResult.ok && achResult.status === 'processing') {
-      return { processing: true, pi: achResult.pi, method: 'ach', message: `Final ACH (balance-checked) initiated.` };
+      return { processing: true, pi: achResult.pi, method: 'ach', message: `ACH (balance-checked) initiated.` };
     }
-    return { failed: true, reason: `Final ACH attempt failed: ${achResult.reason}`, error: achResult.error };
+    return { failed: true, reason: `ACH attempt failed: ${achResult.reason}`, error: achResult.error };
   }
 
   // attempt >= 5 means we've exhausted the cascade.
