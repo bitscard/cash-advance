@@ -1015,6 +1015,44 @@ app.post('/api/advance/applications/:id/subscription/activate', async function (
 // /subscription/sync endpoint uses to confirm the subscription is live.
 const MEMBERSHIP_PRICE_CENTS = 399;
 const MEMBERSHIP_PRODUCT_NAME = 'Advance Membership';
+
+// Stripe's subscription API in some versions rejects the inline
+// `product_data: { name: ... }` shortcut inside price_data, returning
+// "unknown parameter ... did you mean product?" The fix is to reference
+// a real Product ID. We lazily fetch-or-create the Product once on
+// process boot and cache it; all subscription creates use the cached id.
+let _membershipProductIdCache = null;
+async function getMembershipProductId() {
+  if (_membershipProductIdCache) return _membershipProductIdCache;
+  try {
+    // Look for an existing product with our canonical name. Stripe's
+    // products.list supports query=name:..., but that requires the
+    // Search API in some accounts; iterating is simpler + works everywhere.
+    let starting_after = undefined;
+    for (let i = 0; i < 5; i++) {
+      const page = await stripe.products.list({ limit: 100, ...(starting_after ? { starting_after } : {}) });
+      const existing = page.data.find(p => p.name === MEMBERSHIP_PRODUCT_NAME && p.active);
+      if (existing) {
+        _membershipProductIdCache = existing.id;
+        console.log('[membership-product] reusing existing', { id: existing.id });
+        return existing.id;
+      }
+      if (!page.has_more || page.data.length === 0) break;
+      starting_after = page.data[page.data.length - 1].id;
+    }
+    // Not found — create it.
+    const created = await stripe.products.create({
+      name: MEMBERSHIP_PRODUCT_NAME,
+      description: 'Monthly membership for Bits Cash Advance — unlimited access to wage advances.',
+    });
+    _membershipProductIdCache = created.id;
+    console.log('[membership-product] created', { id: created.id });
+    return created.id;
+  } catch (err) {
+    console.log('[membership-product] error', err.message);
+    throw err;
+  }
+}
 app.post('/api/advance/applications/:id/subscription/checkout-session', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
@@ -1043,6 +1081,7 @@ app.post('/api/advance/applications/:id/subscription/checkout-session', async fu
     }
 
     const origin = (request.body && request.body.origin) || request.headers.origin || `http://localhost:3000`;
+    const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
@@ -1053,7 +1092,7 @@ app.post('/api/advance/applications/:id/subscription/checkout-session', async fu
           currency: 'usd',
           unit_amount: MEMBERSHIP_PRICE_CENTS,
           recurring: { interval: 'month' },
-          product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+          product: MEMBERSHIP_PRODUCT_ID,
         },
       }],
       success_url: `${origin}/?subscription=success&session_id={CHECKOUT_SESSION_ID}`,
@@ -1655,12 +1694,13 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
           // the repayment day in UTC (so any reasonable global TZ has the
           // membership charge land on the right calendar date).
           const anchor = Math.floor(new Date(`${dueDate}T00:00:00Z`).getTime() / 1000);
+          const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
           const sub = await stripe.subscriptions.create({
             customer: updated.stripe_customer_id,
             items: [{
               price_data: {
                 currency: 'usd',
-                product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+                product: MEMBERSHIP_PRODUCT_ID,
                 unit_amount: MEMBERSHIP_PRICE_CENTS,
                 recurring: { interval: 'month' },
               },
@@ -2363,13 +2403,14 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
       ? new Date(row.repayment_due_date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
     const anchor = Math.floor(new Date(`${anchorDate}T00:00:00Z`).getTime() / 1000);
+    const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
 
     const sub = await stripe.subscriptions.create({
       customer: row.stripe_customer_id,
       items: [{
         price_data: {
           currency: 'usd',
-          product_data: { name: MEMBERSHIP_PRODUCT_NAME },
+          product: MEMBERSHIP_PRODUCT_ID,
           unit_amount: MEMBERSHIP_PRICE_CENTS,
           recurring: { interval: 'month' },
         },
