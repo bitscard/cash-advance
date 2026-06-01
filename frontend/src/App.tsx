@@ -3289,6 +3289,26 @@ const AdminApp = () => {
     }
   };
 
+  const setupMembership = async () => {
+    if (!selected) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/admin/applications/${selected.id}/membership/setup`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...adminHeaders },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Membership setup failed");
+      await loadApplications();
+      await loadMessages(selected.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Membership setup failed");
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   return (
     <main className={styles.page}>
       {!adminToken && (
@@ -3409,6 +3429,19 @@ const AdminApp = () => {
                         </button>
                       ) : (
                         <p className={styles.muted} style={{ margin: 0, fontSize: "1.3rem" }}>No payment method on file yet.</p>
+                      )}
+                      {/* Backfill: create $3.99 membership subscription for users
+                          missing one (e.g. funded before subscription code, or
+                          previous attempt failed silently). Only shows when the
+                          user has a bank PM but no subscription_id. */}
+                      {selected.stripe_payment_method_id && !selected.subscription_id && (
+                        <button
+                          disabled={isBusy}
+                          onClick={setupMembership}
+                          style={{ fontSize: "1.3rem", padding: "0.7rem 1.2rem", background: "var(--brand-tint)", color: "var(--brand)", border: "1.5px solid var(--brand)" }}
+                        >
+                          {isBusy ? "Setting up…" : "Set up $3.99 membership"}
+                        </button>
                       )}
                       {error && <p className={styles.error} style={{ margin: 0, fontSize: "1.3rem" }}>{error}</p>}
                     </div>
