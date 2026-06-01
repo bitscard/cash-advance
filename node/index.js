@@ -668,6 +668,30 @@ app.post('/api/advance/applications', async function (request, response, next) {
     if (!Array.isArray(income_sources) || income_sources.length === 0) {
       return response.status(400).json({ error: { error_message: 'At least one income source is required.' } });
     }
+    // Payday must be within the next 30 days. Anything beyond means the
+    // user wouldn't be able to repay within our cron's normal window —
+    // we ask them to come back closer to their actual payday.
+    {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const maxPayday = new Date(todayStart.getTime() + 30 * 86400000);
+      for (let i = 0; i < income_sources.length; i++) {
+        const src = income_sources[i];
+        if (!src.payday) {
+          return response.status(400).json({ error: { error_message: `Payday is required${income_sources.length > 1 ? ` for income source ${i + 1}` : ''}.` } });
+        }
+        const payday = new Date(src.payday + 'T00:00:00');
+        if (Number.isNaN(payday.getTime())) {
+          return response.status(400).json({ error: { error_message: `Payday must be a valid date${income_sources.length > 1 ? ` for income source ${i + 1}` : ''}.` } });
+        }
+        if (payday.getTime() < todayStart.getTime()) {
+          return response.status(400).json({ error: { error_message: `Payday must be today or later${income_sources.length > 1 ? ` for income source ${i + 1}` : ''}.` } });
+        }
+        if (payday.getTime() > maxPayday.getTime()) {
+          return response.status(400).json({ error: { error_message: `Your next payday must be within the next 30 days${income_sources.length > 1 ? ` for income source ${i + 1}` : ''}. If it's further out, please apply closer to that date.` } });
+        }
+      }
+    }
 
     const ssnClean = (ssn || '').replace(/-/g, '');
     const isTestSSN = TEST_SSNS.has(ssnClean);
