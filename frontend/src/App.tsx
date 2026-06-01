@@ -2451,6 +2451,69 @@ const CustomerApp = () => {
     );
   }
 
+  // Step 4c (between bank link and delivery): debit card as a backup
+  // repayment rail. Framed as a required-looking step but allows a
+  // small Skip link — most users add a card, the few who don't fall
+  // through to ACH-only collection. The card-first-then-ACH cascade in
+  // the backend (chargeRepaymentWithCascade) tries card first when
+  // available; if no card, goes straight to ACH.
+  const cardSkippedKey = `advance_card_skipped_${application.id}`;
+  const cardSkipped = typeof window !== "undefined" && sessionStorage.getItem(cardSkippedKey) === "1";
+  if (preBankActive && hasBankPm && !application.stripe_card_pm_id && !cardSkipped && !needsConnectIdentity) {
+    return (
+      <main className={styles.page}>
+        <NavBar onLogout={handleLogout} />
+        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4rem", maxWidth: "80rem", margin: "0 auto", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 32rem", textAlign: "left" }}>
+              <p className={styles.benefitsHeaderKicker}>Step 5 · Backup card for repayment</p>
+              <h1 className={styles.benefitsHeaderTitle} style={{ marginBottom: "1.6rem" }}>
+                Add a debit card.
+              </h1>
+              <p className={styles.benefitsHeaderSub}>
+                We'll use this card first to collect your repayment on your payday — typically faster than bank ACH. If the card declines, we'll fall back to your bank automatically.
+              </p>
+            </div>
+            <div style={{ flexShrink: 0, opacity: 0.92 }}>
+              <AlienMascot flag="usa" size={160} />
+            </div>
+          </div>
+        </div>
+        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
+          {!stripeKey ? (
+            <p className={styles.error}>Card payments are not configured yet.</p>
+          ) : (
+            <Elements stripe={stripePromise}>
+              <SaveCardForm
+                applicationId={application.id}
+                authToken={token}
+                onSaved={() => loadApplication(application.id)}
+              />
+            </Elements>
+          )}
+          <p style={{ fontSize: "1.25rem", color: "var(--muted)", marginTop: "1.6rem", textAlign: "center" }}>
+            🔒 Card details are encrypted and stored by Stripe — we never see them.
+          </p>
+          <p style={{ marginTop: "2rem", textAlign: "center", fontSize: "1.15rem" }}>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                if (typeof window !== "undefined") sessionStorage.setItem(cardSkippedKey, "1");
+                // Force a re-render by reloading the application data.
+                loadApplication(application.id);
+              }}
+              style={{ color: "var(--muted)", textDecoration: "underline" }}
+            >
+              I'll skip this for now
+            </a>
+          </p>
+        </div>
+        <StatesFooter />
+      </main>
+    );
+  }
+
   // Step 5 of 6: delivery speed (same-day vs 3-5 days)
   if (preBankActive && !application.delivery_type) {
     return (
