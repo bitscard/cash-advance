@@ -2244,23 +2244,61 @@ module.exports.fetchFcTransactions = fetchFcTransactions;
 
 // Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
 // Fails open (ok: true) when balance is unavailable so card-only users are unaffected.
-async function checkOverdraft(accessToken, amountCents) {
-  if (!accessToken) return { ok: true };
+// Balance check before charging. Prefers Stripe Financial Connections
+// (FC) since that's the new bank-link primitive; falls back to legacy
+// Plaid access_token for any older accounts mid-flight. Fails open
+// (returns ok=true) if balance is unavailable — better to attempt the
+// charge than block legitimate collections on data gaps.
+async function checkOverdraft(row, amountCents) {
+  // Try FC first
+  if (row.stripe_fc_account_id) {
+    try {
+      // Refresh the balance feature so we get up-to-the-minute data.
+      // This is critical for "see when money lands, then pull" — the
+      // cached value can be hours stale otherwise. Stripe charges a
+      // small fee per refresh; for us it's worth it to avoid pulling
+      // before payroll arrives.
+      try {
+        await stripe.financialConnections.accounts.refresh(row.stripe_fc_account_id, {
+          features: ['balance'],
+        });
+      } catch (refreshErr) {
+        // Refresh isn't critical — if it fails, we read whatever cached
+        // value Stripe has and proceed.
+        console.log('[overdraft_check fc] refresh failed (non-fatal)', refreshErr.message);
+      }
+      const fcAcct = await stripe.financialConnections.accounts.retrieve(row.stripe_fc_account_id);
+      const availableCents = fcAcct.balance?.current?.usd ?? null;
+      console.log(`[overdraft_check fc] available=${availableCents} cents | charge=${amountCents} cents`);
+      if (availableCents === null) return { ok: true };
+      if (availableCents < amountCents) {
+        const avail = (availableCents / 100).toFixed(2);
+        const needed = (amountCents / 100).toFixed(2);
+        return { ok: false, reason: `Payment skipped — bank balance is $${avail} but repayment is $${needed}. We'll retry tomorrow.` };
+      }
+      return { ok: true };
+    } catch (e) {
+      console.log('[overdraft_check fc] error (failing open)', e.message);
+      // Fall through to Plaid path or success
+    }
+  }
+  // Legacy Plaid path (for users from before FC migration)
+  if (!row.access_token) return { ok: true };
   try {
-    const resp = await client.accountsBalance.get({ access_token: accessToken });
+    const resp = await client.accountsBalance.get({ access_token: row.access_token });
     const checking = resp.data.accounts.find(a => a.type === 'depository') || resp.data.accounts[0];
     const availableCents = checking?.balances.available != null
       ? Math.round(checking.balances.available * 100) : null;
-    console.log(`[overdraft_check] available=${availableCents} cents | charge=${amountCents} cents`);
+    console.log(`[overdraft_check plaid] available=${availableCents} cents | charge=${amountCents} cents`);
     if (availableCents === null) return { ok: true };
     if (availableCents < amountCents) {
       const avail = (availableCents / 100).toFixed(2);
       const needed = (amountCents / 100).toFixed(2);
-      return { ok: false, reason: `Payment skipped to avoid overdraft — account has $${avail} available but repayment is $${needed}. We'll retry when funds are available.` };
+      return { ok: false, reason: `Payment skipped — bank balance is $${avail} but repayment is $${needed}. We'll retry tomorrow.` };
     }
     return { ok: true };
   } catch (e) {
-    console.log('[overdraft_check] balance unavailable:', e.message, '— proceeding');
+    console.log('[overdraft_check plaid] balance unavailable:', e.message, '— proceeding');
     return { ok: true };
   }
 }
@@ -2333,19 +2371,24 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     console.log('[charge] computed amount', { application_id: row.id, amount_cents: amount, repayment_amount: row.repayment_amount, requested_amount: row.requested_amount, delivery_type: row.delivery_type });
 
     // Overdraft check — uses FC balance if available
-    const overdraft = await checkOverdraft(row.access_token, amount);
+    const overdraft = await checkOverdraft(row, amount);
     if (!overdraft.ok) {
       await db.addMessage(row.id, 'system', overdraft.reason);
       return response.status(402).json({ error: { error_message: overdraft.reason } });
     }
+
+    // Increment the attempt counter BEFORE charging so a Stripe error
+    // doesn't leave the row stuck at attempt 0 forever.
+    await db.bumpRepaymentAttemptCount(row.id);
+    const attempt = (row.repayment_attempt_count || 0) + 1;
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount, currency: 'usd',
       customer: row.stripe_customer_id,
       payment_method: bankPmId,
       off_session: true, confirm: true,
-      description: `Cash advance repayment — ${row.name}`,
-      metadata: { application_id: row.id },
+      description: `Cash advance repayment — ${row.name} (attempt ${attempt})`,
+      metadata: { application_id: row.id, attempt: String(attempt) },
     });
 
     await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
@@ -2353,9 +2396,10 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     if (paymentIntent.status === 'succeeded') {
       await db.markRepaymentPaid(row.id);
       await db.incrementRepaymentCount(row.id);
+      await db.resetRepaymentAttemptCount(row.id);
       await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
     } else if (paymentIntent.status === 'processing') {
-      await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);
+      await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated (attempt ${attempt}/3). ACH payments settle in 3-5 business days.`);
     }
 
     // Fire the $3.99 membership invoice right now too — so admin sees
@@ -2372,9 +2416,18 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
   } catch (err) {
     if (err.type === 'StripeCardError' || err.type === 'StripeInvalidRequestError') {
       await db.saveStripeCharge(request.params.id, err.payment_intent?.id || null, 'failed');
-      await db.updateApplicationStatus(request.params.id, 'repayment_failed');
-      await db.addMessage(request.params.id, 'system', `Payment failed: ${err.message}`);
-      return response.status(402).json({ error: { error_message: err.message } });
+      // Retry pipeline: bump attempt count, only flip to repayment_failed
+      // when we've used all 3 attempts. The cron picks it up again
+      // tomorrow (since attempts < 3 and last_attempt_at > 23h ago).
+      const updated = await db.bumpRepaymentAttemptCount(request.params.id);
+      const attemptCount = updated?.repayment_attempt_count || 1;
+      if (attemptCount >= 3) {
+        await db.updateApplicationStatus(request.params.id, 'repayment_failed');
+        await db.addMessage(request.params.id, 'system', `Payment failed after 3 attempts: ${err.message}. Account locked from new advances — contact support to resolve.`);
+      } else {
+        await db.addMessage(request.params.id, 'system', `Payment attempt ${attemptCount}/3 failed: ${err.message}. We'll retry automatically.`);
+      }
+      return response.status(402).json({ error: { error_message: err.message }, attempt: attemptCount });
     }
     next(err);
   }
@@ -2452,32 +2505,38 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
       const bankPmId = row.stripe_payment_method_id;
       if (!bankPmId) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
-        // Overdraft check before charging
-        const overdraft = await checkOverdraft(row.access_token, amount);
+        // Balance check via FC (with refresh) before charging. Skip if
+        // balance is insufficient — cron picks them up again tomorrow
+        // when balance might have replenished.
+        const overdraft = await checkOverdraft(row, amount);
         if (!overdraft.ok) {
           await db.addMessage(row.id, 'system', overdraft.reason);
           results.push({ id: row.id, name: row.name, status: 'skipped_overdraft', reason: overdraft.reason });
           continue;
         }
 
-        // ACH-only collection. No card fallback — any failure flips
-        // the application to repayment_failed (handled in catch block).
+        // Increment attempt count BEFORE the create call so a thrown
+        // error doesn't leave the row stuck at 0 attempts.
+        await db.bumpRepaymentAttemptCount(row.id);
+        const attempt = (row.repayment_attempt_count || 0) + 1;
+
         const paymentIntent = await stripe.paymentIntents.create({
           amount, currency: 'usd',
           customer: row.stripe_customer_id,
           payment_method: bankPmId,
           off_session: true, confirm: true,
-          description: `Cash advance repayment — ${row.name}`,
-          metadata: { application_id: row.id },
+          description: `Cash advance repayment — ${row.name} (attempt ${attempt})`,
+          metadata: { application_id: row.id, attempt: String(attempt) },
         });
 
         await db.saveStripeCharge(row.id, paymentIntent.id, paymentIntent.status);
 
         if (paymentIntent.status === 'succeeded') {
           await db.markRepaymentPaid(row.id);
+          await db.resetRepaymentAttemptCount(row.id);
           await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully.`);
         } else if (paymentIntent.status === 'processing') {
-          await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated. ACH payments settle in 3-5 business days.`);
+          await db.addMessage(row.id, 'system', `Bank debit of $${(amount / 100).toFixed(2)} initiated (attempt ${attempt}/3). ACH payments settle in 3-5 business days.`);
         }
 
         // Fire $3.99 membership invoice alongside the advance.
@@ -2485,12 +2544,19 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
           await forceBillSubscriptionNow(row);
         }
 
-        results.push({ id: row.id, name: row.name, status: paymentIntent.status });
+        results.push({ id: row.id, name: row.name, status: paymentIntent.status, attempt });
       } catch (err) {
         const msg = err.message || 'Unknown error';
         await db.saveStripeCharge(row.id, err.payment_intent?.id || null, 'failed');
-        await db.updateApplicationStatus(row.id, 'repayment_failed');
-        await db.addMessage(row.id, 'system', `Payment failed: ${msg}`);
+        // Retry pipeline — same as the single-charge endpoint.
+        const updated = await db.bumpRepaymentAttemptCount(row.id);
+        const attemptCount = updated?.repayment_attempt_count || 1;
+        if (attemptCount >= 3) {
+          await db.updateApplicationStatus(row.id, 'repayment_failed');
+          await db.addMessage(row.id, 'system', `Payment failed after 3 attempts: ${msg}. Account locked from new advances — contact support to resolve.`);
+        } else {
+          await db.addMessage(row.id, 'system', `Payment attempt ${attemptCount}/3 failed: ${msg}. We'll retry tomorrow.`);
+        }
         results.push({ id: row.id, name: row.name, status: 'failed', error: msg });
       }
     }

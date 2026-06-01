@@ -37,6 +37,8 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS transfer_id TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_session_id TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_subscribed_at TIMESTAMPTZ;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_attempt_count INTEGER DEFAULT 0;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_last_attempt_at TIMESTAMPTZ;
 `).catch(() => {});
 
 pool.query(`
@@ -90,6 +92,8 @@ const publicApp = (row) => ({
   stripe_payment_method_id: row.stripe_payment_method_id || null,
   stripe_card_pm_id: row.stripe_card_pm_id || null,
   stripe_fc_account_id: row.stripe_fc_account_id || null,
+  repayment_attempt_count: row.repayment_attempt_count || 0,
+  repayment_last_attempt_at: row.repayment_last_attempt_at ? new Date(row.repayment_last_attempt_at).toISOString() : null,
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -244,13 +248,18 @@ async function getDueMemberships() {
 
 async function getDueApplications() {
   // ACH-only collection (card fallback removed). Bank PaymentMethod
-  // comes from the FC bank-link at Step 4.
+  // comes from the FC bank-link at Step 4. Skip rows that:
+  //   - have already maxed out retry attempts (>= 3)
+  //   - had an attempt within the last 23h (don't double-pull while
+  //     the prior ACH is still in flight; ACH settles in 3-5 days)
   const { rows } = await pool.query(
     `SELECT * FROM applications
      WHERE repayment_due_date <= CURRENT_DATE
        AND repayment_status = 'pending'
        AND stripe_payment_method_id IS NOT NULL
-       AND stripe_customer_id IS NOT NULL`
+       AND stripe_customer_id IS NOT NULL
+       AND COALESCE(repayment_attempt_count, 0) < 3
+       AND (repayment_last_attempt_at IS NULL OR repayment_last_attempt_at < NOW() - INTERVAL '23 hours')`
   );
   return rows;
 }
@@ -469,6 +478,29 @@ async function markStripeFcSubscribed(id) {
   return rows[0] || null;
 }
 
+// Charge-attempt tracking for the retry pipeline.
+// Increment on each attempt (cron pickup, manual button click, or
+// webhook-driven retry). Reset to 0 on success.
+async function bumpRepaymentAttemptCount(id) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET repayment_attempt_count = COALESCE(repayment_attempt_count, 0) + 1,
+         repayment_last_attempt_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $1 RETURNING *`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function resetRepaymentAttemptCount(id) {
+  const { rows } = await pool.query(
+    `UPDATE applications SET repayment_attempt_count = 0, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   // Export the pool so test teardown can close all connections cleanly.
   pool,
@@ -509,4 +541,6 @@ module.exports = {
   saveStripeFcSession,
   saveStripeFcLinkedAccount,
   markStripeFcSubscribed,
+  bumpRepaymentAttemptCount,
+  resetRepaymentAttemptCount,
 };

@@ -2,7 +2,7 @@ name: Charge due repayments
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # 9am UTC every day
+    - cron: '0 17 * * *'  # 17:00 UTC = 12pm EST / 1pm EDT — late enough most paychecks have landed
   workflow_dispatch:       # allows manual trigger from GitHub Actions tab
 
 jobs:
