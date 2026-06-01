@@ -3897,63 +3897,139 @@ dd {
   background: var(--ld-brand);
   box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
 }
-.ldSignupH1 {
-  font-size: clamp(28px, 4vw, 40px);
+/* Slim progress bar at the top — replaces the redundant 3-dot indicator. */
+.ldSignupProgressBar {
+  margin-bottom: 32px;
+}
+.ldSignupProgressMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+  gap: 12px;
+}
+.ldSignupProgressStep {
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.1;
-  margin: 0 0 10px;
+  color: var(--ld-brand);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.ldSignupProgressNext {
+  font-size: 12px;
+  color: var(--ld-muted);
+  font-weight: 500;
+}
+.ldSignupProgressTrack {
+  height: 5px;
+  background: rgba(13, 82, 52, 0.10);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ldSignupProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ld-brand) 0%, #1f9b5e 100%);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 12px rgba(13, 82, 52, 0.30);
+}
+
+.ldSignupH1 {
+  font-size: clamp(30px, 4.4vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  line-height: 1.08;
+  margin: 0 0 14px;
   color: var(--ld-ink);
 }
 .ldSignupLead {
-  font-size: 16px;
+  font-size: 16.5px;
   color: var(--ld-muted);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.55;
+  max-width: 560px;
 }
 .ldSignupReassure {
-  margin: 12px 0 0;
+  margin: 18px 0 0;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ld-brand);
-  background: rgba(13, 82, 52, 0.08);
+  background: linear-gradient(180deg, rgba(13, 82, 52, 0.08) 0%, rgba(13, 82, 52, 0.05) 100%);
+  border: 1px solid rgba(13, 82, 52, 0.18);
   padding: 8px 14px;
   border-radius: 999px;
+  letter-spacing: -0.005em;
 }
+.ldSignupReassure svg { flex-shrink: 0; }
 
 /* Form */
 .ldSignupForm {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 22px;
 }
 .ldSignupSection {
   background: #fff;
-  border: 1px solid var(--ld-line);
-  border-radius: 18px;
+  border: 1px solid rgba(10, 20, 16, 0.08);
+  border-radius: 20px;
   padding: 28px 28px 24px;
-  box-shadow: 0 1px 0 rgba(13, 82, 52, 0.03);
+  box-shadow:
+    0 1px 0 rgba(13, 82, 52, 0.03),
+    0 18px 40px -28px rgba(10, 20, 16, 0.10);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ldSignupSection:focus-within {
+  border-color: rgba(13, 82, 52, 0.22);
+  box-shadow:
+    0 1px 0 rgba(13, 82, 52, 0.04),
+    0 22px 48px -28px rgba(13, 82, 52, 0.18);
+}
+.ldSignupSectionHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 0;
+}
+.ldSignupSectionIcon {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(13, 82, 52, 0.10) 0%, rgba(13, 82, 52, 0.06) 100%);
+  color: var(--ld-brand);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(13, 82, 52, 0.14);
 }
 .ldSignupSectionTitle {
   font-size: 16px;
   font-weight: 700;
   color: var(--ld-ink);
-  margin: 0 0 20px;
-  letter-spacing: -0.005em;
+  margin: 0;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.ldSignupSectionSub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--ld-muted);
+  line-height: 1.45;
 }
 
 .ldSignupGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 18px;
 }
 .ldSignupField {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 }
 .ldSignupFieldFull { grid-column: 1 / -1; }
@@ -3966,40 +4042,81 @@ dd {
 .ldSignupHint {
   font-weight: 400;
   color: var(--ld-muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .ldPage .ldSignupInput,
 .ldPage .ldSignupSelect {
   width: 100%;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 500;
   color: var(--ld-ink);
   background: #fff;
-  border: 1.5px solid var(--ld-line);
-  border-radius: 11px;
-  padding: 12px 14px;
+  border: 1.5px solid rgba(10, 20, 16, 0.10);
+  border-radius: 12px;
+  padding: 14px 16px;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
   -webkit-appearance: none;
   appearance: none;
 }
-.ldPage .ldSignupInput::placeholder { color: #9aa8a1; }
+.ldPage .ldSignupInput::placeholder { color: #b1bcb6; font-weight: 400; }
 .ldPage .ldSignupInput:hover,
-.ldPage .ldSignupSelect:hover { border-color: #c8d2cc; }
+.ldPage .ldSignupSelect:hover { border-color: rgba(10, 20, 16, 0.22); }
 .ldPage .ldSignupInput:focus,
 .ldPage .ldSignupSelect:focus {
   border-color: var(--ld-brand);
-  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.12);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
+}
+
+/* Custom-styled select with our own caret SVG */
+.ldSignupSelectWrap {
+  position: relative;
 }
 .ldPage .ldSignupSelect {
-  appearance: auto;
-  -webkit-appearance: menulist;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
   background-image: none;
   cursor: pointer;
+  padding-right: 44px;
 }
+.ldSignupSelectCaret {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  color: var(--ld-muted);
+  pointer-events: none;
+}
+.ldSignupSelectWrap:focus-within .ldSignupSelectCaret { color: var(--ld-brand); }
 .ldPage .ldSignupInput[type="date"] { font-variant-numeric: tabular-nums; }
+
+/* Kill the browser autofill yellow/blue background (Chrome fills inputs with
+   a hard-coded color that overrides our white card). Push it back to white
+   and keep the ink color. */
+.ldPage .ldSignupInput:-webkit-autofill,
+.ldPage .ldSignupInput:-webkit-autofill:hover,
+.ldPage .ldSignupInput:-webkit-autofill:focus,
+.ldPage .ldSignupSelect:-webkit-autofill {
+  -webkit-text-fill-color: var(--ld-ink);
+  -webkit-box-shadow: 0 0 0 30px #fff inset;
+  caret-color: var(--ld-ink);
+  transition: background-color 5000s ease-in-out 0s;
+}
+/* Text selection on the signup page uses brand emerald instead of the
+   default browser blue so labels/placeholders don't look highlighted. */
+.ldSignup ::selection {
+  background: rgba(13, 82, 52, 0.20);
+  color: var(--ld-ink);
+}
+.ldSignup input::selection,
+.ldSignup textarea::selection {
+  background: rgba(13, 82, 52, 0.20);
+  color: var(--ld-ink);
+}
 
 /* Income source cards */
 .ldSignupIncomeList {
@@ -4007,14 +4124,16 @@ dd {
   flex-direction: column;
   gap: 14px;
 }
+/* Income source — single source is borderless (just the grid). Additional
+   sources get a top divider so each is visually distinct without nested cards. */
 .ldSignupIncomeCard {
-  border: 1.5px dashed var(--ld-line);
-  border-radius: 14px;
-  padding: 18px 18px 16px;
-  background: var(--ld-bg-soft);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+}
+.ldSignupIncomeCard + .ldSignupIncomeCard {
+  padding-top: 20px;
+  border-top: 1px solid rgba(10, 20, 16, 0.08);
 }
 .ldSignupIncomeHead {
   display: flex;
@@ -4022,19 +4141,19 @@ dd {
   align-items: center;
 }
 .ldSignupIncomeHead strong {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--ld-ink);
+  letter-spacing: -0.005em;
 }
 .ldPage .ldSignupIncomeRemove {
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--ld-muted);
   background: none;
   border: none;
-  padding: 4px 6px;
-  margin: -4px -6px;
+  padding: 4px 8px;
   cursor: pointer;
   border-radius: 6px;
   transition: color 0.15s ease, background 0.15s ease;
@@ -4045,14 +4164,15 @@ dd {
 }
 .ldPage .ldSignupAddSource {
   align-self: flex-start;
+  margin-top: 4px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--ld-brand);
-  background: #fff;
-  border: 1.5px solid var(--ld-line);
+  background: rgba(13, 82, 52, 0.05);
+  border: 1px dashed rgba(13, 82, 52, 0.30);
   border-radius: 10px;
-  padding: 10px 16px;
+  padding: 10px 14px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -4061,7 +4181,22 @@ dd {
 }
 .ldPage .ldSignupAddSource:hover {
   border-color: var(--ld-brand);
-  background: rgba(13, 82, 52, 0.04);
+  border-style: solid;
+  background: rgba(13, 82, 52, 0.08);
+}
+.ldSignupAddSourceIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 /* Error + terms */
@@ -4125,16 +4260,40 @@ dd {
   .ldSignupGrid { grid-template-columns: 1fr; gap: 14px; }
 }
 @media (max-width: 720px) {
-  .ldSignup { padding: 32px 16px 72px; }
+  /* Bottom padding accounts for the sticky submit bar (~84px tall). */
+  .ldSignup { padding: 24px 14px 120px; }
   .ldSignupInner { max-width: 100%; }
-  .ldSignupProgress { margin-bottom: 28px; }
-  .ldSignupStepLabel { display: none; }
-  .ldSignupStepBar { margin: 0 8px; }
+  .ldSignupProgressBar { margin-bottom: 24px; }
+  .ldSignupProgressStep,
+  .ldSignupProgressNext { font-size: 11px; }
+  .ldSignupHeader { margin-bottom: 22px; }
   .ldSignupSection { padding: 22px 20px 20px; border-radius: 16px; }
-  .ldSignupH1 { font-size: clamp(24px, 7vw, 32px); }
+  .ldSignupSectionHead { gap: 12px; margin-bottom: 18px; }
+  .ldSignupSectionIcon { width: 34px; height: 34px; border-radius: 10px; }
+  .ldSignupSectionTitle { font-size: 15px; }
+  .ldSignupSectionSub { font-size: 12.5px; }
+  .ldSignupH1 { font-size: clamp(24px, 7vw, 30px); margin-bottom: 10px; }
   .ldSignupLead { font-size: 15px; }
+  .ldSignupReassure { font-size: 12.5px; padding: 7px 12px; }
+  .ldSignupForm { gap: 16px; }
   .ldPage .ldSignupInput,
   .ldPage .ldSignupSelect { font-size: 16px; padding: 13px 14px; }
+
+  /* Sticky submit bar — always visible at the bottom of the viewport on
+     mobile so users don't lose the CTA while scrolling a long form. */
+  .ldPage .ldSignupSubmit {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    margin: 0;
+    border-radius: 0;
+    padding: 17px 22px calc(17px + env(safe-area-inset-bottom));
+    z-index: 40;
+    box-shadow: 0 -8px 24px -8px rgba(10, 20, 16, 0.18);
+  }
+  .ldPage .ldSignupSubmit:active:not(:disabled) { transform: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -4632,4 +4791,753 @@ dd {
   .ldDashGrid { grid-template-columns: 1fr; gap: 16px; }
   .ldDashCard { padding: 22px 20px 20px; border-radius: 16px; }
   .ldDashPayoutMethods { grid-template-columns: 1fr 1fr; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Welcome / Benefits screen (first screen after signup, before pre-bank flow)
+═══════════════════════════════════════════════════════════════════════ */
+.ldBenefits {
+  background: linear-gradient(180deg, var(--ld-bg-warm) 0%, var(--ld-bg) 360px);
+  min-height: calc(100vh - 72px);
+  padding: 64px 24px 96px;
+}
+.ldBenefitsInner {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.ldBenefitsHeader {
+  margin-bottom: 40px;
+  text-align: left;
+}
+/* Eyebrow chip on light bg — same recipe as gate/signup */
+.ldBenefits .ldEyebrow {
+  color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.08);
+  border: 1px solid rgba(13, 82, 52, 0.16);
+  margin-bottom: 24px;
+}
+.ldBenefits .ldEyebrowDot {
+  background: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
+}
+.ldBenefitsH1 {
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 700;
+  letter-spacing: -0.030em;
+  line-height: 1.08;
+  margin: 0 0 16px;
+  color: var(--ld-ink);
+}
+.ldBenefitsH1Accent {
+  background: linear-gradient(120deg, var(--ld-brand) 0%, #1f9b5e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ldBenefitsLead {
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ld-muted);
+  margin: 0;
+  max-width: 560px;
+}
+
+/* 2×2 grid (replaces the awkward 3+1 wrap) */
+.ldBenefitsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.ldBenefitsCard {
+  background: #fff;
+  border: 1px solid rgba(10, 20, 16, 0.08);
+  border-radius: 18px;
+  padding: 24px 22px 22px;
+  box-shadow:
+    0 1px 0 rgba(13, 82, 52, 0.03),
+    0 18px 40px -28px rgba(10, 20, 16, 0.10);
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.ldBenefitsCard:hover {
+  border-color: rgba(13, 82, 52, 0.30);
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -20px rgba(13, 82, 52, 0.20);
+}
+.ldBenefitsCardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(13, 82, 52, 0.10) 0%, rgba(13, 82, 52, 0.06) 100%);
+  border: 1px solid rgba(13, 82, 52, 0.14);
+  color: var(--ld-brand);
+  margin-bottom: 16px;
+}
+.ldBenefitsCardTitle {
+  margin: 0 0 6px;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.01em;
+}
+.ldBenefitsCardSub {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ld-muted);
+}
+
+/* CTA */
+.ldPage .ldBenefitsBtn {
+  width: 100%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  border: 0;
+  border-radius: 12px;
+  padding: 16px 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  box-shadow: 0 10px 26px -12px rgba(13, 82, 52, 0.45);
+}
+.ldPage .ldBenefitsBtn:hover:not(:disabled) {
+  background: #0a4329;
+  box-shadow: 0 14px 32px -14px rgba(13, 82, 52, 0.55);
+}
+.ldPage .ldBenefitsBtn:active:not(:disabled) { transform: translateY(1px); }
+
+@media (max-width: 720px) {
+  .ldBenefits { padding: 40px 16px 80px; min-height: calc(100vh - 64px); }
+  .ldBenefitsHeader { margin-bottom: 28px; }
+  .ldBenefits .ldEyebrow { margin-bottom: 18px; }
+  .ldBenefitsH1 { font-size: clamp(26px, 8vw, 34px); margin-bottom: 12px; }
+  .ldBenefitsLead { font-size: 15.5px; }
+  .ldBenefitsGrid { grid-template-columns: 1fr; gap: 12px; margin-bottom: 24px; }
+  .ldBenefitsCard { padding: 20px 18px 18px; border-radius: 16px; }
+  .ldBenefitsCardIcon { width: 40px; height: 40px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Pre-bank flow screens (Steps 2-6, approval, waitlist, denied)
+   Shared shell + per-screen component classes.
+═══════════════════════════════════════════════════════════════════════ */
+
+/* Page wrapper — same warm cream → white as Benefits/signup */
+.ldFlow {
+  background: linear-gradient(180deg, var(--ld-bg-warm) 0%, var(--ld-bg) 360px);
+  min-height: calc(100vh - 72px);
+  padding: 48px 24px 96px;
+}
+.ldFlowInner {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.ldFlowInner[data-wide="true"] { max-width: 720px; }
+
+/* Slim progress bar at the top — same gradient fill as signup */
+.ldFlowProgress { margin-bottom: 28px; }
+.ldFlowProgressMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  gap: 12px;
+}
+.ldFlowProgressStep {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ld-brand);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.ldFlowProgressNext {
+  font-size: 11.5px;
+  color: var(--ld-muted);
+  font-weight: 500;
+}
+.ldFlowProgressTrack {
+  height: 5px;
+  background: rgba(13, 82, 52, 0.10);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.ldFlowProgressFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--ld-brand) 0%, #1f9b5e 100%);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(13, 82, 52, 0.30);
+  transition: width 0.3s ease;
+}
+
+/* Header — eyebrow chip + H1 + lead */
+.ldFlowHeader { margin-bottom: 28px; }
+.ldFlow .ldEyebrow {
+  color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.08);
+  border: 1px solid rgba(13, 82, 52, 0.16);
+  margin-bottom: 20px;
+}
+.ldFlow .ldEyebrowDot {
+  background: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
+}
+.ldFlowH1 {
+  font-size: clamp(28px, 4.6vw, 42px);
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  line-height: 1.08;
+  margin: 0 0 14px;
+  color: var(--ld-ink);
+}
+.ldFlowH1Accent {
+  background: linear-gradient(120deg, var(--ld-brand) 0%, #1f9b5e 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ldFlowLead {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--ld-muted);
+  margin: 0;
+  max-width: 540px;
+}
+
+/* Standard error/note treatments */
+.ldFlowError {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #9b2530;
+  background: #fdecee;
+  border: 1px solid #f6c8ce;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+.ldFlowInfoCard {
+  background: linear-gradient(180deg, rgba(13, 82, 52, 0.06) 0%, rgba(13, 82, 52, 0.03) 100%);
+  border: 1px solid rgba(13, 82, 52, 0.18);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.ldFlowInfoCardTitle {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ldFlowInfoCardBody {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ld-ink);
+}
+
+/* Primary CTA */
+.ldPage .ldFlowBtn {
+  width: 100%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  border: 0;
+  border-radius: 12px;
+  padding: 16px 22px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+  box-shadow: 0 10px 26px -12px rgba(13, 82, 52, 0.45);
+}
+.ldPage .ldFlowBtn:hover:not(:disabled) {
+  background: #0a4329;
+  box-shadow: 0 14px 32px -14px rgba(13, 82, 52, 0.55);
+}
+.ldPage .ldFlowBtn:active:not(:disabled) { transform: translateY(1px); }
+.ldPage .ldFlowBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Back link — small underlined text button, centered */
+.ldFlowBackRow {
+  text-align: center;
+  margin-top: 18px;
+}
+.ldPage .ldFlowBackLink {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--ld-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+.ldPage .ldFlowBackLink:hover { color: var(--ld-ink); }
+
+/* Trust line at bottom of a screen (e.g. "🔒 Bank-grade encryption") */
+.ldFlowTrustLine {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--ld-muted);
+  line-height: 1.5;
+}
+
+/* ─── Step 2: payout method tiles ─────────────────────────────────────── */
+.ldFlowMethods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.ldPage .ldFlowMethod {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid rgba(10, 20, 16, 0.10);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.ldPage .ldFlowMethod:hover {
+  border-color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.03);
+}
+.ldPage .ldFlowMethod[data-selected="true"] {
+  border-color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.06);
+  box-shadow: 0 0 0 3px rgba(13, 82, 52, 0.10);
+}
+.ldFlowMethodLogo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.ldFlowMethodName {
+  flex: 1;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+}
+.ldFlowMethodCheck {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ld-brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Shared input/label for inline fields in flow screens */
+.ldFlowField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.ldFlowFieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+}
+.ldPage .ldFlowInput {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ld-ink);
+  background: #fff;
+  border: 1.5px solid rgba(10, 20, 16, 0.10);
+  border-radius: 12px;
+  padding: 13px 14px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.ldPage .ldFlowInput::placeholder { color: #b1bcb6; font-weight: 400; }
+.ldPage .ldFlowInput:hover { border-color: rgba(10, 20, 16, 0.22); }
+.ldPage .ldFlowInput:focus {
+  border-color: var(--ld-brand);
+  box-shadow: 0 0 0 4px rgba(13, 82, 52, 0.14);
+}
+
+/* Confirm card (Step 2) */
+.ldFlowConfirmCard {
+  background: rgba(13, 82, 52, 0.06);
+  border: 1px solid rgba(13, 82, 52, 0.18);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.ldFlowConfirmKicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ld-brand);
+}
+.ldFlowConfirmBody {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ld-ink);
+}
+
+/* ─── Step 3 + Approval: milestone ladder ─────────────────────────────── */
+.ldFlowLadderLabel {
+  margin: 18px 0 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ld-muted);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.ldFlowLadder {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+  padding: 18px 0 8px;
+  scrollbar-width: thin;
+}
+.ldFlowLadderRung {
+  flex: 1 0 88px;
+  background: #fff;
+  border: 1px solid rgba(10, 20, 16, 0.10);
+  border-radius: 12px;
+  padding: 20px 10px 14px;
+  text-align: center;
+  position: relative;
+  opacity: 0.65;
+  transition: opacity 0.2s ease;
+}
+.ldFlowLadderRung[data-current="true"] {
+  background: linear-gradient(135deg, var(--ld-brand) 0%, #0a4329 100%);
+  border-color: var(--ld-brand);
+  opacity: 1;
+  box-shadow: 0 12px 24px -14px rgba(13, 82, 52, 0.45);
+}
+.ldFlowLadderPin {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fbbf24;
+  color: #78350f;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ldFlowLadderAmount {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ld-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ldFlowLadderRung[data-current="true"] .ldFlowLadderAmount { color: #fff; }
+.ldFlowLadderLabelText {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ld-muted);
+}
+.ldFlowLadderRung[data-current="true"] .ldFlowLadderLabelText { color: rgba(255,255,255,0.85); }
+
+/* Sub-benefit grid (Step 3, Approval) */
+.ldFlowBenefitsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ldFlowBenefitCard {
+  background: #fff;
+  border: 1px solid rgba(10, 20, 16, 0.08);
+  border-radius: 14px;
+  padding: 16px 16px 14px;
+}
+.ldFlowBenefitIcon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 82, 52, 0.08);
+  color: var(--ld-brand);
+  border-radius: 9px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+.ldFlowBenefitTitle {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ld-ink);
+  letter-spacing: -0.005em;
+}
+.ldFlowBenefitSub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ld-muted);
+}
+
+/* ─── Step 4: fees breakdown card + bullet list ───────────────────────── */
+.ldFlowFeesCard {
+  background: #fff;
+  border: 1.5px solid rgba(13, 82, 52, 0.22);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+}
+.ldFlowFeesKicker {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ld-brand);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.ldFlowFeesList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ldFlowFeesList li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ld-ink);
+  line-height: 1.45;
+}
+.ldFlowFeesList li strong {
+  color: var(--ld-ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ldFlowFeesHint {
+  color: var(--ld-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.ldFlowFeesFootnote {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--ld-muted);
+  line-height: 1.5;
+}
+.ldFlowBulletList {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--ld-ink);
+}
+
+/* ─── Step 5: delivery options ────────────────────────────────────────── */
+.ldFlowDeliveryGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.ldPage .ldFlowDeliveryOption {
+  position: relative;
+  font-family: inherit;
+  background: #fff;
+  border: 1.5px solid rgba(10, 20, 16, 0.10);
+  border-radius: 14px;
+  padding: 22px 18px 18px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+}
+.ldPage .ldFlowDeliveryOption:hover {
+  border-color: var(--ld-brand);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px -16px rgba(13, 82, 52, 0.25);
+}
+.ldPage .ldFlowDeliveryOption[data-selected="true"] {
+  border-color: var(--ld-brand);
+  background: rgba(13, 82, 52, 0.04);
+  box-shadow: 0 0 0 3px rgba(13, 82, 52, 0.12);
+}
+.ldFlowDeliveryBadge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.ldFlowDeliveryBadge[data-tone="fee"] { background: #fef3c7; color: #92400e; }
+.ldFlowDeliveryBadge[data-tone="free"] {
+  background: rgba(13, 82, 52, 0.10);
+  color: var(--ld-brand);
+}
+.ldFlowDeliveryEmoji { font-size: 28px; margin: 0 0 6px; line-height: 1; }
+.ldFlowDeliveryTitle {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ld-ink);
+}
+.ldFlowDeliverySub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ld-muted);
+}
+
+/* Cost summary (Step 5) */
+.ldFlowCostCard {
+  background: #fff;
+  border: 1px solid rgba(10, 20, 16, 0.10);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.ldFlowCostKicker {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ld-muted);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+.ldFlowCostList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ldFlowCostRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  color: var(--ld-ink);
+  font-variant-numeric: tabular-nums;
+}
+.ldFlowCostTotal {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1.5px solid rgba(10, 20, 16, 0.10);
+  padding-top: 8px;
+  margin-top: 4px;
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--ld-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Expiry banner (approval screen) */
+.ldFlowExpiry {
+  background: linear-gradient(180deg, #fef9c3 0%, #fef3c7 100%);
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ldFlowExpiry span[aria-hidden="true"] { font-size: 20px; flex-shrink: 0; }
+.ldFlowExpiry p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #78350f;
+}
+
+/* Contact / footnote */
+.ldFlowContact {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ld-muted);
+}
+.ldFlowContactLink {
+  color: var(--ld-brand);
+  font-weight: 700;
+  text-decoration: none;
+}
+.ldFlowContactLink:hover { text-decoration: underline; }
+
+/* Plaid button wrapper (Step 6) */
+.ldFlowPlaidArea { margin-bottom: 8px; }
+.ldFlowPlaidArea button { width: 100%; }
+
+@media (max-width: 720px) {
+  .ldFlow { padding: 28px 16px 96px; }
+  .ldFlowProgress { margin-bottom: 22px; }
+  .ldFlowHeader { margin-bottom: 22px; }
+  .ldFlow .ldEyebrow { margin-bottom: 14px; }
+  .ldFlowH1 { font-size: clamp(24px, 7vw, 32px); margin-bottom: 10px; }
+  .ldFlowLead { font-size: 15px; }
+  .ldFlowMethod { padding: 12px 14px; }
+  .ldFlowMethodLogo { width: 36px; height: 36px; }
+  .ldFlowMethodName { font-size: 15px; }
+  .ldFlowDeliveryGrid { grid-template-columns: 1fr; }
+  .ldFlowBenefitsGrid { grid-template-columns: 1fr; gap: 10px; }
+  .ldFlowLadder { gap: 6px; padding: 16px 0 6px; }
+  .ldFlowLadderRung { flex: 1 0 78px; padding: 18px 8px 12px; }
+  .ldFlowLadderAmount { font-size: 17px; }
+  .ldFlowFeesCard { padding: 16px 16px; }
+  .ldFlowFeesList li { font-size: 13.5px; }
 }
