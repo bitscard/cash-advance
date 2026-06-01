@@ -4461,7 +4461,12 @@ const SaveCardForm = ({
           body: JSON.stringify({ payment_method_id: paymentMethodId }),
         },
       );
-      if (!saveRes.ok) throw new Error("Could not save card");
+      if (!saveRes.ok) {
+        // Surface the backend's actual error message (e.g. the
+        // debit-only rejection) instead of a generic "could not save".
+        const saveData = await saveRes.json().catch(() => ({}));
+        throw new Error(saveData.error?.error_message || "Could not save card. Please try again.");
+      }
       setDone(true);
       onSaved();
     } catch (e) {
