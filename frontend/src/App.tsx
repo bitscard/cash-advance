@@ -2176,27 +2176,6 @@ const CustomerApp = () => {
 
           {showFc && (
             <>
-              <motion.div variants={flowChildVariants}>
-                <p className={styles.bldLabel} style={{ marginBottom: 0 }}>Your bank will be used for</p>
-                <ul className={styles.bldFees}>
-                  <li className={styles.bldFeesRow}>
-                    <span>Income verification <span className={styles.bldHint}>(read-only)</span></span>
-                    <strong>FREE</strong>
-                  </li>
-                  <li className={styles.bldFeesRow}>
-                    <span>Each repayment <span className={styles.bldHint}>(on payday)</span></span>
-                    <strong>$25–$30</strong>
-                  </li>
-                  <li className={styles.bldFeesRow}>
-                    <span>Monthly membership <span className={styles.bldHint}>(starts on 1st repay)</span></span>
-                    <strong>$3.99/mo</strong>
-                  </li>
-                </ul>
-                <p style={{ fontSize: "12px", lineHeight: 1.55, color: "var(--bld-text-dim)", margin: "0 0 24px" }}>
-                  Membership and repayments are separate charges. Cancel membership any time. We never charge interest, late fees, or hidden fees.
-                </p>
-              </motion.div>
-
               {fcError && <p className={styles.bldError}>{fcError}</p>}
 
               <motion.button
@@ -2277,84 +2256,11 @@ const CustomerApp = () => {
     );
   }
 
-  // Step 4c (between bank link and delivery): debit card as a backup
-  // repayment rail. Framed as a required-looking step but allows a
-  // small Skip link — most users add a card, the few who don't fall
-  // through to ACH-only collection. The card-first-then-ACH cascade in
-  // the backend (chargeRepaymentWithCascade) tries card first when
-  // available. Card is REQUIRED for real users — no skip link shows
-  // by default. Owner/testers pass ?dev_skip=1 in the URL to reveal
-  // a 'Skip — testing only' link that bypasses this step via a
-  // sessionStorage flag (no card actually saved).
-  const devSkipAllowed = typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("dev_skip") === "1";
-  const cardSkippedKey = `advance_card_skipped_${application.id}`;
-  const cardSkipped = typeof window !== "undefined" && sessionStorage.getItem(cardSkippedKey) === "1";
-  if (preBankActive && hasBankPm && !application.stripe_card_pm_id && !cardSkipped && !needsConnectIdentity) {
-    return (
-      <div className={styles.bldPage}>
-        <header className={styles.bldNav}>
-          <div className={styles.bldNavInner}>
-            <a className={styles.bldBrand} href="/">
-              <span className={styles.bldBrandMark}>✓</span>
-              advance<span className={styles.bldBrandDot}>.</span>
-            </a>
-            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
-          </div>
-        </header>
-
-        <motion.main
-          className={styles.bldMain}
-          variants={flowPageVariants}
-          initial="hidden"
-          animate="visible"
-        >
-          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
-            <span className={styles.bldProgressLabel}>3 of 4</span>
-            <span className={styles.bldProgressDot} data-state="done" />
-            <span className={styles.bldProgressDot} data-state="done" />
-            <span className={styles.bldProgressDot} data-state="current" />
-            <span className={styles.bldProgressDot} />
-          </motion.div>
-
-          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>For repayment</motion.span>
-          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
-            Save your <em>debit card.</em>
-          </motion.h1>
-
-          <motion.div variants={flowChildVariants} style={{ marginTop: "2.4rem" }}>
-            {!stripeKey ? (
-              <p className={styles.bldError}>Card payments are not configured yet.</p>
-            ) : (
-              <Elements stripe={stripePromise}>
-                <SaveCardForm
-                  applicationId={application.id}
-                  authToken={token}
-                  onSaved={() => loadApplication(application.id)}
-                />
-              </Elements>
-            )}
-          </motion.div>
-
-          {devSkipAllowed && (
-            <motion.p variants={flowChildVariants} style={{ marginTop: "2.4rem", textAlign: "center", fontSize: "1.1rem" }}>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (typeof window !== "undefined") sessionStorage.setItem(cardSkippedKey, "1");
-                  loadApplication(application.id);
-                }}
-                style={{ color: "var(--muted)", textDecoration: "underline" }}
-              >
-                Skip — testing only (dev mode)
-              </a>
-            </motion.p>
-          )}
-        </motion.main>
-      </div>
-    );
-  }
+  // (Removed) The card-collection step. Earlier we required a debit
+  // card before delivery as a backup for the ACH-pull cascade, but the
+  // product decision changed — we're back to ACH-only collection.
+  // chargeRepaymentWithCascade already handles the no-card branch
+  // (Day 0 ACH + daily balance-check ACH retries).
 
   // Step 3 of 4: delivery speed (same-day vs 3-5 days)
   if (preBankActive && !application.delivery_type) {
@@ -2848,80 +2754,72 @@ const CustomerApp = () => {
         </div>
       )}
 
-      {!showConfirmation && !showPayoutStep && <div className={styles.appCard}>
-        <div className={styles.appCardPanel}>
-          <div className={styles.appCardHeader}>
-            <p className={styles.appCardKicker}>Your advance</p>
-            <span className={styles.appCardStatusBadge}>{statusLabel[application.status]}</span>
-          </div>
-          <div className={styles.appCardBody}>
-            <dl>
-              <dt>Name</dt>
-              <dd>{application.customer.name}</dd>
-              <dt>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
-              <dd>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
-              <dt>Next payday</dt>
-              <dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
-              <dt>Delivery</dt>
-              <dd>{application.delivery_type === "instant" ? "⚡ Same day" : "📬 3–5 days"}</dd>
-              <dt>Bank</dt>
-              <dd>{application.plaid_connected ? "✓ Connected" : "Not connected"}</dd>
+      {!showConfirmation && !showPayoutStep && (
+        <div className={styles.bldPage}>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="/">
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
+              </a>
+              <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
+            </div>
+          </header>
+
+          <motion.main
+            className={styles.bldMain}
+            variants={flowPageVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>
+              {statusLabel[application.status]}
+            </motion.span>
+            <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+              Your <em>advance.</em>
+            </motion.h1>
+
+            {/* Applicant summary — same dl/dt/dd structure as before so
+                downstream styling cues still apply. Display inherits
+                from the page's overall bld* type scale. */}
+            <motion.dl variants={flowChildVariants} style={{
+              display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.6rem 1.6rem",
+              fontSize: "1.4rem", lineHeight: 1.5, margin: "1.6rem 0 0",
+            }}>
+              <dt style={{ color: "var(--bld-text-dim)" }}>Name</dt>
+              <dd style={{ margin: 0, color: "var(--bld-text)" }}>{application.customer.name}</dd>
+              <dt style={{ color: "var(--bld-text-dim)" }}>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
+              <dd style={{ margin: 0, color: "var(--bld-text)" }}>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
+              <dt style={{ color: "var(--bld-text-dim)" }}>Next payday</dt>
+              <dd style={{ margin: 0, color: "var(--bld-text)" }}>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
+              <dt style={{ color: "var(--bld-text-dim)" }}>Delivery</dt>
+              <dd style={{ margin: 0, color: "var(--bld-text)" }}>{application.delivery_type === "instant" ? "⚡ Same day" : "📬 3–5 days"}</dd>
+              <dt style={{ color: "var(--bld-text-dim)" }}>Bank</dt>
+              <dd style={{ margin: 0, color: "var(--bld-text)" }}>{application.bank_linked ? "✓ Connected" : "Not connected"}</dd>
               {application.repayment ? (
                 <>
-                  <dt>Repay</dt>
-                  <dd className={styles.dueDate}>${application.repayment.amount} on {application.repayment.due_date}</dd>
+                  <dt style={{ color: "var(--bld-text-dim)" }}>Repay</dt>
+                  <dd style={{ margin: 0, color: "var(--bld-text)", fontWeight: 600 }}>${application.repayment.amount} on {application.repayment.due_date}</dd>
                 </>
               ) : application.delivery_type ? (
                 <>
-                  <dt>Repay</dt>
-                  <dd className={styles.dueDate}>${application.requested_amount + (application.delivery_type === "instant" ? 5 : 0)} on payday</dd>
+                  <dt style={{ color: "var(--bld-text-dim)" }}>Repay</dt>
+                  <dd style={{ margin: 0, color: "var(--bld-text)", fontWeight: 600 }}>${application.requested_amount + (application.delivery_type === "instant" ? 5 : 0)} on payday</dd>
                 </>
               ) : null}
-              <dt>Membership</dt>
-              <dd>
+              <dt style={{ color: "var(--bld-text-dim)" }}>Membership</dt>
+              <dd style={{ margin: 0, color: "var(--bld-text)" }}>
                 $3.99/mo{" "}
                 {application.status === "subscription_failed"
                   ? "· payment failed"
                   : application.subscription_id
                     ? `· active${application.subscription_next_billing ? ` · next: ${application.subscription_next_billing}` : ""}`
-                    : application.stripe_card_saved
-                      ? "· starts on first repayment"
-                      : "· card needed"}
+                    : "· starts on first repayment"}
               </dd>
-            </dl>
+            </motion.dl>
 
-            {needsBank && (
-              <div className={styles.appCardAction}>
-                <p><strong>Next step:</strong> connect your bank account via Plaid. This verifies your income so we can review your application.</p>
-                {plaidCheckingCompletion ? (
-                  <button disabled>Finishing connection…</button>
-                ) : plaidLinkToken && hostedLinkUrl ? (
-                  <PlaidConnectButton
-                    linkToken={plaidLinkToken}
-                    hostedLinkUrl={hostedLinkUrl}
-                  />
-                ) : plaidLinkError ? (
-                  <div>
-                    <p style={{ color: "var(--error, #c0392b)", marginBottom: "0.8rem", fontSize: "1.4rem" }}>{plaidLinkError}</p>
-                    <button onClick={fetchPlaidLinkToken}>Retry →</button>
-                  </div>
-                ) : (
-                  <button disabled>Loading…</button>
-                )}
-              </div>
-            )}
-
-            {needsCard && (
-              <div className={styles.appCardAction}>
-                <p><strong>You're approved!</strong> Set up your repayment method via your loan dashboard.</p>
-                <button onClick={() => window.location.href = "/loan"}>
-                  Set up repayment →
-                </button>
-              </div>
-            )}
-
-            {/* ── Post-setup dashboard ───────────────────────────────── */}
-            {!needsBank && !needsCard && (() => {
+            {/* ── Status-driven content ────────────────────────────── */}
+            {(() => {
               const now = new Date();
               const dueDate = application.repayment?.due_date
                 ? new Date(application.repayment.due_date + "T00:00:00")
@@ -3111,10 +3009,10 @@ const CustomerApp = () => {
               </div>
             )}
 
-            {error && <p className={styles.error}>{error}</p>}
-          </div>
+            {error && <p className={styles.bldError}>{error}</p>}
+          </motion.main>
         </div>
-      </div>}
+      )}
 
     </main>
   );
