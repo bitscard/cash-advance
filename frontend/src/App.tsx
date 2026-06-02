@@ -2095,7 +2095,17 @@ const CustomerApp = () => {
             variants={flowChildVariants}
             whileTap={{ scale: 0.98 }}
           >
-            {payoutBusy ? "Saving…" : isAch ? <>Continue <span aria-hidden="true">→</span></> : <>Confirm <span aria-hidden="true">→</span></>}
+            {payoutBusy
+              ? "Saving…"
+              : !selectedMethod
+                ? "Pick a method above"
+                : !isAch && !payoutContact.trim()
+                  ? `Add your ${selectedMethod.name} details`
+                  : isAch && !/^\d{4,17}$/.test(bankAccountNumber)
+                    ? "Enter your bank account number"
+                    : isAch
+                      ? <>Continue <span aria-hidden="true">→</span></>
+                      : <>Confirm <span aria-hidden="true">→</span></>}
           </motion.button>
 
           {payoutAlreadySaved && (
@@ -2132,8 +2142,14 @@ const CustomerApp = () => {
   // Note: skipping bank means the user has no stripe_payment_method_id,
   // so they can't actually be ACH-charged at repayment time. Fine for
   // visual / flow testing; not for end-to-end payment testing.
-  const devSkipBankAllowed = typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("dev_skip_bank") === "1";
+  // Read the flag from the URL OR sessionStorage so it survives hard
+  // navigations (e.g. clicking "Sign in" goes to /loan and strips ?dev_skip_bank=1).
+  // First time we see ?dev_skip_bank=1 in the URL, stash it in session.
+  const devSkipBankAllowed = typeof window !== "undefined" && (() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("dev_skip_bank") === "1";
+    if (fromUrl) sessionStorage.setItem("advance_dev_skip_bank", "1");
+    return fromUrl || sessionStorage.getItem("advance_dev_skip_bank") === "1";
+  })();
   const bankSkippedKey = `advance_bank_skipped_${application.id}`;
   const bankSkipped = typeof window !== "undefined" && sessionStorage.getItem(bankSkippedKey) === "1";
   const needsBankLink = !hasBankPm && !hasCardPm && !bankSkipped;

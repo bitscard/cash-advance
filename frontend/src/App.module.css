@@ -6238,7 +6238,9 @@ dd {
   background: var(--bld-surface);
   border: 2px solid var(--bld-border);
   border-radius: 16px;
-  padding: 24px 20px 20px;
+  /* Top padding clears the absolute-positioned badge ($5 FEE / FREE)
+     so the emoji + title + sub don't flow under it. */
+  padding: 52px 20px 20px;
   text-align: left;
   cursor: pointer;
   font-family: inherit;
