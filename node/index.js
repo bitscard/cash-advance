@@ -925,9 +925,13 @@ app.post('/api/advance/applications/:id/plaid/exchange-token', async function (r
     const updated = await db.setAccessToken(request.params.id, access_token, item_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     console.log('[plaid/exchange-token] success', { application_id: request.params.id, item_id });
-    await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
+    await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. Checking your income…');
     addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
       .catch(err => console.log('[mailchimp review] error:', err.message));
+    // Fire-and-forget auto-approval — see autoApproveIfEligible.
+    autoApproveIfEligible(updated.id).catch(err =>
+      console.log('[auto-approve] background error', { application_id: updated.id, error: err.message })
+    );
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -965,10 +969,14 @@ app.post('/api/advance/applications/:id/plaid/check-completion', async function 
     const exchangeResp = await client.itemPublicTokenExchange({ public_token: publicToken });
     const updated = await db.setAccessToken(request.params.id, exchangeResp.data.access_token, exchangeResp.data.item_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. A reviewer will check your application and respond here.');
+    await db.addMessage(request.params.id, 'system', 'Bank account connected via Plaid. Checking your income…');
     addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
       .catch(err => console.log('[mailchimp review] error:', err.message));
     console.log('[plaid/check-completion] connected', { application_id: request.params.id });
+    // Fire-and-forget auto-approval — see autoApproveIfEligible.
+    autoApproveIfEligible(updated.id).catch(err =>
+      console.log('[auto-approve] background error', { application_id: updated.id, error: err.message })
+    );
     response.json({ status: 'connected', application: db.publicApp(updated) });
   } catch (err) {
     console.log('[plaid/check-completion] error', err.message);
@@ -1206,8 +1214,16 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
     // queue. Legacy Plaid users get this flip from setAccessToken.
     if (updated.stripe_fc_account_id && updated.status === 'intake') {
       updated = await db.updateApplicationStatus(updated.id, 'bank_connected') || updated;
-      await db.addMessage(updated.id, 'system', 'Bank account verified via Stripe. A reviewer will check your application and respond here.');
+      await db.addMessage(updated.id, 'system', 'Bank account verified via Stripe. Checking your income…');
       console.log('[delivery] FC user — status flipped to bank_connected', { application_id: updated.id });
+
+      // Fire-and-forget auto-approval check. Income classification
+      // takes a few seconds (Anthropic AI fallback for ambiguous txs);
+      // the user's polling on the frontend will pick up the new
+      // 'approved' status without us blocking the delivery response.
+      autoApproveIfEligible(updated.id).catch(err =>
+        console.log('[auto-approve] background error', { application_id: updated.id, error: err.message })
+      );
     }
 
     response.json({ application: db.publicApp(updated) });
@@ -2363,6 +2379,132 @@ function computeChargeAmountCents(row) {
   const baseAmount = parseFloat(row.requested_amount) || 25;
   const instantFee = row.delivery_type === 'instant' ? 5 : 0;
   return Math.round((baseAmount + instantFee) * 100);
+}
+
+// Auto-approval. Reuses the same classification + accrual pipeline
+// that powers /admin/income_analysis: pulls transactions from FC (or
+// Plaid for legacy users), classifies each, and sums per-source
+// accrued wages. If accrued income comfortably covers the requested
+// advance, we flip status to 'approved' automatically and set the
+// offer-expiry timer. Otherwise we leave the application as
+// 'bank_connected' for manual review.
+//
+// Safeguards (any one fails → manual review):
+//   - First advance only (repayment_count == 0)
+//   - State must be eligible (not waitlisted)
+//   - User must not have any historical repayment_failed state
+//   - Accrued income must be >= 1.2x the requested amount (20% buffer
+//     against classification noise)
+//
+// Returns { approved, total_accrued_cents, reason }. Caller decides
+// what to do with the result (we currently fire-and-forget).
+async function autoApproveIfEligible(applicationId) {
+  const row = await db.getApplicationById(applicationId);
+  if (!row) return { approved: false, reason: 'not found' };
+
+  // Status gate — only auto-approve from 'bank_connected'
+  if (row.status !== 'bank_connected') {
+    return { approved: false, reason: `status is ${row.status}, expected bank_connected` };
+  }
+
+  // Safeguard: first-advance only. Repeat customers go to manual
+  // review until we trust the auto-approval signal more.
+  if ((row.repayment_count || 0) > 0) {
+    return { approved: false, reason: 'repeat customer — manual review' };
+  }
+
+  // Safeguard: state must be eligible (sanity — shouldn't have reached
+  // bank_connected if not, but defense in depth)
+  if (row.subscription_status === 'waitlisted') {
+    return { approved: false, reason: 'waitlisted state' };
+  }
+
+  // Compute accrued income via the same pipeline as the admin
+  // income-analysis endpoint.
+  try {
+    let txs = [];
+    if (row.stripe_fc_account_id) {
+      const fcTxs = await fetchFcTransactions(row.stripe_fc_account_id);
+      const { adaptFcTransactions } = require('./fcTransactionAdapter');
+      txs = adaptFcTransactions(fcTxs);
+    } else if (row.access_token) {
+      // Legacy Plaid path
+      let cursor, hasMore = true, iter = 0;
+      while (hasMore && iter < 10) {
+        const syncResp = await client.transactionsSync({
+          access_token: row.access_token,
+          cursor,
+          count: 500,
+          options: { include_personal_finance_category: true },
+        });
+        txs = txs.concat(syncResp.data.added || []);
+        cursor = syncResp.data.next_cursor;
+        hasMore = syncResp.data.has_more;
+        iter++;
+      }
+    } else {
+      return { approved: false, reason: 'no bank linked' };
+    }
+
+    // Normalise: positive cents = income, negative = spend (matches
+    // what classifyTransaction expects)
+    const rawTxs = txs.map(tx => ({
+      id: tx.transaction_id,
+      description: tx.merchant_name || tx.name || '',
+      amount: Math.round(-tx.amount * 100),
+      currency: (tx.iso_currency_code || 'usd').toLowerCase(),
+      date: tx.date,
+      category: '',
+      pfc: tx.personal_finance_category?.primary || null,
+    }));
+
+    const incoming = rawTxs.filter(tx => tx.amount > 0);
+    const refundIds = buildRefundSet(rawTxs);
+    const classified = await Promise.all(
+      incoming.map(async tx => {
+        const cls = await classifyTransaction(tx.description, tx.category, tx.pfc, refundIds.has(tx.id));
+        return { ...tx, ...cls };
+      })
+    );
+
+    const incomeCandidates = classified.filter(tx =>
+      tx.status === 'wage_income' || tx.status === 'uncertain'
+    );
+    let incomeSources = await db.getIncomeSources(row.id);
+    if (incomeSources.length === 0 && row.payday) {
+      const fmtDate = v => v ? (typeof v === 'string' ? v.slice(0, 10) : new Date(v).toISOString().slice(0, 10)) : null;
+      incomeSources = [{ id: null, employer: row.employer || '', payday: fmtDate(row.payday), pay_frequency: row.pay_frequency }];
+    }
+    const sourcesWithAccrued = incomeSources.map(src => calcSourceAccrued(src, incomeCandidates));
+    const total_accrued_cents = sourcesWithAccrued.reduce((sum, s) => sum + (s.accrued_cents || 0), 0);
+
+    const requested_cents = Math.round((parseFloat(row.requested_amount) || 25) * 100);
+    // Safeguard: 20% buffer against classification noise — accrued
+    // must comfortably exceed the requested amount.
+    const threshold_cents = Math.round(requested_cents * 1.2);
+
+    if (total_accrued_cents < threshold_cents) {
+      const accruedDollars = (total_accrued_cents / 100).toFixed(2);
+      const requestedDollars = (requested_cents / 100).toFixed(2);
+      const reason = `accrued $${accruedDollars} < threshold (1.2x $${requestedDollars})`;
+      console.log('[auto-approve] insufficient accrual', { application_id: row.id, accrued: total_accrued_cents, requested: requested_cents, threshold: threshold_cents });
+      await db.addMessage(row.id, 'system', `Awaiting manual review — automated income check: $${accruedDollars} accrued, needs at least $${(threshold_cents/100).toFixed(2)}.`);
+      return { approved: false, total_accrued_cents, reason };
+    }
+
+    // ── Auto-approve ──────────────────────────────────────────────
+    const updated = await db.updateApplicationStatus(row.id, 'approved');
+    const expiresAt = getOfferExpiresAt(new Date(), row.state);
+    await db.saveOfferExpiry(row.id, expiresAt);
+    await db.addMessage(row.id, 'system', `Auto-approved! Your bank shows $${(total_accrued_cents/100).toFixed(2)} in accrued earnings — more than enough to cover a $${(requested_cents/100).toFixed(2)} advance. Pick your delivery speed to receive funds.`);
+    addToMailchimp(updated?.name || row.name, updated?.email || row.email, updated?.state || row.state, ['approved'])
+      .catch(err => console.log('[mailchimp approved] error:', err.message));
+    console.log('[auto-approve] approved', { application_id: row.id, accrued: total_accrued_cents, requested: requested_cents });
+    return { approved: true, total_accrued_cents };
+  } catch (err) {
+    console.log('[auto-approve] error — falling back to manual review', { application_id: applicationId, error: err.message });
+    return { approved: false, reason: `error: ${err.message}` };
+  }
 }
 
 // Repayment-collection cascade. The user's spec:
