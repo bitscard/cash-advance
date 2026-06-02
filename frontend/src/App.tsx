@@ -64,6 +64,7 @@ interface Application {
   stripe_charge_status: string | null;
   payout_methods: string | null;
   payout_contact: string | null;
+  bank_account_number: string | null;
   subscription_status: string | null;
   subscription_id: string | null;
   subscription_next_billing: string | null;
@@ -470,6 +471,10 @@ const CustomerApp = () => {
   const [showPayoutStep, setShowPayoutStep] = useState(false);
   const [payoutMethods, setPayoutMethods] = useState<string[]>([]);
   const [payoutContact, setPayoutContact] = useState("");
+  // Bank account number for ACH payouts — admin uses this + the routing
+  // number from FC to manually send via Brex. Routing isn't entered by
+  // the user (it comes from the FC PaymentMethod automatically).
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [payoutSaved, setPayoutSaved] = useState(false);
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
@@ -590,23 +595,33 @@ const CustomerApp = () => {
 
   const submitPayoutPreference = async () => {
     if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
-    // ACH uses Stripe Connect — no contact handle needed (the backend
-    // already wrote 'stripe_connect' as the contact when onboarding
-    // completed). For any handle-based method (PayPal/Cash App/Zelle)
-    // the contact field is required.
+    // ACH requires the user to type their bank account number directly.
+    // PayPal/Cash App/Zelle require a handle in `payoutContact`. Bank
+    // transfer (legacy) uses Plaid for the bank reference and skips
+    // both.
     const isAchPayout = payoutMethods.includes("ACH");
     const isBankTransferPayout = payoutMethods.includes("Bank transfer");
-    if (!isAchPayout && !isBankTransferPayout && !payoutContact.trim()) {
+    if (isAchPayout) {
+      if (!/^\d{4,17}$/.test(bankAccountNumber)) {
+        setPayoutError("Bank account number must be 4–17 digits.");
+        return;
+      }
+    } else if (!isBankTransferPayout && !payoutContact.trim()) {
       setPayoutError("Please enter your username, email, or phone number");
       return;
     }
     setPayoutBusy(true);
     setPayoutError(null);
     try {
+      const body: { methods: string; contact: string; bank_account_number?: string } = {
+        methods: payoutMethods.join(','),
+        contact: payoutContact.trim(),
+      };
+      if (isAchPayout) body.bank_account_number = bankAccountNumber;
       const res = await fetch(apiUrl(`/api/advance/applications/${application!.id}/payout-preference`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ methods: payoutMethods.join(','), contact: payoutContact.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.error_message || "Unable to save preference");
@@ -2243,15 +2258,35 @@ const CustomerApp = () => {
             )}
 
             {isAch && (
-              <div className={styles.ldFlowInfoCard}>
-                <p className={styles.ldFlowInfoCardTitle}>Straight to your bank account</p>
-                <p className={styles.ldFlowInfoCardBody}>
-                  We&apos;ll send your advance via ACH. You&apos;ll connect your bank in the next step — one secure connection covers income verification, payout, and repayment.
-                </p>
-                <p className={styles.ldFlowInfoCardBody} style={{ marginTop: "6px" }}>
-                  After connecting, we&apos;ll ask for a quick identity check (~30 seconds) so we can legally send you money.
-                </p>
-              </div>
+              <>
+                <div className={styles.ldFlowInfoCard}>
+                  <p className={styles.ldFlowInfoCardTitle}>Straight to your bank account</p>
+                  <p className={styles.ldFlowInfoCardBody}>
+                    We&apos;ll send your advance via ACH. Type your account number below — we already have your routing number from the bank you linked.
+                  </p>
+                </div>
+                <label className={styles.ldFlowField} style={{ marginTop: "12px" }}>
+                  <span className={styles.ldFlowFieldLabel}>Bank account number</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{4,17}"
+                    placeholder="e.g. 1234567890"
+                    autoComplete="off"
+                    value={bankAccountNumber}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 17);
+                      setBankAccountNumber(digits);
+                      setPayoutSaved(false);
+                      setPayoutError(null);
+                    }}
+                    className={styles.ldFlowInput}
+                  />
+                  <span style={{ fontSize: "1.15rem", color: "var(--muted)", marginTop: "0.4rem", display: "block" }}>
+                    Find this in your bank app: typically 4–17 digits, no spaces or letters. Look for &quot;Account number&quot; (not the same as the routing number or the card number).
+                  </span>
+                </label>
+              </>
             )}
 
             {payoutError && <p className={styles.ldFlowError}>{payoutError}</p>}
@@ -2259,7 +2294,7 @@ const CustomerApp = () => {
             <button
               type="button"
               className={styles.ldFlowBtn}
-              disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim())}
+              disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim()) || (isAch && !/^\d{4,17}$/.test(bankAccountNumber))}
               onClick={async () => {
                 await submitPayoutPreference();
                 if (application) await loadApplication(application.id);
@@ -2299,7 +2334,10 @@ const CustomerApp = () => {
   const hasCardPm = !!application.stripe_card_pm_id;
   const isAchPayout = application.payout_methods === "ACH";
   const needsBankLink = !hasBankPm && !hasCardPm;
-  const needsConnectIdentity = isAchPayout && hasBankPm && application.stripe_connect_status !== "ready";
+  // needsConnectIdentity is permanently false — Connect Express identity
+  // verification was removed when payouts moved to manual Brex sends.
+  // Kept as a variable for diff clarity in downstream conditionals.
+  const needsConnectIdentity = false;
 
   if (preBankActive && (needsBankLink || needsConnectIdentity)) {
     // Phase 4a: bank not linked yet → show FC link UI
@@ -3683,9 +3721,21 @@ const AdminApp = () => {
                       </dd>
                       <dt>Payout to</dt>
                       <dd>
-                        {selected.payout_methods
-                          ? <>{selected.payout_methods}{selected.payout_contact ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {selected.payout_contact}</span> : null}</>
-                          : "—"}
+                        {selected.payout_methods === "ACH" ? (
+                          <>
+                            <strong>Bank (ACH — send via Brex)</strong>
+                            <div style={{ marginTop: "0.4rem", padding: "0.6rem 0.8rem", background: "var(--brand-tint)", borderRadius: "var(--r-sm)", fontSize: "1.3rem" }}>
+                              <div><span style={{ color: "var(--muted)" }}>Routing:</span> <strong>{pmDetails?.routing_number || "Loading…"}</strong></div>
+                              <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
+                              <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
+                              <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>Copy these into Brex to send the advance.</div>
+                            </div>
+                          </>
+                        ) : selected.payout_methods ? (
+                          <>{selected.payout_methods}{selected.payout_contact ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {selected.payout_contact}</span> : null}</>
+                        ) : (
+                          "—"
+                        )}
                       </dd>
                     </dl>
                     <dl className={styles.adminDl}>
