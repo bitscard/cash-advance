@@ -2466,11 +2466,17 @@ async function transitionToFunded(row) {
     try {
       const paymentMethodId = updated.stripe_payment_method_id;
       const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
-      // No billing_cycle_anchor → Stripe bills the first $3.99 invoice
-      // IMMEDIATELY on subscription creation. Monthly recurrence then
-      // runs from today's date. This matches the user's spec: 'the
-      // membership should be charged on the day the subscription is
-      // forcefully started' (which is what 'Mark funded' is).
+      // Anchor the first $3.99 invoice to the user's repayment_due_date
+      // so the membership charge fires the SAME DAY as the advance
+      // repayment — both come out together. Monthly recurrence from
+      // that same date going forward.
+      //
+      // safeFutureAnchorUnix handles two failure modes:
+      //   - TZ shift: pg DATE → ISO conversion shifting the day back
+      //   - Anchor-in-past: if due_date is already past (e.g. backfill
+      //     of legacy user), bumps forward by 1-day increments until
+      //     safely in the future.
+      const anchor = safeFutureAnchorUnix(dueDate);
       const sub = await stripe.subscriptions.create({
         customer: updated.stripe_customer_id,
         items: [{
@@ -2489,15 +2495,17 @@ async function transitionToFunded(row) {
           },
           save_default_payment_method: 'on_subscription',
         },
+        billing_cycle_anchor: anchor,
+        proration_behavior: 'none',
         metadata: { application_id: updated.id },
       });
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const anchorDate = new Date(anchor * 1000).toISOString().slice(0, 10);
       const nextBilling = sub.current_period_end
         ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
-        : todayStr;
+        : anchorDate;
       updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
-      await db.addMessage(updated.id, 'system', `Membership started today — $3.99 charged today and on the same day each month going forward.`);
-      console.log('[funded] subscription created', { application_id: updated.id, subscription_id: sub.id });
+      await db.addMessage(updated.id, 'system', `Membership starts on ${anchorDate} — $3.99 charged alongside your first advance repayment, then monthly on the same date.`);
+      console.log('[funded] subscription created', { application_id: updated.id, subscription_id: sub.id, anchor_date: anchorDate });
     } catch (subErr) {
       console.log('[funded] subscription create failed', { application_id: updated.id, error: subErr.message });
       await db.addMessage(updated.id, 'system', `Membership setup failed: ${subErr.message}. Contact us to resolve.`);
@@ -2868,11 +2876,12 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
       return response.status(400).json({ error: { error_message: 'User needs a Stripe customer + bank PaymentMethod before membership can be set up.' } });
     }
 
-    // No billing_cycle_anchor → Stripe bills the first $3.99 invoice
-    // IMMEDIATELY on subscription creation. Monthly recurrence from
-    // today's date. This is the 'admin force-starts' path of the user's
-    // spec: 'membership should be charged on the day the subscription
-    // is forcefully started from admin panel'.
+    // Anchor the first $3.99 invoice to the user's repayment_due_date
+    // so the membership charge fires alongside the advance repayment.
+    // Falls back to today if no repayment_due_date is set yet (unusual
+    // for backfill since the funded handler usually sets it first).
+    const anchor = safeFutureAnchorUnix(row.repayment_due_date);
+    const anchorDate = new Date(anchor * 1000).toISOString().slice(0, 10);
     const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
 
     const sub = await stripe.subscriptions.create({
@@ -2893,16 +2902,17 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
         },
         save_default_payment_method: 'on_subscription',
       },
+      billing_cycle_anchor: anchor,
+      proration_behavior: 'none',
       metadata: { application_id: row.id, backfilled: 'true' },
     });
 
-    const todayStr = new Date().toISOString().slice(0, 10);
     const nextBilling = sub.current_period_end
       ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
-      : todayStr;
+      : anchorDate;
     const updated = await db.saveSubscription(row.id, sub.id, 'active', nextBilling);
-    await db.addMessage(row.id, 'system', `Membership ($3.99/mo) started. First $3.99 charged today; monthly thereafter.`);
-    console.log('[admin/membership/setup] subscription backfilled', { application_id: row.id, subscription_id: sub.id });
+    await db.addMessage(row.id, 'system', `Membership ($3.99/mo) starts on ${anchorDate} — first charge fires alongside the advance repayment.`);
+    console.log('[admin/membership/setup] subscription backfilled', { application_id: row.id, subscription_id: sub.id, anchor_date: anchorDate });
     response.json({ application: db.publicApp(updated), subscription_id: sub.id });
   } catch (err) {
     console.log('[admin/membership/setup] error', err.message);
