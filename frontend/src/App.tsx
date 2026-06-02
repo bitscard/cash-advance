@@ -2292,27 +2292,52 @@ const CustomerApp = () => {
   const cardSkipped = typeof window !== "undefined" && sessionStorage.getItem(cardSkippedKey) === "1";
   if (preBankActive && hasBankPm && !application.stripe_card_pm_id && !cardSkipped && !needsConnectIdentity) {
     return (
-      <main className={styles.page}>
-        <NavBar onLogout={handleLogout} />
-        <div className={styles.benefitsHeader} style={{ paddingBottom: "5.6rem" }}>
-          <div style={{ maxWidth: "48rem", margin: "0 auto", textAlign: "center" }}>
-            <h1 className={styles.benefitsHeaderTitle}>For repayment</h1>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
+            </a>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
-        </div>
-        <div className={styles.benefitsBody} style={{ maxWidth: "48rem", margin: "0 auto" }}>
-          {!stripeKey ? (
-            <p className={styles.error}>Card payments are not configured yet.</p>
-          ) : (
-            <Elements stripe={stripePromise}>
-              <SaveCardForm
-                applicationId={application.id}
-                authToken={token}
-                onSaved={() => loadApplication(application.id)}
-              />
-            </Elements>
-          )}
+        </header>
+
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>3 of 4</span>
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
+
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>For repayment</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Save your <em>debit card.</em>
+          </motion.h1>
+
+          <motion.div variants={flowChildVariants} style={{ marginTop: "2.4rem" }}>
+            {!stripeKey ? (
+              <p className={styles.bldError}>Card payments are not configured yet.</p>
+            ) : (
+              <Elements stripe={stripePromise}>
+                <SaveCardForm
+                  applicationId={application.id}
+                  authToken={token}
+                  onSaved={() => loadApplication(application.id)}
+                />
+              </Elements>
+            )}
+          </motion.div>
+
           {devSkipAllowed && (
-            <p style={{ marginTop: "2.4rem", textAlign: "center", fontSize: "1.1rem" }}>
+            <motion.p variants={flowChildVariants} style={{ marginTop: "2.4rem", textAlign: "center", fontSize: "1.1rem" }}>
               <a
                 href="#"
                 onClick={(e) => {
@@ -2324,11 +2349,10 @@ const CustomerApp = () => {
               >
                 Skip — testing only (dev mode)
               </a>
-            </p>
+            </motion.p>
           )}
-        </div>
-        <StatesFooter />
-      </main>
+        </motion.main>
+      </div>
     );
   }
 
