@@ -2125,7 +2125,18 @@ const CustomerApp = () => {
   const hasBankPm = !!application.stripe_payment_method_id;
   const hasCardPm = !!application.stripe_card_pm_id;
   const isAchPayout = application.payout_methods === "ACH";
-  const needsBankLink = !hasBankPm && !hasCardPm;
+  // Dev-only bank skip — same pattern as the old card-skip flag. Engineers
+  // can pass ?dev_skip_bank=1 in the URL to reveal a 'Skip — testing only'
+  // link below the Connect Bank button. Click sets a sessionStorage flag
+  // that bypasses the step. Real users never see the link (no URL param).
+  // Note: skipping bank means the user has no stripe_payment_method_id,
+  // so they can't actually be ACH-charged at repayment time. Fine for
+  // visual / flow testing; not for end-to-end payment testing.
+  const devSkipBankAllowed = typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("dev_skip_bank") === "1";
+  const bankSkippedKey = `advance_bank_skipped_${application.id}`;
+  const bankSkipped = typeof window !== "undefined" && sessionStorage.getItem(bankSkippedKey) === "1";
+  const needsBankLink = !hasBankPm && !hasCardPm && !bankSkipped;
   // needsConnectIdentity is permanently false — Connect Express identity
   // verification was removed when payouts moved to manual Brex sends.
   // Kept as a variable for diff clarity in downstream conditionals.
@@ -2204,6 +2215,22 @@ const CustomerApp = () => {
               <p style={{ marginTop: 16, textAlign: "center", fontSize: "12px", color: "var(--bld-text-dim)", letterSpacing: "0.04em" }}>
                 <span aria-hidden="true">🔒</span> Bank linking is powered by Stripe. Your credentials are never shared with us.
               </p>
+
+              {devSkipBankAllowed && (
+                <motion.p variants={flowChildVariants} style={{ marginTop: 24, textAlign: "center", fontSize: "12px" }}>
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (typeof window !== "undefined") sessionStorage.setItem(bankSkippedKey, "1");
+                      loadApplication(application.id);
+                    }}
+                    style={{ color: "var(--bld-text-dim)", textDecoration: "underline" }}
+                  >
+                    Skip — testing only (dev mode)
+                  </a>
+                </motion.p>
+              )}
 
               <div className={styles.bldBackRow}>
                 <button
