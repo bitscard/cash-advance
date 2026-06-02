@@ -1938,21 +1938,6 @@ const CustomerApp = () => {
             </motion.div>
           )}
 
-          {isAch && (
-            <motion.div
-              className={styles.bldNote}
-              style={{ marginTop: 32 }}
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: "spring", stiffness: 240, damping: 22 }}
-            >
-              <p className={styles.bldNoteTitle}>Straight to your bank account</p>
-              <p className={styles.bldNoteBody}>
-                We&apos;ll send your advance via ACH. You&apos;ll connect your bank in the next step — one secure connection covers income verification, payout, and repayment. After connecting, we&apos;ll ask for a quick identity check (~30 seconds).
-              </p>
-            </motion.div>
-          )}
-
           {payoutError && <p className={styles.bldError}>{payoutError}</p>}
 
           <motion.button
