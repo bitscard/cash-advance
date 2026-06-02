@@ -2708,18 +2708,38 @@ const CustomerApp = () => {
               );
             })()}
 
-            {/* Referral code card — keeps the brand-tint highlight since
-                that's its point. Wrapped in motion for the same enter
-                animation as the rest of the bld* design system. */}
-            <motion.div variants={flowChildVariants} style={{
-              background: "var(--brand-tint)", border: "2px solid var(--brand-tint2)",
-              borderRadius: "16px", padding: "2.4rem 2.8rem", marginTop: "2.4rem",
-            }}>
-              <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 0.8rem" }}>
-                Your referral code
+            {/* Referral card — simplified. One headline, one big code,
+                one copy button, one short note. The expanded marketing
+                copy and the "default-warning" footnote moved to the
+                dashboard where they have more context. */}
+            <motion.div
+              variants={flowChildVariants}
+              className={styles.bldNote}
+              style={{ marginTop: 32, padding: 24, textAlign: "center" }}
+            >
+              <p style={{
+                fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
+                textTransform: "uppercase", color: "var(--bld-accent)",
+                margin: "0 0 8px",
+              }}>
+                Share your code
               </p>
-              <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1.6rem" }}>
-                <code style={{ fontSize: "2.6rem", fontWeight: 900, color: "var(--brand)", letterSpacing: "0.06em" }}>
+              <p style={{ fontSize: 14, color: "var(--bld-text-dim)", margin: "0 0 20px", lineHeight: 1.5 }}>
+                Each friend who joins earns you an extra entry in the weekly $300 raffle.
+              </p>
+              <div style={{
+                display: "flex", alignItems: "stretch", gap: 10,
+                maxWidth: 360, margin: "0 auto",
+              }}>
+                <code style={{
+                  flex: 1, fontSize: 22, fontWeight: 800,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  letterSpacing: "0.08em", color: "var(--bld-text)",
+                  background: "var(--bld-surface)", border: "1px solid var(--bld-border)",
+                  borderRadius: 10, padding: "12px 16px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  textTransform: "uppercase",
+                }}>
                   {application.referral_code}
                 </code>
                 <button
@@ -2729,41 +2749,16 @@ const CustomerApp = () => {
                     setCodeCopied(true);
                     setTimeout(() => setCodeCopied(false), 2000);
                   }}
-                  style={{ fontSize: "1.3rem", padding: "0.6rem 1.4rem", borderRadius: "8px", border: "1.5px solid var(--brand)", background: "var(--brand)", color: "#fff", fontWeight: 600, cursor: "pointer" }}
+                  style={{
+                    fontSize: 13, fontWeight: 600,
+                    background: "var(--bld-accent)", color: "#fff",
+                    border: "none", borderRadius: 10,
+                    padding: "0 18px", cursor: "pointer",
+                    minWidth: 92,
+                  }}
                 >
-                  {codeCopied ? "Copied!" : "Copy code"}
+                  {codeCopied ? "Copied" : "Copy"}
                 </button>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-                <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
-                  <span style={{ fontSize: "2rem", flexShrink: 0 }}>🎰</span>
-                  <div>
-                    <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Earn extra raffle entries</p>
-                    <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
-                      Every friend who uses your code and gets their first advance earns you <strong>an extra entry</strong> into the weekly $300 cash raffle — on top of your automatic entry.
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
-                  <span style={{ fontSize: "2rem", flexShrink: 0 }}>📈</span>
-                  <div>
-                    <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Help them, help yourself</p>
-                    <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
-                      Your referrals let friends skip the waitlist and get early access — even if Advance isn't live in their state yet.
-                    </p>
-                  </div>
-                </div>
-                <div style={{
-                  background: "#fffbeb", border: "1.5px solid #fcd34d",
-                  borderRadius: "8px", padding: "1rem 1.2rem",
-                  display: "flex", gap: "1rem", alignItems: "flex-start",
-                }}>
-                  <span style={{ fontSize: "1.6rem", flexShrink: 0 }}>⚠️</span>
-                  <p style={{ fontSize: "1.3rem", color: "#92400e", lineHeight: 1.6, margin: 0 }}>
-                    One thing to keep in mind: if someone you refer doesn't pay back their first advance on time, it will slow down your ability to unlock higher credit limits. Only share with people you trust.
-                  </p>
-                </div>
               </div>
             </motion.div>
 
