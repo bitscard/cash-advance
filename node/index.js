@@ -1066,6 +1066,56 @@ app.post('/api/advance/applications/:id/subscription/activate', async function (
 // Checkout Session URL the client redirects to. On success/cancel Stripe
 // sends the user back to the origin with a session_id query param the
 // /subscription/sync endpoint uses to confirm the subscription is live.
+// Wire routing numbers for major US banks. Different from ACH routing
+// (which Stripe returns directly on the us_bank_account PaymentMethod).
+// Wire = Fedwire transfers, fee-based, same-business-day settlement.
+// ACH = batched, free or near-free, 1-3 day settlement.
+//
+// For instant-delivery users (who paid $5 extra for same-day funding)
+// admin wires via Brex using these numbers. For standard delivery
+// admin uses the ACH routing Stripe returns.
+//
+// Keys are normalized: lowercase, no punctuation. Match by substring
+// since Stripe's bank_name field varies ('Chase' vs 'JPMorgan Chase Bank').
+const WIRE_ROUTINGS = {
+  'chase': '021000021',
+  'jpmorgan': '021000021',
+  'bank of america': '026009593',
+  'bofa': '026009593',
+  'wells fargo': '121000248',
+  'citi': '021000089',
+  'citibank': '021000089',
+  'capital one': '056073502',
+  'us bank': '091000022',
+  'u.s. bank': '091000022',
+  'pnc': '043000096',
+  'td bank': '031101266',
+  'truist': '053101121',
+  'usaa': '314074269',
+  'navy federal': '256074974',
+  'ally': '124003116',
+  'charles schwab': '121202211',
+  'discover': '031100649',
+  'fifth third': '042000314',
+  'huntington': '044000024',
+  'citizens': '011500120',
+  'm&t bank': '022000046',
+  'keybank': '041001039',
+  'regions': '062000019',
+};
+
+function lookupWireRouting(bankName) {
+  if (!bankName) return null;
+  const key = bankName.toLowerCase().trim();
+  // Direct match
+  if (WIRE_ROUTINGS[key]) return WIRE_ROUTINGS[key];
+  // Substring match — handles 'JPMorgan Chase Bank, N.A.' → 'chase'
+  for (const [k, routing] of Object.entries(WIRE_ROUTINGS)) {
+    if (key.includes(k)) return routing;
+  }
+  return null;
+}
+
 const MEMBERSHIP_PRICE_CENTS = 399;
 const MEMBERSHIP_PRODUCT_NAME = 'Advance Membership';
 
@@ -1489,6 +1539,7 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
           return response.json({
             bank_name: pm.us_bank_account.bank_name || 'Bank Account',
             routing_number: pm.us_bank_account.routing_number || 'Not available',
+            wire_routing_number: lookupWireRouting(pm.us_bank_account.bank_name),
             last4: pm.us_bank_account.last4 || '----',
             account_type: pm.us_bank_account.account_type || 'unknown',
             account_holder_type: pm.us_bank_account.account_holder_type || 'individual',

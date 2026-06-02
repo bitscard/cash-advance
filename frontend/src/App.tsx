@@ -3095,7 +3095,7 @@ const AdminApp = () => {
   const [messageText, setMessageText] = useState("");
   const [snapshot, setSnapshot] = useState<BankSnapshot | null>(null);
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
-  const [pmDetails, setPmDetails] = useState<{ bank_name: string; routing_number: string; last4: string; account_type: string } | null>(null);
+  const [pmDetails, setPmDetails] = useState<{ bank_name: string; routing_number: string; wire_routing_number: string | null; last4: string; account_type: string } | null>(null);
   const [repaymentDate, setRepaymentDate] = useState(thirtyDaysFromNow);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -3512,12 +3512,32 @@ const AdminApp = () => {
                       <dd>
                         {selected.payout_methods === "ACH" ? (
                           <>
-                            <strong>Bank (ACH — send via Brex)</strong>
+                            <strong>
+                              {selected.delivery_type === "instant"
+                                ? "Bank (WIRE — instant via Brex)"
+                                : "Bank (ACH — send via Brex)"}
+                            </strong>
                             <div style={{ marginTop: "0.4rem", padding: "0.6rem 0.8rem", background: "var(--brand-tint)", borderRadius: "var(--r-sm)", fontSize: "1.3rem" }}>
-                              <div><span style={{ color: "var(--muted)" }}>Routing:</span> <strong>{pmDetails?.routing_number || "Loading…"}</strong></div>
-                              <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
-                              <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
-                              <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>Copy these into Brex to send the advance.</div>
+                              {selected.delivery_type === "instant" ? (
+                                // Instant delivery — wire transfer. Highlight wire routing.
+                                <>
+                                  <div><span style={{ color: "var(--muted)" }}>Wire routing:</span> <strong>{pmDetails?.wire_routing_number || (pmDetails ? "Look up manually for this bank" : "Loading…")}</strong></div>
+                                  <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
+                                  <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
+                                  <div><span style={{ color: "var(--muted)" }}>Recipient:</span> {selected.customer.name}</div>
+                                  <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>Wire <strong>$25</strong> ($5 instant fee retained). User chose same-day delivery.</div>
+                                  <div style={{ marginTop: "0.2rem", fontSize: "1.1rem", color: "var(--muted)" }}>ACH routing (for reference): {pmDetails?.routing_number || "—"}</div>
+                                </>
+                              ) : (
+                                // Standard delivery — ACH transfer.
+                                <>
+                                  <div><span style={{ color: "var(--muted)" }}>ACH routing:</span> <strong>{pmDetails?.routing_number || "Loading…"}</strong></div>
+                                  <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
+                                  <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
+                                  <div><span style={{ color: "var(--muted)" }}>Recipient:</span> {selected.customer.name}</div>
+                                  <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>ACH <strong>$25</strong>. User chose 1-2 day delivery.</div>
+                                </>
+                              )}
                             </div>
                           </>
                         ) : selected.payout_methods ? (
