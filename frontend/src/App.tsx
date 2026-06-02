@@ -185,6 +185,43 @@ const formatMoney = (amount: number | null | undefined) => {
 const today = new Date().toISOString().slice(0, 10);
 const thirtyDaysFromNow = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
 
+// US phone validation (NANP rules). Accepts anything the user typed —
+// digits, parens, dashes, spaces, country code — strips to digits and
+// checks shape. Returns { ok, normalized } where normalized is the
+// canonical 10-digit form (no country code).
+//
+// Rules per NANP:
+//   - Total 10 digits (or 11 starting with 1)
+//   - Area code (NPA): first digit 2-9, second digit 0-9, third 0-9
+//   - Exchange code (NXX): same NPA rule for its first digit
+//   - No 555 area code (reserved for fiction/test)
+//   - No N11 area codes (211, 311, 411, 511, 611, 711, 811, 911)
+const isValidUsPhone = (raw: string): { ok: boolean; normalized?: string; reason?: string } => {
+  const digits = (raw || "").replace(/\D/g, "");
+  let d = digits;
+  if (d.length === 11 && d.startsWith("1")) d = d.slice(1);
+  if (d.length !== 10) {
+    return { ok: false, reason: "US phone numbers are 10 digits (e.g. 555-123-4567)." };
+  }
+  const areaCode = d.slice(0, 3);
+  const exchange = d.slice(3, 6);
+  if (!/^[2-9][0-9]{2}$/.test(areaCode)) {
+    return { ok: false, reason: "Area code can't start with 0 or 1." };
+  }
+  if (!/^[2-9][0-9]{2}$/.test(exchange)) {
+    return { ok: false, reason: "Phone number exchange (digits 4-6) can't start with 0 or 1." };
+  }
+  // N11 area codes are reserved (211, 311, ..., 911)
+  if (/^[2-9]11$/.test(areaCode)) {
+    return { ok: false, reason: "That area code is reserved (N11 codes can't be used)." };
+  }
+  // 555 area code is reserved for fiction
+  if (areaCode === "555") {
+    return { ok: false, reason: "555 area codes are reserved for fictional use." };
+  }
+  return { ok: true, normalized: d };
+};
+
 function levenshtein(a: string, b: string): number {
   const dp = Array.from({ length: a.length + 1 }, (_, i) =>
     Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
@@ -604,6 +641,12 @@ const CustomerApp = () => {
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    // Phone: must be a valid US number per NANP rules.
+    const phoneCheck = isValidUsPhone(form.phone);
+    if (!phoneCheck.ok) {
+      setError(phoneCheck.reason || "Please enter a valid US phone number.");
+      return;
+    }
     if (!form.dob) {
       setError("Please enter your date of birth");
       return;
@@ -669,10 +712,16 @@ const CustomerApp = () => {
     setIsBusy(true);
     setError(null);
     try {
-      const { confirmPassword, income_sources: rawSources, ssn, referralCode: _rc, ...rest } = form;
+      const { confirmPassword, income_sources: rawSources, ssn, referralCode: _rc, phone: _phone, ...rest } = form;
       const normalizedGateCode = gateCode.trim().toLowerCase().replace(/\s+/g, '');
+      // Send phone in canonical E.164 form (+1 followed by 10 digits) so
+      // it stores consistently regardless of how the user typed it.
+      // handleSignupSubmit already validated, so this should always succeed.
+      const phoneNormalCheck = isValidUsPhone(form.phone);
+      const normalizedPhone = phoneNormalCheck.normalized ? `+1${phoneNormalCheck.normalized}` : form.phone;
       const body = {
         ...rest,
+        phone: normalizedPhone,
         ssn: ssn.replace(/-/g, ""),
         // pay_frequency dropped from signup — strip the lingering fields
         // off the form state before sending; backend treats null as fine.
@@ -1572,9 +1621,19 @@ const CustomerApp = () => {
                       onChange={(event) => setForm({ ...form, email: event.target.value })} />
                   </label>
                   <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Phone number</span>
-                    <input className={styles.ldSignupInput} required value={form.phone} placeholder="(555) 000-0000"
-                      onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                    <span className={styles.ldSignupFieldLabel}>Phone number <span className={styles.ldSignupHint}>(US only)</span></span>
+                    <input
+                      className={styles.ldSignupInput}
+                      required
+                      type="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      pattern="^[\(]?\d{3}[\)]?[-.\s]?\d{3}[-.\s]?\d{4}$"
+                      title="Enter a 10-digit US phone number, like 555-123-4567 or (555) 123-4567."
+                      value={form.phone}
+                      placeholder="(212) 555-0123"
+                      onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                    />
                   </label>
                   <label className={styles.ldSignupField}>
                     <span className={styles.ldSignupFieldLabel}>Date of birth</span>
