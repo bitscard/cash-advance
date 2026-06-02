@@ -2560,14 +2560,15 @@ async function tryCardCharge(row, amount, attemptLabel) {
 async function tryAchCharge(row, amount, attemptLabel) {
   if (!row.stripe_payment_method_id) return { ok: false, reason: 'no bank on file' };
   try {
+    // Note: payment_method_options.us_bank_account.preferred_settlement_speed
+    // was deprecated by Stripe. Same-Day ACH is no longer requestable via
+    // this parameter — standard 3-5 day ACH is what we get. If Stripe ships
+    // a replacement for Same-Day ACH on PaymentIntents, plug it in here.
     const pi = await stripe.paymentIntents.create({
       amount, currency: 'usd',
       customer: row.stripe_customer_id,
       payment_method: row.stripe_payment_method_id,
       payment_method_types: ['us_bank_account'],
-      payment_method_options: {
-        us_bank_account: { preferred_settlement_speed: 'fastest' },  // Same-Day ACH where eligible
-      },
       off_session: true, confirm: true,
       description: `Cash advance repayment — ${row.name} (${attemptLabel})`,
       metadata: { application_id: row.id, method: 'ach', attempt_label: attemptLabel },
