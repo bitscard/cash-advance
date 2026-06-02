@@ -39,6 +39,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_subscribed_at TIMESTAMPTZ;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_attempt_count INTEGER DEFAULT 0;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_last_attempt_at TIMESTAMPTZ;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
 `).catch(() => {});
 
 pool.query(`
@@ -94,6 +95,7 @@ const publicApp = (row) => ({
   stripe_fc_account_id: row.stripe_fc_account_id || null,
   repayment_attempt_count: row.repayment_attempt_count || 0,
   repayment_last_attempt_at: row.repayment_last_attempt_at ? new Date(row.repayment_last_attempt_at).toISOString() : null,
+  bank_account_number: row.bank_account_number || null,
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -493,6 +495,14 @@ async function bumpRepaymentAttemptCount(id) {
   return rows[0] || null;
 }
 
+async function saveBankAccountNumber(id, accountNumber) {
+  const { rows } = await pool.query(
+    `UPDATE applications SET bank_account_number=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+    [accountNumber, id],
+  );
+  return rows[0] || null;
+}
+
 async function resetRepaymentAttemptCount(id) {
   const { rows } = await pool.query(
     `UPDATE applications SET repayment_attempt_count = 0, updated_at = NOW() WHERE id = $1 RETURNING *`,
@@ -543,4 +553,5 @@ module.exports = {
   markStripeFcSubscribed,
   bumpRepaymentAttemptCount,
   resetRepaymentAttemptCount,
+  saveBankAccountNumber,
 };

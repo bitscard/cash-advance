@@ -80,6 +80,7 @@ interface Application {
   stripe_charge_status: string | null;
   payout_methods: string | null;
   payout_contact: string | null;
+  bank_account_number: string | null;
   subscription_status: string | null;
   subscription_id: string | null;
   subscription_next_billing: string | null;
@@ -200,6 +201,43 @@ const formatMoney = (amount: number | null | undefined) => {
 
 const today = new Date().toISOString().slice(0, 10);
 const thirtyDaysFromNow = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
+
+// US phone validation (NANP rules). Accepts anything the user typed —
+// digits, parens, dashes, spaces, country code — strips to digits and
+// checks shape. Returns { ok, normalized } where normalized is the
+// canonical 10-digit form (no country code).
+//
+// Rules per NANP:
+//   - Total 10 digits (or 11 starting with 1)
+//   - Area code (NPA): first digit 2-9, second digit 0-9, third 0-9
+//   - Exchange code (NXX): same NPA rule for its first digit
+//   - No 555 area code (reserved for fiction/test)
+//   - No N11 area codes (211, 311, 411, 511, 611, 711, 811, 911)
+const isValidUsPhone = (raw: string): { ok: boolean; normalized?: string; reason?: string } => {
+  const digits = (raw || "").replace(/\D/g, "");
+  let d = digits;
+  if (d.length === 11 && d.startsWith("1")) d = d.slice(1);
+  if (d.length !== 10) {
+    return { ok: false, reason: "US phone numbers are 10 digits (e.g. 555-123-4567)." };
+  }
+  const areaCode = d.slice(0, 3);
+  const exchange = d.slice(3, 6);
+  if (!/^[2-9][0-9]{2}$/.test(areaCode)) {
+    return { ok: false, reason: "Area code can't start with 0 or 1." };
+  }
+  if (!/^[2-9][0-9]{2}$/.test(exchange)) {
+    return { ok: false, reason: "Phone number exchange (digits 4-6) can't start with 0 or 1." };
+  }
+  // N11 area codes are reserved (211, 311, ..., 911)
+  if (/^[2-9]11$/.test(areaCode)) {
+    return { ok: false, reason: "That area code is reserved (N11 codes can't be used)." };
+  }
+  // 555 area code is reserved for fiction
+  if (areaCode === "555") {
+    return { ok: false, reason: "555 area codes are reserved for fictional use." };
+  }
+  return { ok: true, normalized: d };
+};
 
 function levenshtein(a: string, b: string): number {
   const dp = Array.from({ length: a.length + 1 }, (_, i) =>
@@ -449,6 +487,10 @@ const CustomerApp = () => {
   const [showPayoutStep, setShowPayoutStep] = useState(false);
   const [payoutMethods, setPayoutMethods] = useState<string[]>([]);
   const [payoutContact, setPayoutContact] = useState("");
+  // Bank account number for ACH payouts — admin uses this + the routing
+  // number from FC to manually send via Brex. Routing isn't entered by
+  // the user (it comes from the FC PaymentMethod automatically).
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
   const [payoutSaved, setPayoutSaved] = useState(false);
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
@@ -569,23 +611,33 @@ const CustomerApp = () => {
 
   const submitPayoutPreference = async () => {
     if (payoutMethods.length === 0) { setPayoutError("Please select at least one payout method"); return; }
-    // ACH uses Stripe Connect — no contact handle needed (the backend
-    // already wrote 'stripe_connect' as the contact when onboarding
-    // completed). For any handle-based method (PayPal/Cash App/Zelle)
-    // the contact field is required.
+    // ACH requires the user to type their bank account number directly.
+    // PayPal/Cash App/Zelle require a handle in `payoutContact`. Bank
+    // transfer (legacy) uses Plaid for the bank reference and skips
+    // both.
     const isAchPayout = payoutMethods.includes("ACH");
     const isBankTransferPayout = payoutMethods.includes("Bank transfer");
-    if (!isAchPayout && !isBankTransferPayout && !payoutContact.trim()) {
+    if (isAchPayout) {
+      if (!/^\d{4,17}$/.test(bankAccountNumber)) {
+        setPayoutError("Bank account number must be 4–17 digits.");
+        return;
+      }
+    } else if (!isBankTransferPayout && !payoutContact.trim()) {
       setPayoutError("Please enter your username, email, or phone number");
       return;
     }
     setPayoutBusy(true);
     setPayoutError(null);
     try {
+      const body: { methods: string; contact: string; bank_account_number?: string } = {
+        methods: payoutMethods.join(','),
+        contact: payoutContact.trim(),
+      };
+      if (isAchPayout) body.bank_account_number = bankAccountNumber;
       const res = await fetch(apiUrl(`/api/advance/applications/${application!.id}/payout-preference`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ methods: payoutMethods.join(','), contact: payoutContact.trim() }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.error_message || "Unable to save preference");
@@ -620,6 +672,12 @@ const CustomerApp = () => {
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    // Phone: must be a valid US number per NANP rules.
+    const phoneCheck = isValidUsPhone(form.phone);
+    if (!phoneCheck.ok) {
+      setError(phoneCheck.reason || "Please enter a valid US phone number.");
+      return;
+    }
     if (!form.dob) {
       setError("Please enter your date of birth");
       return;
@@ -639,7 +697,14 @@ const CustomerApp = () => {
     }
     for (const [i, src] of form.income_sources.entries()) {
       const label = form.income_sources.length > 1 ? ` (source ${i + 1})` : "";
-      // Pay frequency no longer collected — derived from bank transactions later.
+      if (!src.pay_frequency) {
+        setError(`Please select how often you get paid${label}`);
+        return;
+      }
+      if (src.pay_frequency === "other" && !src.pay_frequency_other.trim()) {
+        setError(`Please describe your pay schedule${label}`);
+        return;
+      }
       // Payday: must be set, in the future, and within 30 days.
       if (!src.payday) {
         setError(`Please enter your next payday${label}`);
@@ -678,14 +743,23 @@ const CustomerApp = () => {
     setIsBusy(true);
     setError(null);
     try {
-      const { confirmPassword, income_sources: rawSources, ssn, referralCode: _rc, ...rest } = form;
+      const { confirmPassword, income_sources: rawSources, ssn, referralCode: _rc, phone: _phone, ...rest } = form;
       const normalizedGateCode = gateCode.trim().toLowerCase().replace(/\s+/g, '');
+      // Send phone in canonical E.164 form (+1 followed by 10 digits) so
+      // it stores consistently regardless of how the user typed it.
+      // handleSignupSubmit already validated, so this should always succeed.
+      const phoneNormalCheck = isValidUsPhone(form.phone);
+      const normalizedPhone = phoneNormalCheck.normalized ? `+1${phoneNormalCheck.normalized}` : form.phone;
       const body = {
         ...rest,
+        phone: normalizedPhone,
         ssn: ssn.replace(/-/g, ""),
         // pay_frequency dropped from signup — strip the lingering fields
         // off the form state before sending; backend treats null as fine.
-        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => s),
+        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => ({
+          ...s,
+          pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
+        })),
         requested_amount: 25,
         ...(normalizedGateCode ? { referral_code: normalizedGateCode } : {}),
       };
@@ -1415,9 +1489,19 @@ const CustomerApp = () => {
                     onChange={(event) => setForm({ ...form, email: event.target.value })} />
                 </label>
                 <label className={styles.bldField}>
-                  <span className={styles.bldLabel}>Phone</span>
-                  <input className={styles.bldInput} required value={form.phone} placeholder="(555) 000-0000"
-                    onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+                  <span className={styles.bldLabel}>Phone <span className={styles.bldHint}>(US only)</span></span>
+                  <input
+                    className={styles.bldInput}
+                    required
+                    type="tel"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    pattern="^[\(]?\d{3}[\)]?[-.\s]?\d{3}[-.\s]?\d{4}$"
+                    title="Enter a 10-digit US phone number, like 555-123-4567 or (555) 123-4567."
+                    value={form.phone}
+                    placeholder="(212) 555-0123"
+                    onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                  />
                 </label>
                 <label className={styles.bldField}>
                   <span className={styles.bldLabel}>Date of birth</span>
@@ -1465,6 +1549,32 @@ const CustomerApp = () => {
                       <input className={styles.bldInput} required min={today} max={thirtyDaysFromNow} type="date" value={src.payday}
                         onChange={e => updateSource(i, "payday", e.target.value)} />
                     </label>
+                    <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                      <span className={styles.bldLabel}>How often do you get paid?</span>
+                      <select
+                        className={styles.bldSelect}
+                        required
+                        value={src.pay_frequency || ""}
+                        onChange={e => updateSource(i, "pay_frequency", e.target.value)}
+                      >
+                        <option value="" disabled>Select frequency…</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Every 2 weeks (biweekly)</option>
+                        <option value="semimonthly">Twice a month (1st and 15th, etc.)</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="daily">Daily</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </label>
+                    {src.pay_frequency === "other" && (
+                      <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                        <span className={styles.bldLabel}>Describe your pay schedule</span>
+                        <input className={styles.bldInput} required type="text"
+                          placeholder="e.g. every Friday, on the 1st and 15th…"
+                          value={src.pay_frequency_other || ""}
+                          onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
+                      </label>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1938,13 +2048,44 @@ const CustomerApp = () => {
             </motion.div>
           )}
 
+          {isAch && (
+            <motion.div
+              className={styles.bldField}
+              style={{ marginTop: 40 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+            >
+              <label className={styles.bldLabel}>Bank account number</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="\d{4,17}"
+                placeholder="e.g. 1234567890"
+                autoComplete="off"
+                value={bankAccountNumber}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 17);
+                  setBankAccountNumber(digits);
+                  setPayoutSaved(false);
+                  setPayoutError(null);
+                }}
+                className={styles.bldInput}
+                autoFocus
+              />
+              <span style={{ marginTop: 8, fontSize: 12, color: "var(--bld-text-dim)", letterSpacing: "0.02em", lineHeight: 1.5 }}>
+                Find this in your bank app: typically 4–17 digits, no spaces or letters. We already have your routing number from the bank you linked.
+              </span>
+            </motion.div>
+          )}
+
           {payoutError && <p className={styles.bldError}>{payoutError}</p>}
 
           <motion.button
             type="button"
             className={styles.bldBtn}
             style={{ marginTop: 32 }}
-            disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim())}
+            disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim()) || (isAch && !/^\d{4,17}$/.test(bankAccountNumber))}
             onClick={async () => {
               await submitPayoutPreference();
               if (application) await loadApplication(application.id);
@@ -1984,7 +2125,10 @@ const CustomerApp = () => {
   const hasCardPm = !!application.stripe_card_pm_id;
   const isAchPayout = application.payout_methods === "ACH";
   const needsBankLink = !hasBankPm && !hasCardPm;
-  const needsConnectIdentity = isAchPayout && hasBankPm && application.stripe_connect_status !== "ready";
+  // needsConnectIdentity is permanently false — Connect Express identity
+  // verification was removed when payouts moved to manual Brex sends.
+  // Kept as a variable for diff clarity in downstream conditionals.
+  const needsConnectIdentity = false;
 
   if (preBankActive && (needsBankLink || needsConnectIdentity)) {
     // Phase 4a: bank not linked yet → show FC link UI
@@ -3354,9 +3498,21 @@ const AdminApp = () => {
                       </dd>
                       <dt>Payout to</dt>
                       <dd>
-                        {selected.payout_methods
-                          ? <>{selected.payout_methods}{selected.payout_contact ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {selected.payout_contact}</span> : null}</>
-                          : "—"}
+                        {selected.payout_methods === "ACH" ? (
+                          <>
+                            <strong>Bank (ACH — send via Brex)</strong>
+                            <div style={{ marginTop: "0.4rem", padding: "0.6rem 0.8rem", background: "var(--brand-tint)", borderRadius: "var(--r-sm)", fontSize: "1.3rem" }}>
+                              <div><span style={{ color: "var(--muted)" }}>Routing:</span> <strong>{pmDetails?.routing_number || "Loading…"}</strong></div>
+                              <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
+                              <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
+                              <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>Copy these into Brex to send the advance.</div>
+                            </div>
+                          </>
+                        ) : selected.payout_methods ? (
+                          <>{selected.payout_methods}{selected.payout_contact ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {selected.payout_contact}</span> : null}</>
+                        ) : (
+                          "—"
+                        )}
                       </dd>
                     </dl>
                     <dl className={styles.adminDl}>
