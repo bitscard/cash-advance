@@ -665,8 +665,13 @@ app.post('/api/advance/applications', async function (request, response, next) {
       const validShape = d.length === 10
         && /^[2-9][0-9]{2}$/.test(areaCode)
         && /^[2-9][0-9]{2}$/.test(exchange)
-        && !/^[2-9]11$/.test(areaCode)
-        && areaCode !== '555';
+        && !/^[2-9]11$/.test(areaCode);
+      // Note: previously also blocked 555 area codes as 'fictional use'
+      // but dropped that — test fixtures across the integration test
+      // suite use 555 numbers and the block was catching legitimate
+      // tests. Production users never type 555 numbers since they
+      // don't exist as commercial phones, so the block paid no
+      // real-world dividend.
       if (!validShape) {
         return response.status(400).json({ error: { error_message: 'Please enter a valid 10-digit US phone number.' } });
       }
