@@ -4934,18 +4934,37 @@ dd {
    Shared shell + per-screen component classes.
 ═══════════════════════════════════════════════════════════════════════ */
 
-/* Page wrapper — same warm cream → white as Benefits/signup */
+/* Page wrapper — warm cream → white with a soft emerald ambient glow.
+   The glow is a pseudo-element so every flow screen gets it for free. */
 .ldFlow {
+  position: relative;
   background: linear-gradient(180deg, var(--ld-bg-warm) 0%, var(--ld-bg) 360px);
   min-height: calc(100vh - 72px);
   padding: 48px 24px 96px;
+  overflow: hidden;
 }
+.ldFlow::before {
+  content: "";
+  position: absolute;
+  top: -260px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 760px;
+  height: 760px;
+  background: radial-gradient(circle, rgba(13, 82, 52, 0.10) 0%, rgba(13, 82, 52, 0.03) 35%, transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+.ldFlow > * { position: relative; z-index: 1; }
 .ldFlowInner {
   width: 100%;
   max-width: 600px;
   margin: 0 auto;
 }
 .ldFlowInner[data-wide="true"] { max-width: 720px; }
+/* Keep the explicit ambient div working too if any screen uses it */
+.ldFlowAmbient { display: none; }
 
 /* Slim progress bar at the top — same gradient fill as signup */
 .ldFlowProgress { margin-bottom: 28px; }
@@ -5540,4 +5559,672 @@ dd {
   .ldFlowLadderAmount { font-size: 17px; }
   .ldFlowFeesCard { padding: 16px 16px; }
   .ldFlowFeesList li { font-size: 13.5px; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   BOLD MONO design system — Cash App–inspired.
+   Pure black surface, electric-green single accent, chunky display type,
+   tiles instead of cards, no gradients, generous whitespace.
+   Use the .bld* namespace for everything in this language.
+═════════════════════════════════════════════════════════════════════════ */
+
+.bldPage {
+  --bld-bg: #0a0a0a;
+  --bld-surface: #141414;
+  --bld-surface-2: #1a1a1a;
+  --bld-border: #262626;
+  --bld-border-strong: #3a3a3a;
+  --bld-text: #ffffff;
+  --bld-text-muted: #a0a0a0;
+  --bld-text-dim: #6e6e6e;
+  --bld-accent: #00d632;
+  --bld-accent-hover: #00f039;
+  --bld-accent-dim: rgba(0, 214, 50, 0.12);
+  --bld-accent-soft: rgba(0, 214, 50, 0.06);
+  --bld-danger: #ff4d5e;
+  --bld-amber: #fbbf24;
+
+  min-height: 100vh;
+  background: var(--bld-bg);
+  color: var(--bld-text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.bldPage *::selection {
+  background: var(--bld-accent);
+  color: var(--bld-bg);
+}
+
+/* Nav */
+.bldNav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10, 10, 10, 0.85);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid var(--bld-border);
+}
+.bldNavInner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.bldBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--bld-text);
+  text-decoration: none;
+}
+.bldBrandMark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--bld-accent);
+  color: var(--bld-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+.bldBrandDot { color: var(--bld-accent); }
+.bldPage .bldNavLink {
+  background: none;
+  border: 1px solid var(--bld-border);
+  color: var(--bld-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+}
+.bldPage .bldNavLink:hover {
+  color: var(--bld-text);
+  border-color: var(--bld-border-strong);
+  background: var(--bld-surface);
+}
+
+/* Main page wrapper */
+.bldMain {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 40px 24px 96px;
+}
+.bldMain[data-wide="true"] { max-width: 680px; }
+
+/* Progress dots — 4 dots, current is accent-green, past dots are dimmer */
+.bldProgress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 48px;
+}
+.bldProgressLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bld-text-muted);
+  margin-right: 8px;
+}
+.bldProgressDot {
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bld-border);
+  transition: background 0.3s ease, width 0.3s ease;
+}
+.bldProgressDot[data-state="done"] { background: var(--bld-accent); }
+.bldProgressDot[data-state="current"] {
+  background: var(--bld-accent);
+  width: 32px;
+  box-shadow: 0 0 16px rgba(0, 214, 50, 0.40);
+}
+
+/* Typography */
+.bldEyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bld-accent);
+  margin-bottom: 16px;
+}
+.bldH1 {
+  font-size: clamp(40px, 7vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.040em;
+  line-height: 0.96;
+  margin: 0 0 16px;
+  color: var(--bld-text);
+}
+.bldH1 em {
+  font-style: normal;
+  color: var(--bld-accent);
+}
+.bldLead {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--bld-text-muted);
+  margin: 0 0 40px;
+  max-width: 480px;
+}
+
+/* Tile list — the signature component. Big bold rows with subtle hover. */
+.bldTiles {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--bld-border);
+}
+.bldPage .bldTile {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 4px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--bld-border);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  color: var(--bld-text);
+  transition: padding-left 0.18s ease, background 0.18s ease;
+}
+.bldPage .bldTile:hover {
+  padding-left: 12px;
+  background: linear-gradient(90deg, var(--bld-accent-soft), transparent);
+}
+.bldPage .bldTile[data-selected="true"] {
+  padding-left: 16px;
+  background: linear-gradient(90deg, var(--bld-accent-dim), transparent);
+}
+.bldTileLogo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 900;
+  font-size: 18px;
+  color: #fff;
+}
+.bldTileName {
+  flex: 1;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--bld-text);
+}
+.bldTileArrow {
+  color: var(--bld-text-dim);
+  font-size: 22px;
+  font-weight: 400;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+.bldPage .bldTile:hover .bldTileArrow,
+.bldPage .bldTile[data-selected="true"] .bldTileArrow {
+  color: var(--bld-accent);
+  transform: translateX(4px);
+}
+
+/* Input field — minimal, black bg, accent focus */
+.bldField {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.bldLabel {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--bld-text-muted);
+}
+.bldHint {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--bld-text-dim);
+  font-size: 11.5px;
+}
+.bldPage .bldInput,
+.bldPage .bldSelect {
+  width: 100%;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--bld-text);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid var(--bld-border);
+  border-radius: 0;
+  padding: 14px 0;
+  outline: none;
+  transition: border-color 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  caret-color: var(--bld-accent);
+}
+.bldPage .bldInput::placeholder { color: var(--bld-text-dim); font-weight: 500; }
+.bldPage .bldInput:hover,
+.bldPage .bldSelect:hover { border-bottom-color: var(--bld-border-strong); }
+.bldPage .bldInput:focus,
+.bldPage .bldSelect:focus { border-bottom-color: var(--bld-accent); }
+.bldPage .bldInput:-webkit-autofill,
+.bldPage .bldInput:-webkit-autofill:hover,
+.bldPage .bldInput:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--bld-text);
+  -webkit-box-shadow: 0 0 0 30px var(--bld-bg) inset;
+  caret-color: var(--bld-text);
+  transition: background-color 5000s ease-in-out 0s;
+}
+.bldPage .bldSelect {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%23a0a0a0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  padding-right: 28px;
+}
+.bldPage .bldSelect option {
+  background: var(--bld-surface);
+  color: var(--bld-text);
+}
+
+/* Inline note / info block — accent left rule, dark bg */
+.bldNote {
+  background: var(--bld-surface);
+  border-left: 3px solid var(--bld-accent);
+  padding: 16px 18px;
+  margin-bottom: 24px;
+}
+.bldNoteTitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bld-text);
+}
+.bldNoteBody {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--bld-text-muted);
+}
+
+/* Error message */
+.bldError {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--bld-danger);
+  background: rgba(255, 77, 94, 0.10);
+  border-left: 3px solid var(--bld-danger);
+  line-height: 1.5;
+}
+
+/* Primary CTA — solid accent, black text, full width, chunky */
+.bldPage .bldBtn {
+  width: 100%;
+  background: var(--bld-accent);
+  color: var(--bld-bg);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  border: 0;
+  border-radius: 999px;
+  padding: 20px 28px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background 0.15s ease, transform 0.05s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.bldPage .bldBtn:hover:not(:disabled) {
+  background: var(--bld-accent-hover);
+}
+.bldPage .bldBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.bldPage .bldBtn:disabled {
+  background: var(--bld-surface);
+  color: var(--bld-text-dim);
+  cursor: not-allowed;
+}
+
+/* Secondary text button (back link, alt action) */
+.bldPage .bldTextBtn {
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--bld-text-muted);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.bldPage .bldTextBtn:hover { color: var(--bld-text); }
+
+.bldBackRow {
+  text-align: center;
+  margin-top: 24px;
+}
+
+/* Section heading inside a form (signup steps) */
+.bldSectionLabel {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bld-text-muted);
+  margin: 40px 0 20px;
+}
+.bldSectionLabel:first-child { margin-top: 0; }
+
+/* Fields grid (2-col on desktop, 1-col on mobile) */
+.bldFieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+.bldFieldGrid .bldField { grid-column: auto; }
+.bldFieldFull { grid-column: 1 / -1 !important; }
+
+/* Income source repeater */
+.bldIncomeBlock {
+  padding-top: 4px;
+}
+.bldIncomeBlock + .bldIncomeBlock {
+  padding-top: 24px;
+  margin-top: 24px;
+  border-top: 1px solid var(--bld-border);
+}
+.bldIncomeHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.bldIncomeHead strong {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bld-text);
+}
+.bldPage .bldIncomeRemove {
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bld-text-dim);
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.15s ease;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bldPage .bldIncomeRemove:hover { color: var(--bld-danger); }
+.bldPage .bldAddSource {
+  background: none;
+  border: 1px dashed var(--bld-border-strong);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bld-accent);
+  padding: 12px 20px;
+  margin-top: 20px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.bldPage .bldAddSource:hover {
+  background: var(--bld-accent-soft);
+  border-color: var(--bld-accent);
+  border-style: solid;
+}
+
+/* Terms paragraph (signup) */
+.bldTerms {
+  margin: 32px 0 24px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--bld-text-dim);
+}
+.bldTermsLink {
+  color: var(--bld-text-muted);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bldTermsLink:hover { color: var(--bld-text); }
+
+/* Trust row (sign-in / gate page bottom) */
+.bldTrust {
+  list-style: none;
+  padding: 0;
+  margin: 56px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 28px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--bld-text-muted);
+  text-transform: uppercase;
+}
+.bldTrust li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bldTrust svg { color: var(--bld-accent); flex-shrink: 0; }
+
+/* Hero amount (approval screen) */
+.bldHeroAmount {
+  font-size: clamp(72px, 14vw, 132px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+  color: var(--bld-accent);
+  font-variant-numeric: tabular-nums;
+  margin: 0 0 12px;
+}
+
+/* Cost summary (delivery step) */
+.bldCost {
+  background: var(--bld-surface);
+  padding: 18px 20px;
+  margin-bottom: 24px;
+}
+.bldCostKicker {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--bld-text-muted);
+}
+.bldCostRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--bld-text-muted);
+  font-variant-numeric: tabular-nums;
+  padding: 6px 0;
+}
+.bldCostTotal {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bld-border);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--bld-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fees table (Step 2 - Connect bank) */
+.bldFees {
+  border-top: 1px solid var(--bld-border);
+  border-bottom: 1px solid var(--bld-border);
+  margin: 24px 0;
+}
+.bldFeesRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 16px 0;
+  font-size: 15px;
+  color: var(--bld-text);
+  border-bottom: 1px solid var(--bld-border);
+}
+.bldFeesRow:last-child { border-bottom: 0; }
+.bldFeesRow strong {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--bld-accent);
+}
+.bldFeesRow .bldHint {
+  color: var(--bld-text-dim);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+/* Delivery option (Step 3) — bigger tiles, 2-col */
+.bldDeliveryGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.bldPage .bldDelivery {
+  position: relative;
+  background: var(--bld-surface);
+  border: 2px solid var(--bld-border);
+  border-radius: 16px;
+  padding: 24px 20px 20px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--bld-text);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.05s ease;
+}
+.bldPage .bldDelivery:hover {
+  border-color: var(--bld-border-strong);
+}
+.bldPage .bldDelivery[data-selected="true"] {
+  border-color: var(--bld-accent);
+  background: var(--bld-accent-dim);
+}
+.bldPage .bldDelivery:active { transform: scale(0.98); }
+.bldDeliveryBadge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bld-bg);
+  color: var(--bld-text-muted);
+}
+.bldDeliveryBadge[data-tone="fee"] { color: var(--bld-amber); }
+.bldDeliveryBadge[data-tone="free"] { color: var(--bld-accent); }
+.bldDeliveryEmoji { font-size: 28px; margin: 0 0 12px; line-height: 1; }
+.bldDeliveryTitle {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+.bldDeliverySub {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--bld-text-muted);
+}
+
+/* Status banner (offer expires) */
+.bldBanner {
+  background: rgba(251, 191, 36, 0.10);
+  border-left: 3px solid var(--bld-amber);
+  padding: 14px 18px;
+  margin-bottom: 28px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--bld-text);
+}
+.bldBanner strong { color: var(--bld-amber); }
+
+/* Footnote / contact line */
+.bldFootnote {
+  margin: 32px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--bld-text-muted);
+}
+.bldFootLink {
+  color: var(--bld-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+.bldFootLink:hover { text-decoration: underline; }
+
+/* Mobile */
+@media (max-width: 720px) {
+  .bldNavInner { padding: 14px 20px; }
+  .bldMain { padding: 28px 20px 120px; }
+  .bldProgress { margin-bottom: 36px; }
+  .bldH1 { font-size: clamp(34px, 9vw, 48px); }
+  .bldLead { font-size: 15px; margin-bottom: 32px; }
+  .bldTileName { font-size: 17px; }
+  .bldTileLogo { width: 40px; height: 40px; }
+  .bldFieldGrid { grid-template-columns: 1fr; }
+  .bldDeliveryGrid { grid-template-columns: 1fr; }
+  .bldHeroAmount { font-size: clamp(64px, 18vw, 92px); }
+  /* Sticky CTA on mobile signup */
+  .bldPage .bldBtnSticky {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    border-radius: 0;
+    padding: 20px 28px calc(20px + env(safe-area-inset-bottom));
+    z-index: 40;
+  }
 }

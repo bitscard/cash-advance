@@ -1,9 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { motion } from "framer-motion";
 
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
+
+// Shared motion variants for pre-bank flow screens. Page fades + slides up,
+// children stagger in. Spring physics on the page give a polished feel.
+const flowPageVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring" as const, stiffness: 120, damping: 22, when: "beforeChildren", staggerChildren: 0.06 },
+  },
+};
+const flowChildVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 180, damping: 24 } },
+};
 import TermsPage from "./TermsPage";
 import PrivacyPage from "./PrivacyPage";
 import StoryPage from "./StoryPage";
@@ -427,7 +443,6 @@ const CustomerApp = () => {
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [trustScreenSeen, setTrustScreenSeen] = useState(false);
-  const [benefitsSeen, setBenefitsSeen] = useState(false);
   const [reapplyBusy, setReapplyBusy] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -1737,7 +1752,7 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
+          <motion.div className={styles.ldFlowInner} data-wide="true" variants={flowPageVariants} initial="hidden" animate="visible">
             <div className={styles.ldFlowHeader}>
               <span className={styles.ldEyebrow}>
                 <span className={styles.ldEyebrowDot} aria-hidden="true" />
@@ -1778,7 +1793,7 @@ const CustomerApp = () => {
             <p className={styles.ldFlowContact}>
               Questions? Reach us at <a href="mailto:usa@getbits.app" className={styles.ldFlowContactLink}>usa@getbits.app</a>
             </p>
-          </div>
+          </motion.div>
         </main>
       </div>
     );
@@ -1804,7 +1819,7 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
+          <motion.div className={styles.ldFlowInner} data-wide="true" variants={flowPageVariants} initial="hidden" animate="visible">
             <div className={styles.ldFlowHeader}>
               <span className={styles.ldEyebrow}>
                 <span className={styles.ldEyebrowDot} aria-hidden="true" />
@@ -1853,7 +1868,7 @@ const CustomerApp = () => {
             <p className={styles.ldFlowContact}>
               Questions? Email <a href="mailto:usa@getbits.app" className={styles.ldFlowContactLink}>usa@getbits.app</a>
             </p>
-          </div>
+          </motion.div>
         </main>
       </div>
     );
@@ -1891,7 +1906,7 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
+          <motion.div className={styles.ldFlowInner} data-wide="true" variants={flowPageVariants} initial="hidden" animate="visible">
             <div className={styles.ldFlowHeader}>
               <span className={styles.ldEyebrow}>
                 <span className={styles.ldEyebrowDot} aria-hidden="true" />
@@ -1964,7 +1979,7 @@ const CustomerApp = () => {
             >
               Choose how to receive my $25 <span aria-hidden="true">→</span>
             </button>
-          </div>
+          </motion.div>
         </main>
       </div>
     );
@@ -1989,108 +2004,9 @@ const CustomerApp = () => {
     (application.subscription_status === "active" || application.subscription_status === "pending_payment") &&
     !application.plaid_connected;
 
-  // Welcome / Benefits pitch — first screen after signup. This is informational
-  // (no form, no action), so it gets no step counter — those live on action
-  // screens (Receive money, Connect bank, Delivery, Plaid).
-  if (preBankActive && !benefitsSeen) {
-    const benefits = [
-      {
-        title: "No credit check, ever",
-        sub: "We never pull your credit. Your score is safe with us — good or bad.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-            <path d="M5.5 5.5l13 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        ),
-      },
-      {
-        title: "0% interest",
-        sub: "Pay back exactly what you got. No interest, no late fees, no rollover.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M4 20L20 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="2" />
-            <circle cx="17" cy="17" r="2.5" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        ),
-      },
-      {
-        title: "No collections",
-        sub: "If repayment fails, we write it off. No collections, no lawsuits, no debt buyers.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 3l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V7l8-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-            <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        ),
-      },
-      {
-        title: "Weekly $300 raffle",
-        sub: "Every active borrower is entered automatically. Refer a friend, earn extra entries.",
-        icon: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2l2.5 5.5L20 8.5l-4 4 1 5.5L12 15.5 7 18l1-5.5-4-4 5.5-1L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-          </svg>
-        ),
-      },
-    ];
-    return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
-            </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
-          </div>
-        </header>
+  // Benefits + Trust pitch screens removed per client — users go straight to action.
 
-        <main className={styles.ldBenefits}>
-          <div className={styles.ldBenefitsInner}>
-            <div className={styles.ldBenefitsHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                Welcome to advance
-              </span>
-              <h1 className={styles.ldBenefitsH1}>
-                Here&apos;s what makes <span className={styles.ldBenefitsH1Accent}>advance</span> different.
-              </h1>
-              <p className={styles.ldBenefitsLead}>
-                No credit check. No interest. No collections. Pay back on payday — that&apos;s it.
-              </p>
-            </div>
-
-            <div className={styles.ldBenefitsGrid}>
-              {benefits.map(({ title, sub, icon }) => (
-                <div key={title} className={styles.ldBenefitsCard}>
-                  <span className={styles.ldBenefitsCardIcon} aria-hidden="true">{icon}</span>
-                  <p className={styles.ldBenefitsCardTitle}>{title}</p>
-                  <p className={styles.ldBenefitsCardSub}>{sub}</p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className={styles.ldBenefitsBtn}
-              onClick={() => setBenefitsSeen(true)}
-            >
-              Let&apos;s get started <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Step 2 of 6: receive money — single-select PayPal/Cash App/Zelle with logos + confirmation
+  // Step 1 of 4: receive money — single-select PayPal/Cash App/Zelle/ACH
   const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
   if (preBankActive && (!payoutAlreadySaved || wantsToChangePayout)) {
     const methods: { id: string; name: string; logo: React.ReactNode; placeholder: string; label: string }[] = [
@@ -2175,18 +2091,29 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
-            <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
+          <div className={styles.ldFlowAmbient} aria-hidden="true" />
+          <motion.div
+            className={styles.ldFlowInner}
+            variants={flowPageVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.div className={styles.ldFlowProgress} variants={flowChildVariants} aria-label="Onboarding progress">
               <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 2 of 6</span>
+                <span className={styles.ldFlowProgressStep}>Step 1 of 4</span>
                 <span className={styles.ldFlowProgressNext}>Receive money</span>
               </div>
               <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(2 / 6) * 100}%` }} />
+                <motion.div
+                  className={styles.ldFlowProgressFill}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(1 / 4) * 100}%` }}
+                  transition={{ delay: 0.2, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                />
               </div>
-            </div>
+            </motion.div>
 
-            <div className={styles.ldFlowHeader}>
+            <motion.div className={styles.ldFlowHeader} variants={flowChildVariants}>
               <span className={styles.ldEyebrow}>
                 <span className={styles.ldEyebrowDot} aria-hidden="true" />
                 Receive money
@@ -2195,13 +2122,13 @@ const CustomerApp = () => {
               <p className={styles.ldFlowLead}>
                 Pick one — we&apos;ll send your advance here once you&apos;re approved.
               </p>
-            </div>
+            </motion.div>
 
-            <div className={styles.ldFlowMethods}>
-              {methods.map(m => {
+            <motion.div className={styles.ldFlowMethods} variants={flowChildVariants}>
+              {methods.map((m, i) => {
                 const selected = selectedId === m.id;
                 return (
-                  <button
+                  <motion.button
                     key={m.id}
                     type="button"
                     onClick={() => {
@@ -2211,17 +2138,36 @@ const CustomerApp = () => {
                     }}
                     className={styles.ldFlowMethod}
                     data-selected={selected}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 + i * 0.05, type: "spring", stiffness: 200, damping: 22 }}
+                    whileTap={{ scale: 0.98 }}
                   >
                     {m.logo}
                     <span className={styles.ldFlowMethodName}>{m.name}</span>
-                    {selected && <span className={styles.ldFlowMethodCheck} aria-hidden="true">✓</span>}
-                  </button>
+                    {selected && (
+                      <motion.span
+                        className={styles.ldFlowMethodCheck}
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                        aria-hidden="true"
+                      >
+                        ✓
+                      </motion.span>
+                    )}
+                  </motion.button>
                 );
               })}
-            </div>
+            </motion.div>
 
             {selectedMethod && !isAch && (
-              <label className={styles.ldFlowField}>
+              <motion.label
+                className={styles.ldFlowField}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 220, damping: 22 }}
+              >
                 <span className={styles.ldFlowFieldLabel}>{selectedMethod.label}</span>
                 <input
                   type="text"
@@ -2229,21 +2175,32 @@ const CustomerApp = () => {
                   value={payoutContact}
                   onChange={(e) => { setPayoutContact(e.target.value); setPayoutSaved(false); setPayoutError(null); }}
                   className={styles.ldFlowInput}
+                  autoFocus
                 />
-              </label>
+              </motion.label>
             )}
 
             {selectedMethod && !isAch && payoutContact.trim() && (
-              <div className={styles.ldFlowConfirmCard}>
+              <motion.div
+                className={styles.ldFlowConfirmCard}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 240, damping: 22 }}
+              >
                 <p className={styles.ldFlowConfirmKicker}>Please confirm</p>
                 <p className={styles.ldFlowConfirmBody}>
                   We&apos;ll send your advance to <strong>{selectedMethod.name}</strong> at <strong>{payoutContact.trim()}</strong>. Make sure this is correct — we can&apos;t recover funds sent to the wrong address.
                 </p>
-              </div>
+              </motion.div>
             )}
 
             {isAch && (
-              <div className={styles.ldFlowInfoCard}>
+              <motion.div
+                className={styles.ldFlowInfoCard}
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 240, damping: 22 }}
+              >
                 <p className={styles.ldFlowInfoCardTitle}>Straight to your bank account</p>
                 <p className={styles.ldFlowInfoCardBody}>
                   We&apos;ll send your advance via ACH. You&apos;ll connect your bank in the next step — one secure connection covers income verification, payout, and repayment.
@@ -2251,12 +2208,12 @@ const CustomerApp = () => {
                 <p className={styles.ldFlowInfoCardBody} style={{ marginTop: "6px" }}>
                   After connecting, we&apos;ll ask for a quick identity check (~30 seconds) so we can legally send you money.
                 </p>
-              </div>
+              </motion.div>
             )}
 
             {payoutError && <p className={styles.ldFlowError}>{payoutError}</p>}
 
-            <button
+            <motion.button
               type="button"
               className={styles.ldFlowBtn}
               disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim())}
@@ -2265,9 +2222,11 @@ const CustomerApp = () => {
                 if (application) await loadApplication(application.id);
                 setWantsToChangePayout(false);
               }}
+              variants={flowChildVariants}
+              whileTap={{ scale: 0.98 }}
             >
               {payoutBusy ? "Saving…" : isAch ? <>Continue <span aria-hidden="true">→</span></> : <>Yes, this is correct <span aria-hidden="true">→</span></>}
-            </button>
+            </motion.button>
 
             {payoutAlreadySaved && (
               <div className={styles.ldFlowBackRow}>
@@ -2280,117 +2239,16 @@ const CustomerApp = () => {
                 </button>
               </div>
             )}
-          </div>
+          </motion.div>
         </main>
       </div>
     );
   }
 
-  // Step 3 of 6: trust-building screen (milestone ladder + how-it-works)
-  if (preBankActive && !trustScreenSeen) {
-    const milestones = [
-      { amount: "$25", label: "1st advance", current: true },
-      { amount: "$50", label: "2nd advance", current: false },
-      { amount: "$75", label: "3rd advance", current: false },
-      { amount: "$100", label: "4th advance", current: false },
-      { amount: "$150", label: "5th advance", current: false },
-      { amount: "$200", label: "6th+", current: false },
-    ];
-    return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
-            </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
-          </div>
-        </header>
+  // Trust-ladder pitch removed per client. Approval-trust screen below still uses
+  // trustScreenSeen as its own gate after approval (different page, kept).
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
-            <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
-              <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 3 of 6</span>
-                <span className={styles.ldFlowProgressNext}>How advance works</span>
-              </div>
-              <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(3 / 6) * 100}%` }} />
-              </div>
-            </div>
-
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                How advance works
-              </span>
-              <h1 className={styles.ldFlowH1}>
-                Your limit grows <span className={styles.ldFlowH1Accent}>with trust.</span>
-              </h1>
-              <p className={styles.ldFlowLead}>
-                You&apos;ll start at <strong>$25</strong>. Repay on time and your limit climbs — all the way up to $200.
-              </p>
-            </div>
-
-            <div className={styles.ldFlowInfoCard}>
-              <p className={styles.ldFlowInfoCardTitle}>How trust-building works</p>
-              <p className={styles.ldFlowInfoCardBody}>
-                Every on-time repayment earns you a higher limit on your next advance. We start small because we&apos;re just getting to know each other — but the more history we build together, the more we can offer you.
-              </p>
-            </div>
-
-            <p className={styles.ldFlowLadderLabel}>Your advance limit roadmap</p>
-            <div className={styles.ldFlowLadder}>
-              {milestones.map((m) => (
-                <div
-                  key={m.amount}
-                  className={styles.ldFlowLadderRung}
-                  data-current={m.current}
-                >
-                  {m.current && (
-                    <span className={styles.ldFlowLadderPin}>You start here</span>
-                  )}
-                  <p className={styles.ldFlowLadderAmount}>{m.amount}</p>
-                  <p className={styles.ldFlowLadderLabelText}>{m.label}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className={styles.ldFlowBenefitsGrid}>
-              {[
-                { icon: "📅", title: "Repay on payday", sub: "Your advance is automatically due on your next payday. Repay on time to unlock a higher limit." },
-                { icon: "🚫", title: "No credit bureau reporting", sub: "We never report anything to any credit bureau — good or bad. Your score is always safe." },
-                { icon: "🔄", title: "No rollover, no interest", sub: "This isn't a loan. There's zero interest and you can't roll over your balance. Just pay back what you got." },
-                { icon: "🛡️", title: "We never chase you", sub: "If repayment fails, we write it off. No collections, no lawsuits, no debt buyers — ever." },
-              ].map(({ icon, title, sub }) => (
-                <div key={title} className={styles.ldFlowBenefitCard}>
-                  <span className={styles.ldFlowBenefitIcon} aria-hidden="true">{icon}</span>
-                  <p className={styles.ldFlowBenefitTitle}>{title}</p>
-                  <p className={styles.ldFlowBenefitSub}>{sub}</p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className={styles.ldFlowBtn}
-              onClick={() => setTrustScreenSeen(true)}
-            >
-              Continue <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
-  // Step 4 of 6: bank link via Stripe Financial Connections
+  // Step 2 of 4: bank link via Stripe Financial Connections
   // ONE bank link powers: repayment debit, income verification, and ACH
   // payout (if user picked ACH at Step 2). Replaces both the old card
   // collection step AND the Plaid bank verification step (Step 6 below
@@ -2424,14 +2282,14 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
+          <motion.div className={styles.ldFlowInner} variants={flowPageVariants} initial="hidden" animate="visible">
             <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
               <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 4 of 6</span>
+                <span className={styles.ldFlowProgressStep}>Step 2 of 4</span>
                 <span className={styles.ldFlowProgressNext}>{showConnect ? "Identity check" : "Connect bank"}</span>
               </div>
               <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(4 / 6) * 100}%` }} />
+                <div className={styles.ldFlowProgressFill} style={{ width: `${(2 / 4) * 100}%` }} />
               </div>
             </div>
 
@@ -2546,7 +2404,7 @@ const CustomerApp = () => {
                 </button>
               </>
             )}
-          </div>
+          </motion.div>
         </main>
       </div>
     );
@@ -2635,14 +2493,14 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
+          <motion.div className={styles.ldFlowInner} variants={flowPageVariants} initial="hidden" animate="visible">
             <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
               <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 5 of 6</span>
+                <span className={styles.ldFlowProgressStep}>Step 3 of 4</span>
                 <span className={styles.ldFlowProgressNext}>Delivery speed</span>
               </div>
               <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(5 / 6) * 100}%` }} />
+                <div className={styles.ldFlowProgressFill} style={{ width: `${(3 / 4) * 100}%` }} />
               </div>
             </div>
 
@@ -2726,7 +2584,7 @@ const CustomerApp = () => {
                 ← Change payout method
               </button>
             </div>
-          </div>
+          </motion.div>
         </main>
       </div>
     );
@@ -2754,10 +2612,10 @@ const CustomerApp = () => {
         </header>
 
         <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
+          <motion.div className={styles.ldFlowInner} variants={flowPageVariants} initial="hidden" animate="visible">
             <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
               <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 6 of 6</span>
+                <span className={styles.ldFlowProgressStep}>Step 4 of 4</span>
                 <span className={styles.ldFlowProgressNext}>Bank verification</span>
               </div>
               <div className={styles.ldFlowProgressTrack} aria-hidden="true">
@@ -2813,7 +2671,7 @@ const CustomerApp = () => {
                 ← Change payout method
               </button>
             </div>
-          </div>
+          </motion.div>
         </main>
       </div>
     );
