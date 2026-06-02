@@ -5913,6 +5913,110 @@ dd {
   cursor: not-allowed;
 }
 
+/* Dashboard nav user chip — avatar + sign-out */
+.bldDashUser {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.bldAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--bld-accent);
+  color: var(--bld-bg);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(0, 214, 50, 0.30);
+}
+
+/* Status pill — big inline status indicator with tone colors */
+.bldStatusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 14px;
+  background: var(--bld-surface);
+  border: 1px solid var(--bld-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bld-text);
+}
+.bldStatusPillDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--bld-text-muted);
+}
+.bldStatusPill[data-tone="positive"] {
+  color: var(--bld-accent);
+  border-color: rgba(0, 214, 50, 0.30);
+  background: var(--bld-accent-soft);
+}
+.bldStatusPill[data-tone="positive"] .bldStatusPillDot {
+  background: var(--bld-accent);
+  box-shadow: 0 0 12px var(--bld-accent);
+  animation: bldPulse 2.5s ease-in-out infinite;
+}
+.bldStatusPill[data-tone="progress"] {
+  color: var(--bld-amber);
+  border-color: rgba(251, 191, 36, 0.30);
+  background: rgba(251, 191, 36, 0.06);
+}
+.bldStatusPill[data-tone="progress"] .bldStatusPillDot {
+  background: var(--bld-amber);
+  box-shadow: 0 0 10px var(--bld-amber);
+  animation: bldPulse 2.5s ease-in-out infinite;
+}
+.bldStatusPill[data-tone="negative"] {
+  color: var(--bld-danger);
+  border-color: rgba(255, 77, 94, 0.30);
+  background: rgba(255, 77, 94, 0.06);
+}
+.bldStatusPill[data-tone="negative"] .bldStatusPillDot { background: var(--bld-danger); }
+@keyframes bldPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Inline chips for row values */
+.bldChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bld-surface);
+  border: 1px solid var(--bld-border);
+  color: var(--bld-text-muted);
+}
+.bldChip[data-tone="ok"] {
+  color: var(--bld-accent);
+  border-color: rgba(0, 214, 50, 0.30);
+  background: var(--bld-accent-soft);
+}
+.bldChip[data-tone="pending"] {
+  color: var(--bld-amber);
+  border-color: rgba(251, 191, 36, 0.30);
+  background: rgba(251, 191, 36, 0.06);
+}
+.bldChip[data-tone="neutral"] {
+  color: var(--bld-text-muted);
+}
+
 /* Secondary text button (back link, alt action) */
 .bldPage .bldTextBtn {
   background: none;
