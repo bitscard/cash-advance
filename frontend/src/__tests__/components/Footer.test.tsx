@@ -45,6 +45,6 @@ describe("Signup form consent line (App.tsx)", () => {
     expect(slice).toMatch(/href="\/terms"/);
     expect(slice).toMatch(/href="\/privacy"/);
     expect(slice).toMatch(/href="\/consent"/);
-    expect(slice).toMatch(/Consent to the Use of Electronic Documents and Signatures/);
+    expect(slice).toMatch(/Consent to electronic signatures/);
   });
 });
