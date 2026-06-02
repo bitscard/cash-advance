@@ -1,9 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { motion } from "framer-motion";
 
 import { apiUrl } from "./api";
 import styles from "./App.module.css";
+
+// Shared motion variants for pre-bank flow screens. Page fades + slides up,
+// children stagger in. Spring physics on the page give a polished feel.
+const flowPageVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring" as const, stiffness: 120, damping: 22, when: "beforeChildren", staggerChildren: 0.06 },
+  },
+};
+const flowChildVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 180, damping: 24 } },
+};
 import TermsPage from "./TermsPage";
 import PrivacyPage from "./PrivacyPage";
 import StoryPage from "./StoryPage";
@@ -1003,442 +1019,300 @@ const CustomerApp = () => {
       const goSignup = () => setView("referral");
       const goSignIn = () => { window.location.href = "/loan"; };
       return (
-        <div className={styles.ldPage}>
+        <div className={styles.bldPage}>
           {/* ── 1. Nav ─────────────────────────────────────────────────────── */}
-          <header className={styles.ldNav}>
-            <div className={styles.ldNavInner}>
-              <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-                <span className={styles.ldBrandMark}>
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                    <circle cx="11" cy="11" r="10" fill="#fff" />
-                    <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                advance<span className={styles.ldBrandDot}>.</span>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
               </a>
-              <nav className={styles.ldNavLinks} aria-label="Main">
+              <nav className={styles.bldLandNavLinks} aria-label="Main">
                 <a href="#how">How it works</a>
                 <a href="#raffle">Raffle</a>
                 <a href="#faq">FAQ</a>
               </nav>
-              <div className={styles.ldNavCtas}>
-                <button type="button" onClick={goSignIn} className={styles.ldLinkBtn}>Sign in</button>
-                <button type="button" onClick={goSignup} className={styles.ldBtnGreen}>Get cash <span aria-hidden="true">→</span></button>
+              <div style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+                <button type="button" onClick={goSignIn} className={styles.bldNavLink}>Sign in</button>
+                <button type="button" onClick={goSignup} className={styles.bldLandNavCta}>Get cash →</button>
               </div>
             </div>
           </header>
 
           <main>
             {/* ── 2. Hero ──────────────────────────────────────────────────── */}
-            <section className={styles.ldHero}>
-              <div className={styles.ldHeroBgGrid} aria-hidden="true" />
-              <div className={styles.ldHeroBgGlow} aria-hidden="true" />
-              <div className={styles.ldHeroInner}>
-                <div className={styles.ldHeroCopy}>
-                  <span className={styles.ldEyebrow}>
-                    <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                    AI-powered · No credit check · 0% interest
-                  </span>
-                  <h1 className={styles.ldH1}>
-                    Cash before<br />
-                    <span className={styles.ldH1Accent}>your paycheck.</span>
-                  </h1>
-                  <div className="mt-6">
-          <p className={styles.ldHeroSub}>
-                    Up to <strong>$300 in your account today</strong>. Repay on your next payday — 0% interest, no late fees, no credit pull. Just $3.99/month for membership.
-                  </p>
-                  </div>
-        
-                  <div className={styles.ldHeroCtaRow}>
-                    <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
-                      Get my cash <span aria-hidden="true">→</span>
-                    </button>
-                    <a className={styles.ldHeroLink} href="#how">
-                      How it works
-                    </a>
-                  </div>
-                  <ul className={styles.ldHeroProof}>
-                    <li>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4" />
-                        <circle cx="11" cy="7" r="2" stroke="currentColor" strokeWidth="1.4" />
-                        <path d="M2 13c0-2 2-3 4-3s4 1 4 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                        <path d="M9 13c0-1.5 1.5-2.5 3-2.5s2.5 1 2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                      </svg>
-                      <strong>700,000+</strong>&nbsp;members
-                    </li>
-                    <li>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <path d="M8 1.5l1.85 4.05L14 6.2l-3.15 2.75L11.7 13 8 10.85 4.3 13l.85-4.05L2 6.2l4.15-.65L8 1.5z" fill="currentColor" />
-                      </svg>
-                      <strong>4.7</strong>&nbsp;on Trustpilot
-                    </li>
-                    <li>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <path d="M8 1.5l1.4 3.6 3.6 1.4-3.6 1.4L8 11.5l-1.4-3.6L3 6.5l3.6-1.4L8 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="none" />
-                        <circle cx="13" cy="13" r="1.2" fill="currentColor" />
-                      </svg>
-                      AI-powered approvals
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Phone frame mockup */}
-                <div className={styles.ldHeroPhoneWrap}>
-                  <div className={styles.ldHeroSparkle1} aria-hidden="true" />
-                  <div className={styles.ldHeroSparkle2} aria-hidden="true" />
-                  <div className={styles.ldPhone}>
-                    <div className={styles.ldPhoneNotch} aria-hidden="true" />
-                    <div className={styles.ldPhoneScreen}>
-                      <div className={styles.ldPhoneTop}>
-                        <span>9:41</span>
-                        <span className={styles.ldPhoneTopIcons}>
-                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M1 8h2v1H1zM4 6h2v3H4zM7 4h2v5H7zM10 2h2v7h-2z" fill="#0a1410" /></svg>
-                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M7 9a4 4 0 0 0 0-8 4 4 0 0 0 0 8z" stroke="#0a1410" strokeWidth="1" fill="none" /></svg>
-                          <svg width="20" height="10" viewBox="0 0 20 10" fill="none"><rect x="0.5" y="2.5" width="17" height="5" rx="1.5" stroke="#0a1410" /><rect x="2" y="4" width="13" height="2" rx="0.5" fill="#0a1410" /><rect x="18" y="4" width="1.5" height="2" rx="0.5" fill="#0a1410" /></svg>
-                        </span>
-                      </div>
-                      <div className={styles.ldPhoneAppHeader}>
-                        <span className={styles.ldPhoneAppName}>advance<span>.</span></span>
-                        <span className={styles.ldPhoneAvatar}>JS</span>
-                      </div>
-                      <p className={styles.ldPhoneGreet}>Hey Jamie 👋</p>
-                      <div className={styles.ldPhoneCard}>
-                        <div className={styles.ldPhonePill}>
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          Approved
-                        </div>
-                        <p className={styles.ldPhoneLabel}>Advance amount</p>
-                        <div className={styles.ldPhoneAmount}>$250<span>.00</span></div>
-                        <div className={styles.ldPhoneRow}>
-                          <span>Repay on</span>
-                          <strong>Fri, Mar 14</strong>
-                        </div>
-                        <div className={styles.ldPhoneRow}>
-                          <span>Account</span>
-                          <strong>Chase ••4582</strong>
-                        </div>
-                        <div className={styles.ldPhoneRow}>
-                          <span>Interest</span>
-                          <strong className={styles.ldPhoneFree}>$0.00</strong>
-                        </div>
-                        <button type="button" className={styles.ldPhoneBtn}>Send to my bank</button>
-                      </div>
-                      <p className={styles.ldPhoneFooter}>🎰 You&apos;re entered in this week&apos;s $300 raffle</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── 2b. Delivery options (the #1 selling point) ──────────────── */}
-            <section className={styles.ldDelivery}>
-              <div className={styles.ldContainer}>
-                <div className={styles.ldDeliveryHeader}>
-                  <span className={styles.ldKicker}>The advance way</span>
-                  <h2 className={styles.ldH2}>
-                    Get your cash<br />
-                    <span className={styles.ldH1Accent} style={{ background: "linear-gradient(120deg, #0d5234 0%, #1a8a55 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>your way.</span>
-                  </h2>
-                  <p className={styles.ldLead}>
-                    Zelle to your bank. Cash App to your $cashtag. PayPal if that&apos;s your thing. You pick how it lands.
-                  </p>
-                </div>
-                <div className={styles.ldDeliveryGrid}>
-                  {/* Zelle */}
-                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardZelle}`}>
-                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
-                    <div className={styles.ldDeliveryIcon}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M7 7h10L7 17h10" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <p className={styles.ldDeliveryBrand}>Zelle</p>
-                    <h3>Straight to your bank</h3>
-                    <p>Lands in your linked bank in minutes — no extra fees on top.</p>
-                  </div>
-
-                  {/* Cash App */}
-                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardCashApp}`}>
-                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
-                    <div className={styles.ldDeliveryIcon}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M12 4v16M16 8.5c-1.4-1-3-1.5-4.5-1.5-2 0-3.5 1-3.5 2.5s1.5 2.4 4 3 4 1.2 4 2.7-1.5 2.5-3.5 2.5c-1.5 0-3.1-.6-4.5-1.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <p className={styles.ldDeliveryBrand}>Cash App</p>
-                    <h3>Hits your $cashtag</h3>
-                    <p>Send the advance straight to your Cash App balance — same day.</p>
-                  </div>
-
-                  {/* PayPal */}
-                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardPayPal}`}>
-                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
-                    <div className={styles.ldDeliveryIcon}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M8 4h7c2.5 0 4.5 1.8 4.5 4.5S17.5 13 15 13h-3.5L10 20" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M6 7h6c2 0 3.5 1.5 3.5 3.5S14 14 12 14H8.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-                      </svg>
-                    </div>
-                    <p className={styles.ldDeliveryBrand}>PayPal</p>
-                    <h3>To your PayPal balance</h3>
-                    <p>Already on PayPal? Funds land in your wallet, no extra steps.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── 3. Amount tier strip ─────────────────────────────────────── */}
-            <section className={styles.ldAmounts}>
-              <div className={styles.ldContainer}>
-                <p className={styles.ldKicker}>How much do you need?</p>
-                <h2 className={styles.ldH2}>Borrow only what you need.<br />Repay only what you borrowed.</h2>
-                <div className={styles.ldAmountChips}>
-                  <div className={styles.ldChip}>$25</div>
-                  <div className={styles.ldChip}>$50</div>
-                  <div className={styles.ldChip}>$100</div>
-                  <div className={styles.ldChip}>$200</div>
-                  <div className={styles.ldChipFeatured}>
-                    $300
-                    <span className={styles.ldChipBadge}>max</span>
-                  </div>
-                </div>
-                <p className={styles.ldAmountsNote}>
-                  Membership is <strong>$3.99/month</strong>. Instant transfers are <strong>$5</strong>. No interest, no late fees, no credit pull.
+            <section className={styles.bldLandHero}>
+              <motion.div
+                className={styles.bldLandHeroInner}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 100, damping: 22 }}
+              >
+                <p className={styles.bldEyebrow}>AI-powered · No credit check · 0% interest</p>
+                <h1 className={styles.bldLandHeroH1}>
+                  Cash before<br /><em>your paycheck.</em>
+                </h1>
+                <p className={styles.bldLandHeroSub}>
+                  Up to <strong>$300</strong> in your account today. Repay on your next payday — 0% interest, no late fees, no credit pull. Just $3.99/month.
                 </p>
+                <div className={styles.bldLandHeroCtaRow}>
+                  <motion.button
+                    type="button"
+                    onClick={goSignup}
+                    className={styles.bldBtn}
+                    style={{ width: "auto", paddingLeft: 32, paddingRight: 32 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Get my cash <span aria-hidden="true">→</span>
+                  </motion.button>
+                  <a className={styles.bldLandGhostLink} href="#how">How it works ↓</a>
+                </div>
+                <ul className={styles.bldLandProof}>
+                  <li><strong>700K+</strong> members</li>
+                  <li><strong>4.7★</strong> Trustpilot</li>
+                  <li><strong>AI</strong> approvals</li>
+                </ul>
+              </motion.div>
+            </section>
+
+            {/* ── 3. Amount tiers ─────────────────────────────────────────── */}
+            <section className={styles.bldLandAmounts}>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>How much do you need?</p>
+              <h2 className={styles.bldLandH2} style={{ marginLeft: "auto", marginRight: "auto" }}>
+                Borrow what you need.<br /><em>Repay what you borrowed.</em>
+              </h2>
+
+              <div className={styles.bldLandTiers}>
+                {[
+                  { amt: "$25", lbl: "1st advance", featured: false },
+                  { amt: "$50", lbl: "Then $50", featured: false },
+                  { amt: "$100", lbl: "Then $100", featured: false },
+                  { amt: "$200", lbl: "Then $200", featured: false },
+                  { amt: "$300", lbl: "Max", featured: true },
+                ].map((t, i) => (
+                  <motion.div
+                    key={t.amt}
+                    className={styles.bldLandTier}
+                    data-featured={t.featured}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-80px" }}
+                    transition={{ delay: i * 0.06, type: "spring", stiffness: 140, damping: 22 }}
+                  >
+                    <span className={styles.bldLandTierIndex}>0{i + 1}</span>
+                    <span className={styles.bldLandTierAmt}>{t.amt}</span>
+                    <span className={styles.bldLandTierLbl}>{t.lbl}</span>
+                  </motion.div>
+                ))}
               </div>
+
+              <p className={styles.bldLandAmountsNote}>
+                Membership <strong>$3.99/mo</strong> · Instant transfers <strong>$5</strong> · 0% interest · No late fees · No credit pull
+              </p>
+            </section>
+
+            {/* ── 2b. Delivery options ─────────────────────────────────────── */}
+            <section className={styles.bldLandSection}>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>The advance way</p>
+              <h2 className={styles.bldLandH2}>
+                Get your cash<br /><em>your way.</em>
+              </h2>
+              <p className={styles.bldLead} style={{ marginBottom: 40 }}>
+                Zelle to your bank. Cash App to your $cashtag. PayPal if that&apos;s your thing.
+              </p>
+              <ul className={styles.bldTiles}>
+                {[
+                  { name: "PayPal", sub: "To your PayPal balance, instantly.", logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P" },
+                  { name: "Cash App", sub: "Hits your $cashtag, same day.", logoBg: "#00D632", logoText: "$" },
+                  { name: "Zelle", sub: "Straight to your bank in minutes.", logoBg: "#6D1ED4", logoText: "Z" },
+                ].map((m) => (
+                  <li key={m.name} className={styles.bldTile} style={{ cursor: "default" }}>
+                    <span className={styles.bldTileLogo} style={{ background: m.logoBg }}>{m.logoText}</span>
+                    <span style={{ flex: 1 }}>
+                      <span className={styles.bldTileName} style={{ display: "block" }}>{m.name}</span>
+                      <span style={{ fontSize: 13, color: "var(--bld-text-muted)" }}>{m.sub}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </section>
 
             {/* ── 4. How it works ──────────────────────────────────────────── */}
-            <section className={styles.ldHow} id="how">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldSectionHeader}>
-                  <span className={styles.ldKicker}>How it works</span>
-                  <h2 className={styles.ldH2}>From application to cash<br />in three steps.</h2>
-                </div>
-                <div className={styles.ldStepsGrid}>
-                  <article className={styles.ldStep}>
-                    <div className={styles.ldStepIconBox}>
-                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                        <rect x="4" y="3" width="20" height="22" rx="3" stroke="currentColor" strokeWidth="1.8" />
-                        <line x1="8" y1="10" x2="20" y2="10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                        <line x1="8" y1="14" x2="16" y2="14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                        <line x1="8" y1="18" x2="14" y2="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
+            <section className={styles.bldLandSection} id="how">
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>How it works</p>
+              <h2 className={styles.bldLandH2}>
+                Application to cash<br /><em>in three steps.</em>
+              </h2>
+              <div className={styles.bldLandSteps}>
+                {[
+                  { n: "01", title: "Apply in 2 minutes", sub: "Tell us your name, employer, payday, and last 4 of your SSN. No credit pull, ever." },
+                  { n: "02", title: "Connect your bank", sub: "Link with Plaid — read-only, encrypted. We see your income but never your password." },
+                  { n: "03", title: "Get your money", sub: "A real reviewer approves your advance. Money lands in your account the same day." },
+                ].map(s => (
+                  <article key={s.n} className={styles.bldLandStep}>
+                    <div className={styles.bldLandStepN}>{s.n}</div>
+                    <div>
+                      <h3 className={styles.bldLandStepH3}>{s.title}</h3>
+                      <p className={styles.bldLandStepP}>{s.sub}</p>
                     </div>
-                    <span className={styles.ldStepLabel}>Step 01</span>
-                    <h3>Apply in 2 minutes</h3>
-                    <p>Tell us your name, employer, payday and last 4 of your SSN. No credit pull, ever.</p>
                   </article>
-                  <article className={styles.ldStep}>
-                    <div className={styles.ldStepIconBox}>
-                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                        <path d="M3 11L14 4l11 7H3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                        <rect x="6" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
-                        <rect x="12.5" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
-                        <rect x="19" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
-                        <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <span className={styles.ldStepLabel}>Step 02</span>
-                    <h3>Connect your bank</h3>
-                    <p>Link with Plaid — read-only, encrypted. We see your income but never your password.</p>
-                  </article>
-                  <article className={styles.ldStep}>
-                    <div className={styles.ldStepIconBox}>
-                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                        <circle cx="14" cy="14" r="10" stroke="currentColor" strokeWidth="1.8" />
-                        <path d="M10 14h8M14 10v8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <span className={styles.ldStepLabel}>Step 03</span>
-                    <h3>Get your money</h3>
-                    <p>A real reviewer approves your advance. Money lands in your account the same day.</p>
-                  </article>
-                </div>
+                ))}
               </div>
             </section>
 
             {/* ── 6. Raffle ────────────────────────────────────────────────── */}
-            <section className={styles.ldRaffle} id="raffle">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldRaffleGrid}>
-                  <div>
-                    <span className={styles.ldRaffleKicker}>Member perk</span>
-                    <h2 className={styles.ldRaffleHeadline}>
-                      Win a trip<br />
-                      <span className={styles.ldRaffleAccent}>to Cancún.</span>
-                    </h2>
-                    <p className={styles.ldRaffleSub}>
-                      Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your advances — you&apos;re in.
-                    </p>
-                    <button type="button" onClick={goSignup} className={styles.ldBtnDarkLg}>
-                      Become a member <span aria-hidden="true">→</span>
-                    </button>
+            <section className={styles.bldLandSection} id="raffle">
+              <div className={styles.bldLandTwoCol}>
+                <div>
+                  <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>Member perk</p>
+                  <h2 className={styles.bldLandH2}>
+                    Win a trip<br /><em>to Cancún.</em>
+                  </h2>
+                  <p className={styles.bldLead} style={{ marginBottom: 32 }}>
+                    Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your advances — you&apos;re in.
+                  </p>
+                  <motion.button type="button" onClick={goSignup} className={styles.bldBtn} style={{ width: "auto", paddingLeft: 32, paddingRight: 32 }} whileTap={{ scale: 0.98 }}>
+                    Become a member <span aria-hidden="true">→</span>
+                  </motion.button>
+                </div>
+                <div className={styles.bldLandRaffleCard}>
+                  <div className={styles.bldLandRaffleTop}>
+                    <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em" }}>advance<span style={{ color: "var(--bld-accent)" }}>.</span></span>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--bld-text-muted)" }}>Q1 · 2026</span>
                   </div>
-                  <div className={styles.ldRaffleVisual}>
-                    <div className={styles.ldTicket}>
-                      <div className={styles.ldTicketTop}>
-                        <span className={styles.ldTicketBrand}>advance<span>.</span></span>
-                        <span className={styles.ldTicketSerial}>Q1 · 2026</span>
-                      </div>
-                      <div className={styles.ldTicketDivider}>
-                        <span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span />
-                      </div>
-                      <p className={styles.ldTicketLabel}>Quarterly getaway</p>
-                      <div className={styles.ldTicketDest}>Cancún <span aria-hidden="true">🏖️</span></div>
-                      <p className={styles.ldTicketCash}>All-inclusive · 4 days · 2 guests</p>
-                      <div className={styles.ldTicketFooter}>
-                        <span>Next draw</span>
-                        <strong>April 1, 2026</strong>
-                      </div>
-                    </div>
+                  <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--bld-text-muted)" }}>Quarterly getaway</p>
+                  <p className={styles.bldLandRaffleDest}>Cancún 🏖️</p>
+                  <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--bld-text-muted)" }}>All-inclusive · 4 days · 2 guests</p>
+                  <div className={styles.bldLandRaffleFoot}>
+                    <span>Next draw</span>
+                    <strong>April 1, 2026</strong>
                   </div>
                 </div>
               </div>
             </section>
 
             {/* ── 7. British angle / story teaser ──────────────────────────── */}
-            <section className={styles.ldBritish}>
-              <div className={styles.ldContainer}>
-                <div className={styles.ldBritishGrid}>
-                  <div>
-                    <span className={styles.ldKicker}>Our story</span>
-                    <h2 className={styles.ldH2}>
-                      Built by guys in England.<br />
-                      For America.
-                    </h2>
-                    <div className="mt-6">
-        <p className={styles.ldLead}>
-                      We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
-                    </p>
-                    </div>
-
-                    <p className={styles.ldLead} style={{ marginTop: "16px" }}>
-                      If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.ldInlineLink}>email us</a> and tell us off.
-                    </p>
-                    <a href="/story" className={styles.ldStoryLink}>
-                      Read our story <span aria-hidden="true">→</span>
-                    </a>
-                  </div>
-                  <div className={styles.ldBritishPhotoWrap}>
-                    <div className={styles.ldBritishPhotoFrame}>
-                      <img src="/founder-1.jpeg" alt="One of the advance founders." className={styles.ldBritishPhoto} />
-                    </div>
-                    <div className={styles.ldBritishPhotoTag}>
-                      <strong>Made in England</strong>
-                      <span>Built for America</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <section className={styles.bldLandSection}>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>Our story</p>
+              <h2 className={styles.bldLandH2}>
+                Built by guys in England.<br /><em>For America.</em>
+              </h2>
+              <p className={styles.bldLead}>
+                We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
+              </p>
+              <p className={styles.bldLead} style={{ marginTop: 16 }}>
+                If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>email us</a> and tell us off.
+              </p>
+              <a href="/story" className={styles.bldLandStoryLink}>
+                Read our story <span aria-hidden="true">→</span>
+              </a>
             </section>
 
             {/* ── 8. FAQ ───────────────────────────────────────────────────── */}
-            <section className={styles.ldFaq} id="faq">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldFaqGrid}>
-                  <div>
-                    <span className={styles.ldKicker}>FAQ</span>
-                    <h2 className={styles.ldH2}>Questions, plain answers.</h2>
-                    <p className={styles.ldLead}>If something isn&apos;t clear, ask us — we&apos;ll answer the same day.</p>
-                  </div>
-                  <div className={styles.ldFaqList}>
-                    {[
-                      ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
-                      ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
-                      ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
-                      ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
-                      ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
-                      ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
-                    ].map(([q, a]) => (
-                      <details key={q} className={styles.ldFaqItem}>
+            <section className={styles.bldLandSection} id="faq">
+              <div className={styles.bldLandTwoCol}>
+                <div>
+                  <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>FAQ</p>
+                  <h2 className={styles.bldLandH2}>
+                    Questions,<br /><em>plain answers.</em>
+                  </h2>
+                  <p className={styles.bldLead}>
+                    If something isn&apos;t clear, ask us — we&apos;ll answer the same day.
+                  </p>
+                </div>
+                <ul className={styles.bldLandFaq}>
+                  {[
+                    ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
+                    ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
+                    ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
+                    ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
+                    ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
+                    ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
+                  ].map(([q, a]) => (
+                    <li key={q} className={styles.bldLandFaqItem}>
+                      <details>
                         <summary>
                           <span>{q}</span>
-                          <span className={styles.ldFaqPlus} aria-hidden="true">
-                            <span /><span />
-                          </span>
+                          <span className={styles.bldLandFaqIcon} aria-hidden="true">+</span>
                         </summary>
                         <p>{a}</p>
                       </details>
-                    ))}
-                  </div>
-                </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </section>
 
             {/* ── 9. CTA band ──────────────────────────────────────────────── */}
-            <section className={styles.ldCta}>
-              <div className={styles.ldCtaBgGlow} aria-hidden="true" />
-              <div className={styles.ldContainer}>
-                <h2 className={styles.ldCtaHeadline}>
-                  Your next paycheck<br />is closer than you think.
-                </h2>
-                <div className="mb-6">
-                   <p className={styles.ldCtaSub}>Get started in 2 minutes. No credit check. No commitment.</p>
-                </div>
-    
-                <div className={styles.ldCtaBtnRow}>
-                  <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
-                    Get my cash <span aria-hidden="true">→</span>
-                  </button>
-                  <a className={styles.ldCtaGhost} href="#faq">Read the FAQ</a>
-                </div>
-                <p className={styles.ldCtaNote}>Invite-only beta — have a referral code ready</p>
-              </div>
+            <section className={styles.bldLandCta}>
+              <h2 className={styles.bldLandCtaH2}>
+                Your next paycheck<br /><em>is closer than you think.</em>
+              </h2>
+              <p className={styles.bldLead} style={{ marginBottom: 32, maxWidth: 460 }}>
+                Get started in 2 minutes. No credit check. No commitment.
+              </p>
+              <motion.button
+                type="button"
+                onClick={goSignup}
+                className={styles.bldBtn}
+                whileTap={{ scale: 0.98 }}
+              >
+                Get my cash <span aria-hidden="true">→</span>
+              </motion.button>
+              <p style={{ marginTop: 16, fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bld-text-dim)" }}>
+                Invite-only beta — have a referral code ready
+              </p>
             </section>
           </main>
 
           {/* ── 10. Footer ─────────────────────────────────────────────────── */}
-          <footer className={styles.ldFooter}>
-            <div className={styles.ldContainer}>
-              <div className={styles.ldFooterTop}>
-                <div className={styles.ldFooterBrand}>
-                  <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-                    advance<span className={styles.ldBrandDot}>.</span>
-                  </a>
-                  <p>
-                    A new product from <strong>Bits Card Inc.</strong><br />
-                    Earned wage access — not a loan.
-                  </p>
-                  <p className={styles.ldFooterMade}>
-                    <span aria-hidden="true">🇬🇧</span> Made in England · Built for America
-                  </p>
+          <footer className={styles.bldLandFooter}>
+            <div className={styles.bldLandFooterTop}>
+              <div>
+                <a className={styles.bldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                  <span className={styles.bldBrandMark}>✓</span>
+                  advance<span className={styles.bldBrandDot}>.</span>
+                </a>
+                <p className={styles.bldLandFooterBlurb}>
+                  A new product from <strong style={{ color: "var(--bld-text)" }}>Bits Card Inc.</strong> Earned wage access — not a loan.
+                </p>
+                <p style={{ marginTop: 16, fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--bld-accent)" }}>
+                  🇬🇧 Made in England · Built for America
+                </p>
+              </div>
+              <div className={styles.bldLandFooterCols}>
+                <div>
+                  <p className={styles.bldLandFooterColTitle}>Product</p>
+                  <ul>
+                    <li><a href="#how">How it works</a></li>
+                    <li><a href="#raffle">Raffle</a></li>
+                    <li><a href="#faq">FAQ</a></li>
+                  </ul>
                 </div>
-                <div className={styles.ldFooterCols}>
-                  <div>
-                    <p className={styles.ldFooterColTitle}>Product</p>
-                    <ul>
-                      <li><a href="#how">How it works</a></li>
-                      <li><a href="#raffle">Raffle</a></li>
-                      <li><a href="#faq">FAQ</a></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className={styles.ldFooterColTitle}>Legal</p>
-                    <ul>
-                      <li><a href="/terms">Terms</a></li>
-                      <li><a href="/privacy">Privacy</a></li>
-                      <li><a href="#">Disclosures</a></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className={styles.ldFooterColTitle}>Support</p>
-                    <ul>
-                      <li><a href="mailto:usa@getbits.app">Contact</a></li>
-                      <li><a href="#">Help center</a></li>
-                    </ul>
-                  </div>
+                <div>
+                  <p className={styles.bldLandFooterColTitle}>Legal</p>
+                  <ul>
+                    <li><a href="/terms">Terms</a></li>
+                    <li><a href="/privacy">Privacy</a></li>
+                    <li><a href="#">Disclosures</a></li>
+                  </ul>
+                </div>
+                <div>
+                  <p className={styles.bldLandFooterColTitle}>Support</p>
+                  <ul>
+                    <li><a href="mailto:usa@getbits.app">Contact</a></li>
+                    <li><a href="#">Help center</a></li>
+                  </ul>
                 </div>
               </div>
-              <div className={styles.ldFooterBottom}>
-                <span>© 2026 Bits Card Inc. All rights reserved.</span>
-                <div className={styles.ldDisclaimer}>
-                  <p className={styles.ldDisclaimerLead}>All accounts are subject to ID verification and approval.</p>
-                  <p>
-                    advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app">usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
-                  </p>
-                </div>
+            </div>
+            <div className={styles.bldLandFooterBottom}>
+              <span style={{ fontSize: 12, color: "var(--bld-text-dim)" }}>© 2026 Bits Card Inc. All rights reserved.</span>
+              <div className={styles.bldLandDisclaimer}>
+                <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--bld-text-muted)" }}>All accounts are subject to ID verification and approval.</p>
+                <p style={{ margin: 0 }}>
+                  advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app" style={{ color: "var(--bld-text-muted)", textDecoration: "underline" }}>usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
+                </p>
               </div>
             </div>
           </footer>
@@ -1449,379 +1323,328 @@ const CustomerApp = () => {
     // ── Referral gate ────────────────────────────────────────────────────────
     if (view === "referral") {
       return (
-        <div className={styles.ldPage}>
-          <header className={styles.ldNav}>
-            <div className={styles.ldNavInner}>
-              <a className={styles.ldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
-                <span className={styles.ldBrandMark}>
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                    <circle cx="11" cy="11" r="10" fill="#fff" />
-                    <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                advance<span className={styles.ldBrandDot}>.</span>
+        <div className={styles.bldPage}>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
               </a>
-              <div className={styles.ldNavCtas}>
-                <a href="/loan" className={styles.ldLinkBtn}>Sign in</a>
-              </div>
+              <a href="/loan" className={styles.bldNavLink}>Sign in</a>
             </div>
           </header>
 
-          <main className={styles.ldGate}>
-            <div className={styles.ldGateInner}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                Invite-only early access
-              </span>
-              <h1 className={styles.ldGateH1}>You got the hook-up?</h1>
-              <p className={styles.ldGateLead}>
-                Advance is growing through word of mouth. Enter the code from whoever invited you to continue.
-              </p>
+          <motion.main
+            className={styles.bldMain}
+            variants={flowPageVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>
+              Invite-only
+            </motion.span>
+            <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+              Got a <em>code?</em>
+            </motion.h1>
+            <motion.p className={styles.bldLead} variants={flowChildVariants}>
+              Advance is growing through word of mouth. Drop the code from whoever invited you.
+            </motion.p>
 
-              <div className={styles.ldGateCard}>
-                <label htmlFor="gate-code-input" className={styles.ldGateLabel}>
-                  Your invite code
-                </label>
-                <input
-                  id="gate-code-input"
-                  type="text"
-                  autoComplete="off"
-                  placeholder="Enter your code"
-                  value={gateCode}
-                  onChange={(e) => { setGateCode(e.target.value); setGateValid(null); setError(null); }}
-                  onKeyDown={(e) => e.key === "Enter" && document.getElementById("gate-continue")?.click()}
-                  className={`${styles.ldGateInput} ${gateValid === false ? styles.ldGateInputInvalid : ""} ${gateValid === true ? styles.ldGateInputValid : ""}`}
-                />
-                {gateValid === true && (
-                  <p className={styles.ldGateValidMsg}>
-                    <span aria-hidden="true">✓</span> {gateReferrerName ? `Referred by ${gateReferrerName}` : "Code accepted"}
-                  </p>
-                )}
-                {gateValid === false && (
-                  <p className={styles.ldGateInvalidMsg}>
-                    That code isn&apos;t recognized. Check with whoever referred you and try again.
-                  </p>
-                )}
-                {error && <p className={styles.ldGateError}>{error}</p>}
-                <button
-                  id="gate-continue"
-                  type="button"
-                  className={styles.ldGateBtn}
-                  disabled={!gateCode.trim() || gateBusy}
-                  onClick={async () => {
-                    const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
-                    if (!code) return;
-                    setGateBusy(true);
-                    setError(null);
-                    try {
-                      const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
-                      const data = await res.json();
-                      setGateValid(data.valid);
-                      setGateReferrerName(data.valid ? data.referrer_name : null);
-                      if (data.valid) {
-                        setForm(f => ({ ...f, referralCode: code }));
-                        setView("signup");
-                      }
-                    } catch {
-                      setError("Could not verify code. Please try again.");
-                    } finally {
-                      setGateBusy(false);
-                    }
-                  }}
-                >
-                  {gateBusy ? "Checking…" : <>Continue <span aria-hidden="true">→</span></>}
-                </button>
-              </div>
+            <motion.div className={styles.bldField} variants={flowChildVariants}>
+              <label htmlFor="gate-code-input" className={styles.bldLabel}>
+                Your invite code
+              </label>
+              <input
+                id="gate-code-input"
+                type="text"
+                autoComplete="off"
+                placeholder="e.g. friend123"
+                value={gateCode}
+                onChange={(e) => { setGateCode(e.target.value); setGateValid(null); setError(null); }}
+                onKeyDown={(e) => e.key === "Enter" && document.getElementById("gate-continue")?.click()}
+                className={styles.bldInput}
+              />
+              {gateValid === true && (
+                <p style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "var(--bld-accent)", letterSpacing: "0.04em" }}>
+                  <span aria-hidden="true">✓</span> {gateReferrerName ? `Referred by ${gateReferrerName}` : "Code accepted"}
+                </p>
+              )}
+              {gateValid === false && (
+                <p style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: "var(--bld-danger)" }}>
+                  That code isn&apos;t recognized. Check with whoever invited you.
+                </p>
+              )}
+            </motion.div>
 
-              <p className={styles.ldGateFootNote}>
-                Already have an account? <a href="/loan" className={styles.ldGateFootLink}>Sign in →</a>
-              </p>
+            {error && <p className={styles.bldError}>{error}</p>}
 
-              <ul className={styles.ldGateTrust} aria-label="What you get">
-                <li>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  No credit check
-                </li>
-                <li>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  0% interest
-                </li>
-                <li>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Cancel anytime
-                </li>
-              </ul>
-            </div>
-          </main>
+            <motion.button
+              id="gate-continue"
+              type="button"
+              className={styles.bldBtn}
+              disabled={!gateCode.trim() || gateBusy}
+              onClick={async () => {
+                const code = gateCode.trim().toLowerCase().replace(/\s+/g, '');
+                if (!code) return;
+                setGateBusy(true);
+                setError(null);
+                try {
+                  const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
+                  const data = await res.json();
+                  setGateValid(data.valid);
+                  setGateReferrerName(data.valid ? data.referrer_name : null);
+                  if (data.valid) {
+                    setForm(f => ({ ...f, referralCode: code }));
+                    setView("signup");
+                  }
+                } catch {
+                  setError("Could not verify code. Please try again.");
+                } finally {
+                  setGateBusy(false);
+                }
+              }}
+              variants={flowChildVariants}
+              whileTap={{ scale: 0.98 }}
+            >
+              {gateBusy ? "Checking…" : <>Continue <span aria-hidden="true">→</span></>}
+            </motion.button>
+
+            <motion.p className={styles.bldFootnote} variants={flowChildVariants}>
+              Already have an account? <a href="/loan" className={styles.bldFootLink}>Sign in →</a>
+            </motion.p>
+
+            <motion.ul className={styles.bldTrust} variants={flowChildVariants} aria-label="What you get">
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                No credit check
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                0% interest
+              </li>
+              <li>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Cancel anytime
+              </li>
+            </motion.ul>
+          </motion.main>
         </div>
       );
     }
 
     // ── Signup ────────────────────────────────────────────────────────────────
     return (
-      <div className={styles.ldPage}>
+      <div className={styles.bldPage}>
         {isDateFocused && <div className={styles.backdrop} />}
 
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <a href="/loan" className={styles.ldLinkBtn}>Sign in</a>
+            <a href="/loan" className={styles.bldNavLink}>Sign in</a>
           </div>
         </header>
 
-        <main className={styles.ldSignup}>
-          <div className={styles.ldSignupInner}>
-            {/* Slim single progress bar replaces the redundant 3-dot+eyebrow combo */}
-            <div className={styles.ldSignupProgressBar} aria-label="Signup progress">
-              <div className={styles.ldSignupProgressMeta}>
-                <span className={styles.ldSignupProgressStep}>Step 1 of 3</span>
-                <span className={styles.ldSignupProgressNext}>Next: Connect bank</span>
-              </div>
-              <div className={styles.ldSignupProgressTrack} aria-hidden="true">
-                <div className={styles.ldSignupProgressFill} style={{ width: `${(1 / 3) * 100}%` }} />
-              </div>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          data-wide="true"
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Signup progress">
+            <span className={styles.bldProgressLabel}>1 of 3 · Your info</span>
+            <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
 
-            <div className={styles.ldSignupHeader}>
-              <h1 className={styles.ldSignupH1}>Tell us about yourself</h1>
-              <p className={styles.ldSignupLead}>
-                Takes about 2 minutes — your info is encrypted and never sold.
-              </p>
-              <p className={styles.ldSignupReassure}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
-                  <path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                No hard credit check — ever. Zero impact on your credit score.
-              </p>
-            </div>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Tell us about <em>yourself.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Takes about 2 minutes — your info is encrypted and never sold. No hard credit check, ever.
+          </motion.p>
 
-            <form className={styles.ldSignupForm} onSubmit={handleSignupSubmit}>
-              <section className={styles.ldSignupSection}>
-                <header className={styles.ldSignupSectionHead}>
-                  <span className={styles.ldSignupSectionIcon} aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
-                      <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 className={styles.ldSignupSectionTitle}>Personal information</h2>
-                    <p className={styles.ldSignupSectionSub}>Who you are — for ID verification.</p>
-                  </div>
-                </header>
-                <div className={styles.ldSignupGrid}>
-                  <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Full name</span>
-                    <input className={styles.ldSignupInput} required value={form.name} placeholder="Jane Smith"
-                      onChange={(event) => setForm({ ...form, name: event.target.value })} />
-                  </label>
-                  <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Email address</span>
-                    <input className={styles.ldSignupInput} required type="email" value={form.email} placeholder="jane@example.com"
-                      onChange={(event) => setForm({ ...form, email: event.target.value })} />
-                  </label>
-                  <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Phone number <span className={styles.ldSignupHint}>(US only)</span></span>
-                    <input
-                      className={styles.ldSignupInput}
-                      required
-                      type="tel"
-                      autoComplete="tel"
-                      inputMode="tel"
-                      pattern="^[\(]?\d{3}[\)]?[-.\s]?\d{3}[-.\s]?\d{4}$"
-                      title="Enter a 10-digit US phone number, like 555-123-4567 or (555) 123-4567."
-                      value={form.phone}
-                      placeholder="(212) 555-0123"
-                      onChange={(event) => setForm({ ...form, phone: event.target.value })}
-                    />
-                  </label>
-                  <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Date of birth</span>
-                    <input className={styles.ldSignupInput} required type="date" value={form.dob}
-                      max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
-                      onChange={(event) => setForm({ ...form, dob: event.target.value })} />
-                  </label>
-                  <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
-                    <span className={styles.ldSignupFieldLabel}>State</span>
-                    <div className={styles.ldSignupSelectWrap}>
+          <form onSubmit={handleSignupSubmit}>
+            <motion.div variants={flowChildVariants}>
+              <p className={styles.bldSectionLabel}>Personal information</p>
+              <div className={styles.bldFieldGrid}>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>Full name</span>
+                  <input className={styles.bldInput} required value={form.name} placeholder="Jane Smith"
+                    onChange={(event) => setForm({ ...form, name: event.target.value })} />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>Email</span>
+                  <input className={styles.bldInput} required type="email" value={form.email} placeholder="jane@example.com"
+                    onChange={(event) => setForm({ ...form, email: event.target.value })} />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>Phone <span className={styles.bldHint}>(US only)</span></span>
+                  <input
+                    className={styles.bldInput}
+                    required
+                    type="tel"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    pattern="^[\(]?\d{3}[\)]?[-.\s]?\d{3}[-.\s]?\d{4}$"
+                    title="Enter a 10-digit US phone number, like 555-123-4567 or (555) 123-4567."
+                    value={form.phone}
+                    placeholder="(212) 555-0123"
+                    onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                  />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>Date of birth</span>
+                  <input className={styles.bldInput} required type="date" value={form.dob}
+                    max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
+                    onChange={(event) => setForm({ ...form, dob: event.target.value })} />
+                </label>
+                <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                  <span className={styles.bldLabel}>State</span>
+                  <select
+                    className={styles.bldSelect}
+                    required
+                    value={form.state}
+                    onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  >
+                    <option value="" disabled>Select state…</option>
+                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+              </div>
+            </motion.div>
+
+            <motion.div variants={flowChildVariants}>
+              <p className={styles.bldSectionLabel}>Income</p>
+              {form.income_sources.map((src, i) => (
+                <div key={i} className={styles.bldIncomeBlock}>
+                  {form.income_sources.length > 1 && (
+                    <div className={styles.bldIncomeHead}>
+                      <strong>Income source {i + 1}</strong>
+                      <button type="button" onClick={() => removeSource(i)} className={styles.bldIncomeRemove}>
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                  <div className={styles.bldFieldGrid}>
+                    <label className={styles.bldField}>
+                      <span className={styles.bldLabel}>Employer</span>
+                      <input className={styles.bldInput} required value={src.employer} placeholder="Acme Corp"
+                        onChange={e => updateSource(i, "employer", e.target.value)} />
+                    </label>
+                    <label className={styles.bldField}>
+                      <span className={styles.bldLabel}>
+                        Next payday <span className={styles.bldHint}>(within 30 days)</span>
+                      </span>
+                      <input className={styles.bldInput} required min={today} max={thirtyDaysFromNow} type="date" value={src.payday}
+                        onChange={e => updateSource(i, "payday", e.target.value)} />
+                    </label>
+                    <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                      <span className={styles.bldLabel}>How often do you get paid?</span>
                       <select
-                        className={styles.ldSignupSelect}
+                        className={styles.bldSelect}
                         required
-                        value={form.state}
-                        onChange={(e) => setForm({ ...form, state: e.target.value })}
+                        value={src.pay_frequency || ""}
+                        onChange={e => updateSource(i, "pay_frequency", e.target.value)}
                       >
-                        <option value="" disabled>Select state…</option>
-                        {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                        <option value="" disabled>Select frequency…</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="biweekly">Every 2 weeks (biweekly)</option>
+                        <option value="semimonthly">Twice a month (1st and 15th, etc.)</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="daily">Daily</option>
+                        <option value="other">Other</option>
                       </select>
-                      <svg className={styles.ldSignupSelectCaret} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                  </label>
-                </div>
-              </section>
-
-              <section className={styles.ldSignupSection}>
-                <header className={styles.ldSignupSectionHead}>
-                  <span className={styles.ldSignupSectionIcon} aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 6v12M9 9h4.5a2.5 2.5 0 010 5h-3a2.5 2.5 0 000 5H15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 className={styles.ldSignupSectionTitle}>Income</h2>
-                    <p className={styles.ldSignupSectionSub}>How you get paid.</p>
+                    </label>
+                    {src.pay_frequency === "other" && (
+                      <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                        <span className={styles.bldLabel}>Describe your pay schedule</span>
+                        <input className={styles.bldInput} required type="text"
+                          placeholder="e.g. every Friday, on the 1st and 15th…"
+                          value={src.pay_frequency_other || ""}
+                          onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
+                      </label>
+                    )}
                   </div>
-                </header>
-                <div className={styles.ldSignupIncomeList}>
-                  {form.income_sources.map((src, i) => (
-                    <div key={i} className={styles.ldSignupIncomeCard}>
-                      {form.income_sources.length > 1 && (
-                        <div className={styles.ldSignupIncomeHead}>
-                          <strong>Income source {i + 1}</strong>
-                          <button type="button" onClick={() => removeSource(i)} className={styles.ldSignupIncomeRemove}>
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                      <div className={styles.ldSignupGrid}>
-                        <label className={styles.ldSignupField}>
-                          <span className={styles.ldSignupFieldLabel}>Employer</span>
-                          <input className={styles.ldSignupInput} required value={src.employer} placeholder="Acme Corp"
-                            onChange={e => updateSource(i, "employer", e.target.value)} />
-                        </label>
-                        <label className={styles.ldSignupField}>
-                          <span className={styles.ldSignupFieldLabel}>
-                            Next payday <span className={styles.ldSignupHint}>(within the next 30 days)</span>
-                          </span>
-                          <input className={styles.ldSignupInput} required min={today} max={thirtyDaysFromNow} type="date" value={src.payday}
-                            onChange={e => updateSource(i, "payday", e.target.value)} />
-                        </label>
-                        <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
-                          <span className={styles.ldSignupFieldLabel}>How often do you get paid?</span>
-                          <div className={styles.ldSignupSelectWrap}>
-                            <select
-                              className={styles.ldSignupSelect}
-                              required
-                              value={src.pay_frequency}
-                              onChange={e => updateSource(i, "pay_frequency", e.target.value)}
-                            >
-                              <option value="" disabled>Select frequency…</option>
-                              <option value="weekly">Weekly</option>
-                              <option value="biweekly">Every 2 weeks (biweekly)</option>
-                              <option value="semimonthly">Twice a month (1st and 15th, etc.)</option>
-                              <option value="monthly">Monthly</option>
-                              <option value="daily">Daily</option>
-                              <option value="other">Other</option>
-                            </select>
-                            <svg className={styles.ldSignupSelectCaret} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </div>
-                        </label>
-                        {src.pay_frequency === "other" && (
-                          <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
-                            <span className={styles.ldSignupFieldLabel}>Describe your pay schedule</span>
-                            <input className={styles.ldSignupInput} required type="text"
-                              placeholder="e.g. every Friday, on the 1st and 15th…"
-                              value={src.pay_frequency_other}
-                              onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addSource} className={styles.ldSignupAddSource}>
-                    <span className={styles.ldSignupAddSourceIcon} aria-hidden="true">+</span>
-                    Add another income source
-                  </button>
                 </div>
-              </section>
-
-              <section className={styles.ldSignupSection}>
-                <header className={styles.ldSignupSectionHead}>
-                  <span className={styles.ldSignupSectionIcon} aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                      <path d="M12 3l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V7l8-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-                      <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                  <div>
-                    <h2 className={styles.ldSignupSectionTitle}>Verification &amp; security</h2>
-                    <p className={styles.ldSignupSectionSub}>Required to legally send money. Encrypted in transit.</p>
-                  </div>
-                </header>
-                <div className={styles.ldSignupGrid}>
-                  <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
-                    <span className={styles.ldSignupFieldLabel}>Social Security Number</span>
-                    <input
-                      className={styles.ldSignupInput}
-                      required
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder="XXX-XX-XXXX"
-                      value={(() => {
-                        const d = form.ssn.replace(/-/g, "");
-                        if (d.length > 5) return `${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}`;
-                        if (d.length > 3) return `${d.slice(0,3)}-${d.slice(3)}`;
-                        return d;
-                      })()}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
-                        setForm({ ...form, ssn: digits });
-                      }}
-                    />
-                  </label>
-                  <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Create a password</span>
-                    <input className={styles.ldSignupInput} required type="password" minLength={6} placeholder="Min. 6 characters"
-                      autoComplete="new-password"
-                      value={form.password}
-                      onChange={(event) => setForm({ ...form, password: event.target.value })} />
-                  </label>
-                  <label className={styles.ldSignupField}>
-                    <span className={styles.ldSignupFieldLabel}>Confirm password</span>
-                    <input className={styles.ldSignupInput} required type="password" autoComplete="new-password"
-                      value={form.confirmPassword}
-                      onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
-                  </label>
-                </div>
-              </section>
-
-              {error && <p className={styles.ldSignupError}>{error}</p>}
-
-              <p className={styles.ldSignupTerms}>
-                By submitting this form and creating an account, you confirm that you have read, understood, and agree to be bound by our{" "}
-                <a href="/terms" target="_blank" rel="noopener noreferrer" className={styles.ldSignupTermsLink}>Terms &amp; Conditions</a>
-                ,{" "}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" className={styles.ldSignupTermsLink}>Privacy Policy</a>
-                , and{" "}
-                <a href="/consent" target="_blank" rel="noopener noreferrer" className={styles.ldSignupTermsLink}>Consent to the Use of Electronic Documents and Signatures</a>
-                , including the state-specific provisions that apply to your state of residence. We never pull your credit and we will never send your account to collections.
-              </p>
-
-              <button disabled={isBusy} className={styles.ldSignupSubmit}>
-                {isBusy ? "Creating account…" : <>Continue <span aria-hidden="true">→</span></>}
+              ))}
+              <button type="button" onClick={addSource} className={styles.bldAddSource}>
+                <span aria-hidden="true">+</span> Add another income source
               </button>
-            </form>
-          </div>
-        </main>
+            </motion.div>
+
+            <motion.div variants={flowChildVariants}>
+              <p className={styles.bldSectionLabel}>Verification &amp; security</p>
+              <div className={styles.bldFieldGrid}>
+                <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                  <span className={styles.bldLabel}>Social Security Number</span>
+                  <input
+                    className={styles.bldInput}
+                    required
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="XXX-XX-XXXX"
+                    value={(() => {
+                      const d = form.ssn.replace(/-/g, "");
+                      if (d.length > 5) return `${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}`;
+                      if (d.length > 3) return `${d.slice(0,3)}-${d.slice(3)}`;
+                      return d;
+                    })()}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+                      setForm({ ...form, ssn: digits });
+                    }}
+                  />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>Password</span>
+                  <input className={styles.bldInput} required type="password" minLength={6} placeholder="Min. 6 characters"
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(event) => setForm({ ...form, password: event.target.value })} />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>Confirm</span>
+                  <input className={styles.bldInput} required type="password" autoComplete="new-password"
+                    value={form.confirmPassword}
+                    onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
+                </label>
+              </div>
+            </motion.div>
+
+            {error && <p className={styles.bldError} style={{ marginTop: 24 }}>{error}</p>}
+
+            <p className={styles.bldTerms}>
+              By submitting this form and creating an account, you agree to our{" "}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className={styles.bldTermsLink}>Terms</a>
+              ,{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className={styles.bldTermsLink}>Privacy Policy</a>
+              , and{" "}
+              <a href="/consent" target="_blank" rel="noopener noreferrer" className={styles.bldTermsLink}>Consent to electronic signatures</a>
+              . We never pull your credit and we will never send your account to collections.
+            </p>
+
+            <motion.button
+              disabled={isBusy}
+              className={styles.bldBtn}
+              variants={flowChildVariants}
+              whileTap={{ scale: 0.98 }}
+            >
+              {isBusy ? "Creating account…" : <>Continue <span aria-hidden="true">→</span></>}
+            </motion.button>
+          </form>
+        </motion.main>
       </div>
     );
 
@@ -1834,66 +1657,63 @@ const CustomerApp = () => {
   if (stateIsIneligible) {
     const stateName = application.customer.state || "your state";
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                You&apos;re in line
-              </span>
-              <h1 className={styles.ldFlowH1}>
-                We&apos;re coming to <span className={styles.ldFlowH1Accent}>{stateName}!</span>
-              </h1>
-              <p className={styles.ldFlowLead}>
-                Advance is live in 36 states today. We&apos;re expanding fast — {stateName} is on the roadmap. You&apos;ll get an email the moment we go live.
-              </p>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          data-wide="true"
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>You&apos;re in line</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            We&apos;re coming to <em>{stateName}.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Live in 36 states today. We&apos;re expanding fast — {stateName} is on the roadmap. You&apos;ll get an email the moment we go live.
+          </motion.p>
 
-            <div className={styles.ldFlowInfoCard}>
-              <p className={styles.ldFlowInfoCardTitle}>
-                <span aria-hidden="true">✅</span> You&apos;re confirmed
-              </p>
-              <p className={styles.ldFlowInfoCardBody}>
-                We&apos;ll email <strong>{application.customer.email}</strong> as soon as Advance launches in {stateName}.
-              </p>
-            </div>
-
-            <div className={styles.ldFlowBenefitsGrid}>
-              {[
-                { icon: "🚫", title: "No credit check, ever", sub: "We won't pull your credit now or when we launch. Your score is safe." },
-                { icon: "💸", title: "Instant access at launch", sub: "When we go live in your state, you'll skip the line — your account is ready to go." },
-                { icon: "🔒", title: "Your data is safe", sub: "We've stored your information securely. We will never sell it or share it with advertisers." },
-                { icon: "🎰", title: "Weekly $300 raffle", sub: "Once Advance is live in your state, you'll be automatically entered in our weekly cash raffle." },
-              ].map(({ icon, title, sub }) => (
-                <div key={title} className={styles.ldFlowBenefitCard}>
-                  <span className={styles.ldFlowBenefitIcon} aria-hidden="true">{icon}</span>
-                  <p className={styles.ldFlowBenefitTitle}>{title}</p>
-                  <p className={styles.ldFlowBenefitSub}>{sub}</p>
-                </div>
-              ))}
-            </div>
-
-            <p className={styles.ldFlowContact}>
-              Questions? Reach us at <a href="mailto:usa@getbits.app" className={styles.ldFlowContactLink}>usa@getbits.app</a>
+          <motion.div className={styles.bldNote} variants={flowChildVariants}>
+            <p className={styles.bldNoteTitle}>✓ You&apos;re confirmed</p>
+            <p className={styles.bldNoteBody}>
+              We&apos;ll email <strong style={{ color: "var(--bld-text)" }}>{application.customer.email}</strong> as soon as Advance launches in {stateName}.
             </p>
-          </div>
-        </main>
+          </motion.div>
+
+          <motion.div variants={flowChildVariants}>
+            <p className={styles.bldSectionLabel}>What to expect</p>
+            <ul className={styles.bldTiles}>
+              {[
+                { icon: "🚫", title: "No credit check, ever", sub: "We won't pull your credit now or when we launch." },
+                { icon: "💸", title: "Instant access at launch", sub: "Skip the line — your account is ready to go." },
+                { icon: "🔒", title: "Your data is safe", sub: "Stored securely. Never sold or shared with advertisers." },
+                { icon: "🎰", title: "Weekly $300 raffle", sub: "Automatic entry once Advance is live in your state." },
+              ].map(({ icon, title, sub }) => (
+                <li key={title} className={styles.bldTile} style={{ cursor: "default" }}>
+                  <span className={styles.bldTileLogo} style={{ background: "var(--bld-surface)", border: "1px solid var(--bld-border)", color: "var(--bld-accent)" }}>{icon}</span>
+                  <span style={{ flex: 1 }}>
+                    <span className={styles.bldTileName} style={{ display: "block" }}>{title}</span>
+                    <span style={{ fontSize: 13, color: "var(--bld-text-muted)" }}>{sub}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+
+          <p className={styles.bldFootnote}>
+            Questions? <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>usa@getbits.app</a>
+          </p>
+        </motion.main>
       </div>
     );
   }
@@ -1901,74 +1721,75 @@ const CustomerApp = () => {
   // ── Denied screen (shown instead of raw "Denied" status) ────────────────────
   if (application.status === 'denied') {
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                Application update
-              </span>
-              <h1 className={styles.ldFlowH1}>Not quite ready yet.</h1>
-              <p className={styles.ldFlowLead}>
-                We weren&apos;t able to approve your advance at this time — but this isn&apos;t permanent. Many members get approved on a second try once their income history builds up.
-              </p>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          data-wide="true"
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>Application update</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Not quite <em>ready yet.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            We weren&apos;t able to approve your advance at this time — but this isn&apos;t permanent. Many members get approved on a second try once their income history builds up.
+          </motion.p>
 
-            <div className={styles.ldFlowInfoCard}>
-              <p className={styles.ldFlowInfoCardTitle}>
-                <span aria-hidden="true">💌</span> No mark on your credit
-              </p>
-              <p className={styles.ldFlowInfoCardBody}>
-                We never reported anything to any credit bureau. Your score is exactly where it was.
-              </p>
-            </div>
-
-            <div className={styles.ldFlowBenefitsGrid}>
-              {[
-                { icon: "📅", title: "Consistent deposit history", sub: "A few more pay cycles showing regular deposits can make a big difference. Try again in 30–60 days." },
-                { icon: "🏦", title: "Keep your bank connected", sub: "Your account is still active. When you're ready to reapply, your bank connection will still be in place." },
-                { icon: "🚫", title: "No collections, ever", sub: "We'll never refer you to a debt collector, sell your information, or file a lawsuit — unconditionally." },
-                { icon: "📩", title: "Get in touch", sub: "If you think this was a mistake or have questions, email us. We review every message personally." },
-              ].map(({ icon, title, sub }) => (
-                <div key={title} className={styles.ldFlowBenefitCard}>
-                  <span className={styles.ldFlowBenefitIcon} aria-hidden="true">{icon}</span>
-                  <p className={styles.ldFlowBenefitTitle}>{title}</p>
-                  <p className={styles.ldFlowBenefitSub}>{sub}</p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className={styles.ldFlowBtn}
-              disabled={reapplyBusy}
-              onClick={handleReapply}
-            >
-              {reapplyBusy ? "Resubmitting…" : <>Reapply <span aria-hidden="true">→</span></>}
-            </button>
-            {error && <p className={styles.ldFlowError} style={{ marginTop: "12px", textAlign: "center" }}>{error}</p>}
-
-            <p className={styles.ldFlowContact}>
-              Questions? Email <a href="mailto:usa@getbits.app" className={styles.ldFlowContactLink}>usa@getbits.app</a>
+          <motion.div className={styles.bldNote} variants={flowChildVariants}>
+            <p className={styles.bldNoteTitle}>💌 No mark on your credit</p>
+            <p className={styles.bldNoteBody}>
+              We never reported anything to any credit bureau. Your score is exactly where it was.
             </p>
-          </div>
-        </main>
+          </motion.div>
+
+          <motion.div variants={flowChildVariants}>
+            <p className={styles.bldSectionLabel}>What typically helps</p>
+            <ul className={styles.bldTiles}>
+              {[
+                { icon: "📅", title: "Consistent deposit history", sub: "A few more pay cycles can make a big difference. Try again in 30–60 days." },
+                { icon: "🏦", title: "Keep your bank connected", sub: "Account is still active. Reapply anytime — connection stays in place." },
+                { icon: "🚫", title: "No collections, ever", sub: "We'll never refer you to a debt collector or file a lawsuit — unconditionally." },
+                { icon: "📩", title: "Get in touch", sub: "Think this was a mistake? Email us — we review every message personally." },
+              ].map(({ icon, title, sub }) => (
+                <li key={title} className={styles.bldTile} style={{ cursor: "default" }}>
+                  <span className={styles.bldTileLogo} style={{ background: "var(--bld-surface)", border: "1px solid var(--bld-border)", color: "var(--bld-accent)" }}>{icon}</span>
+                  <span style={{ flex: 1 }}>
+                    <span className={styles.bldTileName} style={{ display: "block" }}>{title}</span>
+                    <span style={{ fontSize: 13, color: "var(--bld-text-muted)" }}>{sub}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+
+          <motion.button
+            type="button"
+            className={styles.bldBtn}
+            disabled={reapplyBusy}
+            onClick={handleReapply}
+            variants={flowChildVariants}
+            whileTap={{ scale: 0.98 }}
+          >
+            {reapplyBusy ? "Resubmitting…" : <>Reapply <span aria-hidden="true">→</span></>}
+          </motion.button>
+          {error && <p className={styles.bldError} style={{ marginTop: 12, textAlign: "center" }}>{error}</p>}
+
+          <p className={styles.bldFootnote}>
+            Questions? <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>usa@getbits.app</a>
+          </p>
+        </motion.main>
       </div>
     );
   }
@@ -1988,98 +1809,109 @@ const CustomerApp = () => {
       { amount: "$200", label: "6th+", current: false },
     ];
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner} data-wide="true">
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                You&apos;re approved
-              </span>
-              <h1 className={styles.ldFlowH1}>
-                <span className={styles.ldFlowH1Accent}>$25</span> is on its way <span aria-hidden="true">🎉</span>
-              </h1>
-              <p className={styles.ldFlowLead}>
-                Your first advance is <strong>$25</strong>. Pay it back on time and your limit grows — all the way up to $200.
-              </p>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          data-wide="true"
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>You&apos;re approved</motion.span>
+          <motion.div
+            className={styles.bldHeroAmount}
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 180, damping: 18, delay: 0.15 }}
+          >
+            $25
+          </motion.div>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Your money&apos;s <em>on its way.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Pay it back on time and your limit grows — all the way up to $200.
+          </motion.p>
 
-            {application.offer_expires_at && (() => {
-              const exp = new Date(application.offer_expires_at);
-              const timeStr = exp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
-              return (
-                <div className={styles.ldFlowExpiry}>
-                  <span aria-hidden="true">⏰</span>
-                  <p>
-                    <strong>This offer expires tonight at {timeStr}.</strong> If you don&apos;t choose a delivery method before then, your offer will be cancelled and you&apos;ll need to reapply.
-                  </p>
-                </div>
-              );
-            })()}
+          {application.offer_expires_at && (() => {
+            const exp = new Date(application.offer_expires_at);
+            const timeStr = exp.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+            return (
+              <motion.div className={styles.bldBanner} variants={flowChildVariants}>
+                <p>
+                  <strong>⏰ This offer expires tonight at {timeStr}.</strong> Choose a delivery method before then, or you&apos;ll need to reapply.
+                </p>
+              </motion.div>
+            );
+          })()}
 
-            <div className={styles.ldFlowInfoCard}>
-              <p className={styles.ldFlowInfoCardTitle}>How trust-building works</p>
-              <p className={styles.ldFlowInfoCardBody}>
-                Every on-time repayment earns you a higher limit on your next advance. We start small because we&apos;re just getting to know each other — but the more history we build together, the more we can offer you.
-              </p>
-            </div>
+          <motion.div className={styles.bldNote} variants={flowChildVariants}>
+            <p className={styles.bldNoteTitle}>How trust-building works</p>
+            <p className={styles.bldNoteBody}>
+              Every on-time repayment earns you a higher limit on your next advance. Start small, build history, get more.
+            </p>
+          </motion.div>
 
-            <p className={styles.ldFlowLadderLabel}>Your advance limit roadmap</p>
-            <div className={styles.ldFlowLadder}>
-              {milestones.map((m) => (
-                <div
-                  key={m.amount}
-                  className={styles.ldFlowLadderRung}
-                  data-current={m.current}
-                >
-                  {m.current && (
-                    <span className={styles.ldFlowLadderPin}>You are here</span>
-                  )}
-                  <p className={styles.ldFlowLadderAmount}>{m.amount}</p>
-                  <p className={styles.ldFlowLadderLabelText}>{m.label}</p>
-                </div>
-              ))}
-            </div>
+          <motion.p className={styles.bldSectionLabel} variants={flowChildVariants}>Your advance limit roadmap</motion.p>
+          <motion.div
+            style={{ display: "flex", gap: 8, overflowX: "auto", padding: "18px 0 8px", marginBottom: 32 }}
+            variants={flowChildVariants}
+          >
+            {milestones.map((m) => (
+              <div
+                key={m.amount}
+                style={{
+                  flex: "1 0 88px",
+                  background: m.current ? "var(--bld-accent)" : "var(--bld-surface)",
+                  border: m.current ? "0" : "1px solid var(--bld-border)",
+                  borderRadius: 12,
+                  padding: "20px 10px 14px",
+                  textAlign: "center",
+                  position: "relative",
+                  opacity: m.current ? 1 : 0.55,
+                  boxShadow: m.current ? "0 0 20px rgba(0, 214, 50, 0.45)" : "none",
+                }}
+              >
+                {m.current && (
+                  <span style={{
+                    position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)",
+                    background: "var(--bld-bg)", color: "var(--bld-accent)", fontSize: 10, fontWeight: 800,
+                    letterSpacing: "0.08em", textTransform: "uppercase", padding: "3px 8px", borderRadius: 999,
+                    border: "1px solid var(--bld-accent)", whiteSpace: "nowrap",
+                  }}>
+                    You&apos;re here
+                  </span>
+                )}
+                <p style={{ margin: "0 0 4px", fontSize: 19, fontWeight: 800, color: m.current ? "var(--bld-bg)" : "var(--bld-text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
+                  {m.amount}
+                </p>
+                <p style={{ margin: 0, fontSize: 11, color: m.current ? "rgba(0,0,0,0.7)" : "var(--bld-text-dim)" }}>
+                  {m.label}
+                </p>
+              </div>
+            ))}
+          </motion.div>
 
-            <div className={styles.ldFlowBenefitsGrid}>
-              {[
-                { icon: "📅", title: "Repay on payday", sub: "Your advance is automatically due on your next payday. Repay on time to unlock a higher limit." },
-                { icon: "🚫", title: "No credit bureau reporting", sub: "We never report anything to any credit bureau — good or bad. Your score is always safe." },
-                { icon: "🔄", title: "No rollover, no interest", sub: "This isn't a loan. There's zero interest and you can't roll over your balance. Just pay back what you got." },
-                { icon: "🛡️", title: "We never chase you", sub: "If repayment fails, we write it off. No collections, no lawsuits, no debt buyers — ever." },
-              ].map(({ icon, title, sub }) => (
-                <div key={title} className={styles.ldFlowBenefitCard}>
-                  <span className={styles.ldFlowBenefitIcon} aria-hidden="true">{icon}</span>
-                  <p className={styles.ldFlowBenefitTitle}>{title}</p>
-                  <p className={styles.ldFlowBenefitSub}>{sub}</p>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              className={styles.ldFlowBtn}
-              onClick={() => setTrustScreenSeen(true)}
-            >
-              Choose how to receive my $25 <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </main>
+          <motion.button
+            type="button"
+            className={styles.bldBtn}
+            onClick={() => setTrustScreenSeen(true)}
+            variants={flowChildVariants}
+            whileTap={{ scale: 0.98 }}
+          >
+            Choose how to receive my $25 <span aria-hidden="true">→</span>
+          </motion.button>
+        </motion.main>
       </div>
     );
   }
@@ -2108,222 +1940,181 @@ const CustomerApp = () => {
   // Step 1 of 4: receive money — single-select PayPal/Cash App/Zelle/ACH
   const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
   if (preBankActive && (!payoutAlreadySaved || wantsToChangePayout)) {
-    const methods: { id: string; name: string; logo: React.ReactNode; placeholder: string; label: string }[] = [
-      {
-        id: "PayPal",
-        name: "PayPal",
-        placeholder: "e.g. you@email.com",
-        label: "Your PayPal email or phone",
-        logo: (
-          <span style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: "3.6rem", height: "3.6rem", borderRadius: "50%",
-            background: "linear-gradient(135deg, #009cde 0%, #003087 100%)",
-            color: "white", fontSize: "1.8rem", fontWeight: 900, fontStyle: "italic",
-            flexShrink: 0,
-          }}>P</span>
-        ),
-      },
-      {
-        id: "CashApp",
-        name: "Cash App",
-        placeholder: "e.g. $cashtag",
-        label: "Your $cashtag",
-        logo: (
-          <span style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: "3.6rem", height: "3.6rem", borderRadius: "0.8rem",
-            background: "#00D632", color: "white", fontSize: "2rem", fontWeight: 900,
-            flexShrink: 0,
-          }}>$</span>
-        ),
-      },
-      {
-        id: "Zelle",
-        name: "Zelle",
-        placeholder: "e.g. you@email.com or phone",
-        label: "Your Zelle email or phone",
-        logo: (
-          <span style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: "3.6rem", height: "3.6rem", borderRadius: "50%",
-            background: "#6D1ED4", color: "white", fontSize: "1.8rem", fontWeight: 900,
-            flexShrink: 0,
-          }}>Z</span>
-        ),
-      },
-      {
-        id: "ACH",
-        name: "Bank account (ACH)",
-        placeholder: "",
-        label: "",
-        logo: (
-          <span style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: "3.6rem", height: "3.6rem", borderRadius: "0.8rem",
-            background: "var(--brand)", color: "white", fontSize: "2rem",
-            flexShrink: 0,
-          }}>🏦</span>
-        ),
-      },
+    const methods: { id: string; name: string; placeholder: string; label: string; logoBg: string; logoText: string }[] = [
+      { id: "PayPal", name: "PayPal", placeholder: "you@email.com", label: "Your PayPal email or phone",
+        logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P" },
+      { id: "CashApp", name: "Cash App", placeholder: "$cashtag", label: "Your $cashtag",
+        logoBg: "#00D632", logoText: "$" },
+      { id: "Zelle", name: "Zelle", placeholder: "you@email.com or phone", label: "Your Zelle email or phone",
+        logoBg: "#6D1ED4", logoText: "Z" },
+      { id: "ACH", name: "Bank account (ACH)", placeholder: "", label: "",
+        logoBg: "#1a1a1a", logoText: "🏦" },
     ];
     const selectedId = payoutMethods[0];
     const selectedMethod = methods.find(m => m.id === selectedId);
     const isAch = selectedId === "ACH";
-    const achStatus = application.stripe_connect_status;
-    const achReady = isAch && achStatus === "ready";
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
-            <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
-              <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 1 of 4</span>
-                <span className={styles.ldFlowProgressNext}>Receive money</span>
-              </div>
-              <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(1 / 4) * 100}%` }} />
-              </div>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>1 of 4</span>
+            <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
+            <span className={styles.bldProgressDot} />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
 
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                Receive money
-              </span>
-              <h1 className={styles.ldFlowH1}>Where should we send the cash?</h1>
-              <p className={styles.ldFlowLead}>
-                Pick one — we&apos;ll send your advance here once you&apos;re approved.
-              </p>
-            </div>
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>Receive money</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Where does the <em>money go?</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Pick how we send your advance once you&apos;re approved.
+          </motion.p>
 
-            <div className={styles.ldFlowMethods}>
-              {methods.map(m => {
-                const selected = selectedId === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setPayoutMethods([m.id]);
-                      setPayoutSaved(false);
-                      setPayoutError(null);
-                    }}
-                    className={styles.ldFlowMethod}
-                    data-selected={selected}
-                  >
-                    {m.logo}
-                    <span className={styles.ldFlowMethodName}>{m.name}</span>
-                    {selected && <span className={styles.ldFlowMethodCheck} aria-hidden="true">✓</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {selectedMethod && !isAch && (
-              <label className={styles.ldFlowField}>
-                <span className={styles.ldFlowFieldLabel}>{selectedMethod.label}</span>
-                <input
-                  type="text"
-                  placeholder={selectedMethod.placeholder}
-                  value={payoutContact}
-                  onChange={(e) => { setPayoutContact(e.target.value); setPayoutSaved(false); setPayoutError(null); }}
-                  className={styles.ldFlowInput}
-                />
-              </label>
-            )}
-
-            {selectedMethod && !isAch && payoutContact.trim() && (
-              <div className={styles.ldFlowConfirmCard}>
-                <p className={styles.ldFlowConfirmKicker}>Please confirm</p>
-                <p className={styles.ldFlowConfirmBody}>
-                  We&apos;ll send your advance to <strong>{selectedMethod.name}</strong> at <strong>{payoutContact.trim()}</strong>. Make sure this is correct — we can&apos;t recover funds sent to the wrong address.
-                </p>
-              </div>
-            )}
-
-            {isAch && (
-              <>
-                <div className={styles.ldFlowInfoCard}>
-                  <p className={styles.ldFlowInfoCardTitle}>Straight to your bank account</p>
-                  <p className={styles.ldFlowInfoCardBody}>
-                    We&apos;ll send your advance via ACH. Type your account number below — we already have your routing number from the bank you linked.
-                  </p>
-                </div>
-                <label className={styles.ldFlowField} style={{ marginTop: "12px" }}>
-                  <span className={styles.ldFlowFieldLabel}>Bank account number</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d{4,17}"
-                    placeholder="e.g. 1234567890"
-                    autoComplete="off"
-                    value={bankAccountNumber}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "").slice(0, 17);
-                      setBankAccountNumber(digits);
-                      setPayoutSaved(false);
-                      setPayoutError(null);
-                    }}
-                    className={styles.ldFlowInput}
-                  />
-                  <span style={{ fontSize: "1.15rem", color: "var(--muted)", marginTop: "0.4rem", display: "block" }}>
-                    Find this in your bank app: typically 4–17 digits, no spaces or letters. Look for &quot;Account number&quot; (not the same as the routing number or the card number).
-                  </span>
-                </label>
-              </>
-            )}
-
-            {payoutError && <p className={styles.ldFlowError}>{payoutError}</p>}
-
-            <button
-              type="button"
-              className={styles.ldFlowBtn}
-              disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim()) || (isAch && !/^\d{4,17}$/.test(bankAccountNumber))}
-              onClick={async () => {
-                await submitPayoutPreference();
-                if (application) await loadApplication(application.id);
-                setWantsToChangePayout(false);
-              }}
-            >
-              {payoutBusy ? "Saving…" : isAch ? <>Continue <span aria-hidden="true">→</span></> : <>Yes, this is correct <span aria-hidden="true">→</span></>}
-            </button>
-
-            {payoutAlreadySaved && (
-              <div className={styles.ldFlowBackRow}>
-                <button
+          <motion.div className={styles.bldTiles} variants={flowChildVariants}>
+            {methods.map((m, i) => {
+              const selected = selectedId === m.id;
+              return (
+                <motion.button
+                  key={m.id}
                   type="button"
-                  className={styles.ldFlowBackLink}
-                  onClick={() => setWantsToChangePayout(false)}
+                  onClick={() => {
+                    setPayoutMethods([m.id]);
+                    setPayoutSaved(false);
+                    setPayoutError(null);
+                  }}
+                  className={styles.bldTile}
+                  data-selected={selected}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.15 + i * 0.05, type: "spring", stiffness: 200, damping: 22 }}
+                  whileTap={{ scale: 0.99 }}
                 >
-                  Cancel — keep my existing choice
-                </button>
-              </div>
-            )}
-          </div>
-        </main>
+                  <span className={styles.bldTileLogo} style={{ background: m.logoBg }}>{m.logoText}</span>
+                  <span className={styles.bldTileName}>{m.name}</span>
+                  <span className={styles.bldTileArrow} aria-hidden="true">→</span>
+                </motion.button>
+              );
+            })}
+          </motion.div>
+
+          {selectedMethod && !isAch && (
+            <motion.div
+              className={styles.bldField}
+              style={{ marginTop: 40 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+            >
+              <label className={styles.bldLabel}>{selectedMethod.label}</label>
+              <input
+                type="text"
+                placeholder={selectedMethod.placeholder}
+                value={payoutContact}
+                onChange={(e) => { setPayoutContact(e.target.value); setPayoutSaved(false); setPayoutError(null); }}
+                className={styles.bldInput}
+                autoFocus
+              />
+            </motion.div>
+          )}
+
+          {selectedMethod && !isAch && payoutContact.trim() && (
+            <motion.div
+              className={styles.bldNote}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 240, damping: 22 }}
+            >
+              <p className={styles.bldNoteTitle}>Confirm</p>
+              <p className={styles.bldNoteBody}>
+                We&apos;ll send your advance to <strong style={{ color: "var(--bld-text)" }}>{selectedMethod.name}</strong> at <strong style={{ color: "var(--bld-text)" }}>{payoutContact.trim()}</strong>. Make sure this is correct — we can&apos;t recover funds sent to the wrong address.
+              </p>
+            </motion.div>
+          )}
+
+          {isAch && (
+            <motion.div
+              className={styles.bldField}
+              style={{ marginTop: 40 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+            >
+              <label className={styles.bldLabel}>Bank account number</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="\d{4,17}"
+                placeholder="e.g. 1234567890"
+                autoComplete="off"
+                value={bankAccountNumber}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 17);
+                  setBankAccountNumber(digits);
+                  setPayoutSaved(false);
+                  setPayoutError(null);
+                }}
+                className={styles.bldInput}
+                autoFocus
+              />
+              <span style={{ marginTop: 8, fontSize: 12, color: "var(--bld-text-dim)", letterSpacing: "0.02em", lineHeight: 1.5 }}>
+                Find this in your bank app: typically 4–17 digits, no spaces or letters. We already have your routing number from the bank you linked.
+              </span>
+            </motion.div>
+          )}
+
+          {payoutError && <p className={styles.bldError}>{payoutError}</p>}
+
+          <motion.button
+            type="button"
+            className={styles.bldBtn}
+            style={{ marginTop: 32 }}
+            disabled={payoutBusy || !selectedMethod || (!isAch && !payoutContact.trim()) || (isAch && !/^\d{4,17}$/.test(bankAccountNumber))}
+            onClick={async () => {
+              await submitPayoutPreference();
+              if (application) await loadApplication(application.id);
+              setWantsToChangePayout(false);
+            }}
+            variants={flowChildVariants}
+            whileTap={{ scale: 0.98 }}
+          >
+            {payoutBusy ? "Saving…" : isAch ? <>Continue <span aria-hidden="true">→</span></> : <>Confirm <span aria-hidden="true">→</span></>}
+          </motion.button>
+
+          {payoutAlreadySaved && (
+            <div className={styles.bldBackRow}>
+              <button
+                type="button"
+                className={styles.bldTextBtn}
+                onClick={() => setWantsToChangePayout(false)}
+              >
+                Cancel — keep my existing choice
+              </button>
+            </div>
+          )}
+        </motion.main>
       </div>
     );
   }
 
-  // Trust ladder pitch removed per client. The approval-trust screen above
-  // is a DIFFERENT page (post-approval celebration) that still uses
-  // trustScreenSeen + setTrustScreenSeen — keeping that state intact.
+  // Trust-ladder pitch removed per client. Approval-trust screen below still uses
+  // trustScreenSeen as its own gate after approval (different page, kept).
 
   // Step 2 of 4: bank link via Stripe Financial Connections
   // ONE bank link powers: repayment debit, income verification, and ACH
@@ -2345,147 +2136,142 @@ const CustomerApp = () => {
     const showFc = needsBankLink;
     const showConnect = !needsBankLink && needsConnectIdentity;
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
-            <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
-              <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 2 of 4</span>
-                <span className={styles.ldFlowProgressNext}>{showConnect ? "Identity check" : "Connect bank"}</span>
-              </div>
-              <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(2 / 4) * 100}%` }} />
-              </div>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>2 of 4</span>
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
 
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                {showConnect ? "Identity verification" : "Bank account & membership"}
-              </span>
-              <h1 className={styles.ldFlowH1}>
-                {showConnect ? "One quick identity check." : "Connect your bank."}
-              </h1>
-              <p className={styles.ldFlowLead}>
-                {showConnect
-                  ? "We legally need to verify it's you before we can send money to your bank. Takes about 30 seconds on Stripe's secure form."
-                  : "We use your bank to verify your income, send your advance, and collect repayment — all from one secure connection."}
-              </p>
-            </div>
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>
+            {showConnect ? "Identity verification" : "Bank & membership"}
+          </motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            {showConnect ? <>One quick <em>ID check.</em></> : <>Connect your <em>bank.</em></>}
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            {showConnect
+              ? "We legally need to verify it's you before we can send money to your bank. Takes about 30 seconds on Stripe's secure form."
+              : "We use your bank to verify income, send your advance, and collect repayment — all from one secure connection."}
+          </motion.p>
 
-            {showFc && (
-              <>
-                <div className={styles.ldFlowFeesCard}>
-                  <p className={styles.ldFlowFeesKicker}>Your bank will be used for</p>
-                  <ul className={styles.ldFlowFeesList}>
-                    <li>
-                      <span>Income verification <span className={styles.ldFlowFeesHint}>(read-only)</span></span>
-                      <strong>Free</strong>
-                    </li>
-                    <li>
-                      <span>Each advance repayment <span className={styles.ldFlowFeesHint}>(on your payday)</span></span>
-                      <strong>$25–$30</strong>
-                    </li>
-                    <li>
-                      <span>Monthly membership <span className={styles.ldFlowFeesHint}>(starts on first repayment)</span></span>
-                      <strong>$3.99/mo</strong>
-                    </li>
-                  </ul>
-                  <p className={styles.ldFlowFeesFootnote}>
-                    Membership and repayments are separate charges. Cancel membership any time. We never charge interest, late fees, or hidden fees.
-                  </p>
-                </div>
-
-                {fcError && <p className={styles.ldFlowError}>{fcError}</p>}
-
-                <button
-                  type="button"
-                  className={styles.ldFlowBtn}
-                  disabled={fcBusy || !stripeKey}
-                  onClick={startStripeFcLink}
-                >
-                  {fcBusy ? "Opening secure bank link…" : <>Connect bank <span aria-hidden="true">→</span></>}
-                </button>
-
-                {!stripeKey && (
-                  <p className={styles.ldFlowError} style={{ marginTop: "10px" }}>
-                    Bank linking is not configured yet.
-                  </p>
-                )}
-
-                <div className={styles.ldFlowInfoCard} style={{ marginTop: "20px", marginBottom: 0 }}>
-                  <p className={styles.ldFlowInfoCardBody}>
-                    <span aria-hidden="true">✅</span> <strong>As long as you receive regular income, you should be approved.</strong>
-                  </p>
-                </div>
-
-                <p className={styles.ldFlowTrustLine}>
-                  <span aria-hidden="true">🔒</span> Bank linking is powered by Stripe. Your credentials are never shared with us.
+          {showFc && (
+            <>
+              <motion.div variants={flowChildVariants}>
+                <p className={styles.bldLabel} style={{ marginBottom: 0 }}>Your bank will be used for</p>
+                <ul className={styles.bldFees}>
+                  <li className={styles.bldFeesRow}>
+                    <span>Income verification <span className={styles.bldHint}>(read-only)</span></span>
+                    <strong>FREE</strong>
+                  </li>
+                  <li className={styles.bldFeesRow}>
+                    <span>Each repayment <span className={styles.bldHint}>(on payday)</span></span>
+                    <strong>$25–$30</strong>
+                  </li>
+                  <li className={styles.bldFeesRow}>
+                    <span>Monthly membership <span className={styles.bldHint}>(starts on 1st repay)</span></span>
+                    <strong>$3.99/mo</strong>
+                  </li>
+                </ul>
+                <p style={{ fontSize: "12px", lineHeight: 1.55, color: "var(--bld-text-dim)", margin: "0 0 24px" }}>
+                  Membership and repayments are separate charges. Cancel membership any time. We never charge interest, late fees, or hidden fees.
                 </p>
+              </motion.div>
 
-                <div className={styles.ldFlowBackRow}>
-                  <button
-                    type="button"
-                    className={styles.ldFlowBackLink}
-                    onClick={() => setWantsToChangePayout(true)}
-                  >
-                    ← Change payout method
-                  </button>
-                </div>
-              </>
-            )}
+              {fcError && <p className={styles.bldError}>{fcError}</p>}
 
-            {showConnect && (
-              <>
-                <div className={styles.ldFlowInfoCard}>
-                  <p className={styles.ldFlowInfoCardTitle}>
-                    <span aria-hidden="true">✓</span> Bank connected
-                  </p>
-                  <p className={styles.ldFlowInfoCardBody}>
-                    We have your bank for income verification, repayment, and ACH payouts. One more step.
-                  </p>
-                </div>
+              <motion.button
+                type="button"
+                className={styles.bldBtn}
+                disabled={fcBusy || !stripeKey}
+                onClick={startStripeFcLink}
+                variants={flowChildVariants}
+                whileTap={{ scale: 0.98 }}
+              >
+                {fcBusy ? "Opening secure bank link…" : <>Connect bank <span aria-hidden="true">→</span></>}
+              </motion.button>
 
-                <div className={styles.ldFlowFeesCard}>
-                  <p className={styles.ldFlowFeesKicker}>Stripe will ask you to confirm</p>
-                  <ul className={styles.ldFlowBulletList}>
-                    <li>Name, date of birth, last 4 of SSN (we pre-fill)</li>
-                    <li>Address</li>
-                  </ul>
-                  <p className={styles.ldFlowFeesFootnote}>
-                    Your bank is already attached — no need to re-enter routing/account numbers.
-                  </p>
-                </div>
+              {!stripeKey && (
+                <p className={styles.bldError} style={{ marginTop: 12 }}>
+                  Bank linking is not configured yet.
+                </p>
+              )}
 
-                {stripeConnectError && <p className={styles.ldFlowError}>{stripeConnectError}</p>}
+              <div className={styles.bldNote} style={{ marginTop: 24 }}>
+                <p className={styles.bldNoteBody}>
+                  <strong style={{ color: "var(--bld-accent)" }}>✓ Regular income = approval.</strong> If you receive consistent deposits, you should be approved.
+                </p>
+              </div>
 
+              <p style={{ marginTop: 16, textAlign: "center", fontSize: "12px", color: "var(--bld-text-dim)", letterSpacing: "0.04em" }}>
+                <span aria-hidden="true">🔒</span> Bank linking is powered by Stripe. Your credentials are never shared with us.
+              </p>
+
+              <div className={styles.bldBackRow}>
                 <button
                   type="button"
-                  className={styles.ldFlowBtn}
-                  disabled={stripeConnectBusy}
-                  onClick={startStripeConnectOnboarding}
+                  className={styles.bldTextBtn}
+                  onClick={() => setWantsToChangePayout(true)}
                 >
-                  {stripeConnectBusy ? "Redirecting to Stripe…" : <>Verify identity <span aria-hidden="true">→</span></>}
+                  ← Change payout method
                 </button>
-              </>
-            )}
-          </div>
-        </main>
+              </div>
+            </>
+          )}
+
+          {showConnect && (
+            <>
+              <motion.div className={styles.bldNote} variants={flowChildVariants}>
+                <p className={styles.bldNoteTitle}>✓ Bank connected</p>
+                <p className={styles.bldNoteBody}>
+                  We have your bank for income verification, repayment, and ACH payouts. One more step.
+                </p>
+              </motion.div>
+
+              <motion.div variants={flowChildVariants}>
+                <p className={styles.bldLabel}>Stripe will ask you to confirm</p>
+                <ul style={{ margin: "0 0 16px", paddingLeft: 22, fontSize: 14, lineHeight: 1.75, color: "var(--bld-text)" }}>
+                  <li>Name, date of birth, last 4 of SSN <span style={{ color: "var(--bld-text-dim)" }}>(we pre-fill)</span></li>
+                  <li>Address</li>
+                </ul>
+                <p style={{ fontSize: 12, color: "var(--bld-text-dim)", margin: "0 0 24px", lineHeight: 1.55 }}>
+                  Your bank is already attached — no need to re-enter routing/account numbers.
+                </p>
+              </motion.div>
+
+              {stripeConnectError && <p className={styles.bldError}>{stripeConnectError}</p>}
+
+              <motion.button
+                type="button"
+                className={styles.bldBtn}
+                disabled={stripeConnectBusy}
+                onClick={startStripeConnectOnboarding}
+                variants={flowChildVariants}
+                whileTap={{ scale: 0.98 }}
+              >
+                {stripeConnectBusy ? "Redirecting to Stripe…" : <>Verify identity <span aria-hidden="true">→</span></>}
+              </motion.button>
+            </>
+          )}
+        </motion.main>
       </div>
     );
   }
@@ -2556,203 +2342,194 @@ const CustomerApp = () => {
   // Step 3 of 4: delivery speed (same-day vs 3-5 days)
   if (preBankActive && !application.delivery_type) {
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
-            <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
-              <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 3 of 4</span>
-                <span className={styles.ldFlowProgressNext}>Delivery speed</span>
-              </div>
-              <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: `${(3 / 4) * 100}%` }} />
-              </div>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>3 of 4</span>
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
 
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                Delivery speed
-              </span>
-              <h1 className={styles.ldFlowH1}>How fast do you need it?</h1>
-              <p className={styles.ldFlowLead}>
-                Same-day costs an extra <strong>$5</strong>, added to your repayment. 3–5 day delivery is free.
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>Delivery speed</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            How fast do you <em>need it?</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Same-day costs an extra <strong>$5</strong>, added to your repayment. 3–5 day delivery is free.
+          </motion.p>
+
+          <motion.div className={styles.bldDeliveryGrid} variants={flowChildVariants}>
+            <motion.button
+              type="button"
+              className={styles.bldDelivery}
+              data-selected={deliveryChoice === "instant"}
+              onClick={() => setDeliveryChoice("instant")}
+              whileTap={{ scale: 0.97 }}
+            >
+              <span className={styles.bldDeliveryBadge} data-tone="fee">$5 fee</span>
+              <p className={styles.bldDeliveryEmoji} aria-hidden="true">⚡</p>
+              <p className={styles.bldDeliveryTitle}>Same day</p>
+              <p className={styles.bldDeliverySub}>
+                Sent the same day to your PayPal, Cash App, or Zelle.
               </p>
-            </div>
+            </motion.button>
+            <motion.button
+              type="button"
+              className={styles.bldDelivery}
+              data-selected={deliveryChoice === "standard"}
+              onClick={() => setDeliveryChoice("standard")}
+              whileTap={{ scale: 0.97 }}
+            >
+              <span className={styles.bldDeliveryBadge} data-tone="free">Free</span>
+              <p className={styles.bldDeliveryEmoji} aria-hidden="true">📬</p>
+              <p className={styles.bldDeliveryTitle}>3–5 days</p>
+              <p className={styles.bldDeliverySub}>
+                No extra charge. Funds arrive in 3–5 business days.
+              </p>
+            </motion.button>
+          </motion.div>
 
-            <div className={styles.ldFlowDeliveryGrid}>
-              <button
-                type="button"
-                className={styles.ldFlowDeliveryOption}
-                data-selected={deliveryChoice === "instant"}
-                onClick={() => setDeliveryChoice("instant")}
+          {deliveryChoice && (() => {
+            const advance = application.requested_amount;
+            const instantFee = deliveryChoice === "instant" ? 5 : 0;
+            const repayOnPayday = advance + instantFee;
+            const firstMonthTotal = repayOnPayday + 3.99;
+            return (
+              <motion.div
+                className={styles.bldCost}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 240, damping: 22 }}
               >
-                <span className={styles.ldFlowDeliveryBadge} data-tone="fee">$5 fee</span>
-                <p className={styles.ldFlowDeliveryEmoji} aria-hidden="true">⚡</p>
-                <p className={styles.ldFlowDeliveryTitle}>Same day</p>
-                <p className={styles.ldFlowDeliverySub}>
-                  Money sent the same day, straight to your PayPal, Cash App, or Zelle.
-                </p>
-              </button>
-              <button
-                type="button"
-                className={styles.ldFlowDeliveryOption}
-                data-selected={deliveryChoice === "standard"}
-                onClick={() => setDeliveryChoice("standard")}
-              >
-                <span className={styles.ldFlowDeliveryBadge} data-tone="free">Free</span>
-                <p className={styles.ldFlowDeliveryEmoji} aria-hidden="true">📬</p>
-                <p className={styles.ldFlowDeliveryTitle}>3–5 days</p>
-                <p className={styles.ldFlowDeliverySub}>
-                  No extra charge. Funds arrive in 3–5 business days.
-                </p>
-              </button>
-            </div>
-
-            {deliveryChoice && (() => {
-              const advance = application.requested_amount;
-              const instantFee = deliveryChoice === "instant" ? 5 : 0;
-              const repayOnPayday = advance + instantFee;
-              const firstMonthTotal = repayOnPayday + 3.99;
-              return (
-                <div className={styles.ldFlowCostCard}>
-                  <p className={styles.ldFlowCostKicker}>Your first month</p>
-                  <div className={styles.ldFlowCostList}>
-                    <div className={styles.ldFlowCostRow}><span>Advance</span><span>${advance}.00</span></div>
-                    {instantFee > 0 && <div className={styles.ldFlowCostRow}><span>Same-day fee</span><span>$5.00</span></div>}
-                    <div className={styles.ldFlowCostRow}><span>Membership (monthly)</span><span>$3.99</span></div>
-                    <div className={styles.ldFlowCostTotal}>
-                      <span>Total first month</span><span>${firstMonthTotal.toFixed(2)}</span>
-                    </div>
-                  </div>
+                <p className={styles.bldCostKicker}>Your first month</p>
+                <div className={styles.bldCostRow}><span>Advance</span><span>${advance}.00</span></div>
+                {instantFee > 0 && <div className={styles.bldCostRow}><span>Same-day fee</span><span>$5.00</span></div>}
+                <div className={styles.bldCostRow}><span>Membership (monthly)</span><span>$3.99</span></div>
+                <div className={styles.bldCostTotal}>
+                  <span>Total</span><span>${firstMonthTotal.toFixed(2)}</span>
                 </div>
-              );
-            })()}
+              </motion.div>
+            );
+          })()}
 
-            {deliveryError && <p className={styles.ldFlowError}>{deliveryError}</p>}
+          {deliveryError && <p className={styles.bldError}>{deliveryError}</p>}
 
+          <motion.button
+            type="button"
+            className={styles.bldBtn}
+            disabled={deliveryBusy || !deliveryChoice}
+            onClick={saveDelivery}
+            variants={flowChildVariants}
+            whileTap={{ scale: 0.98 }}
+          >
+            {deliveryBusy ? "Saving…" : <>Continue <span aria-hidden="true">→</span></>}
+          </motion.button>
+
+          <div className={styles.bldBackRow}>
             <button
               type="button"
-              className={styles.ldFlowBtn}
-              disabled={deliveryBusy || !deliveryChoice}
-              onClick={saveDelivery}
+              className={styles.bldTextBtn}
+              onClick={() => setWantsToChangePayout(true)}
             >
-              {deliveryBusy ? "Saving…" : <>Continue <span aria-hidden="true">→</span></>}
+              ← Change payout method
             </button>
-
-            <div className={styles.ldFlowBackRow}>
-              <button
-                type="button"
-                className={styles.ldFlowBackLink}
-                onClick={() => setWantsToChangePayout(true)}
-              >
-                ← Change payout method
-              </button>
-            </div>
           </div>
-        </main>
+        </motion.main>
       </div>
     );
   }
 
   // Step 4 of 4: bank connection (the final gate before review)
-  // SKIPPED for FC users — their bank is already linked at Step 4.
+  // SKIPPED for FC users — their bank is already linked at Step 2.
   // Legacy Plaid path stays for users mid-flight on the old flow.
   if (preBankActive && !application.stripe_fc_account_id) {
     return (
-      <div className={styles.ldPage}>
-        <header className={styles.ldNav}>
-          <div className={styles.ldNavInner}>
-            <a className={styles.ldBrand} href="/">
-              <span className={styles.ldBrandMark}>
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                  <circle cx="11" cy="11" r="10" fill="#fff" />
-                  <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              advance<span className={styles.ldBrandDot}>.</span>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
             </a>
-            <button type="button" className={styles.ldLinkBtn} onClick={handleLogout}>Sign out</button>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
           </div>
         </header>
 
-        <main className={styles.ldFlow}>
-          <div className={styles.ldFlowInner}>
-            <div className={styles.ldFlowProgress} aria-label="Onboarding progress">
-              <div className={styles.ldFlowProgressMeta}>
-                <span className={styles.ldFlowProgressStep}>Step 4 of 4</span>
-                <span className={styles.ldFlowProgressNext}>Bank verification</span>
-              </div>
-              <div className={styles.ldFlowProgressTrack} aria-hidden="true">
-                <div className={styles.ldFlowProgressFill} style={{ width: "100%" }} />
-              </div>
-            </div>
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>4 of 4</span>
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="current" />
+          </motion.div>
 
-            <div className={styles.ldFlowHeader}>
-              <span className={styles.ldEyebrow}>
-                <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                Bank verification
-              </span>
-              <h1 className={styles.ldFlowH1}>
-                Let&apos;s see if you&apos;re <span className={styles.ldFlowH1Accent}>approved.</span>
-              </h1>
-              <p className={styles.ldFlowLead}>
-                Connect your bank so we can verify income and finish your application. We never share your login — Plaid handles it securely.
-              </p>
-            </div>
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>Bank verification</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Last step — <em>get approved.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Connect your bank so we can verify income and finish your application. We never share your login — Plaid handles it securely.
+          </motion.p>
 
-            <div className={styles.ldFlowPlaidArea}>
-              {plaidCheckingCompletion ? (
-                <button type="button" className={styles.ldFlowBtn} disabled>Finishing connection…</button>
-              ) : plaidLinkToken && hostedLinkUrl ? (
-                <PlaidConnectButton
-                  linkToken={plaidLinkToken}
-                  hostedLinkUrl={hostedLinkUrl}
-                />
-              ) : plaidLinkError ? (
-                <>
-                  <p className={styles.ldFlowError}>{plaidLinkError}</p>
-                  <button type="button" className={styles.ldFlowBtn} onClick={fetchPlaidLinkToken}>
-                    Retry <span aria-hidden="true">→</span>
-                  </button>
-                </>
-              ) : (
-                <button type="button" className={styles.ldFlowBtn} disabled>Loading…</button>
-              )}
-            </div>
+          <motion.div variants={flowChildVariants}>
+            {plaidCheckingCompletion ? (
+              <button type="button" className={styles.bldBtn} disabled>Finishing connection…</button>
+            ) : plaidLinkToken && hostedLinkUrl ? (
+              <PlaidConnectButton
+                linkToken={plaidLinkToken}
+                hostedLinkUrl={hostedLinkUrl}
+              />
+            ) : plaidLinkError ? (
+              <>
+                <p className={styles.bldError}>{plaidLinkError}</p>
+                <button type="button" className={styles.bldBtn} onClick={fetchPlaidLinkToken}>
+                  Retry <span aria-hidden="true">→</span>
+                </button>
+              </>
+            ) : (
+              <button type="button" className={styles.bldBtn} disabled>Loading…</button>
+            )}
+          </motion.div>
 
-            {error && <p className={styles.ldFlowError} style={{ marginTop: "12px" }}>{error}</p>}
+          {error && <p className={styles.bldError} style={{ marginTop: 12 }}>{error}</p>}
 
-            <p className={styles.ldFlowTrustLine}>
-              <span aria-hidden="true">🔒</span> Bank-grade encryption · We never store your password · 256-bit TLS
-            </p>
+          <p style={{ marginTop: 24, textAlign: "center", fontSize: 12, color: "var(--bld-text-dim)", letterSpacing: "0.04em" }}>
+            <span aria-hidden="true">🔒</span> Bank-grade encryption · We never store your password · 256-bit TLS
+          </p>
 
-            <div className={styles.ldFlowBackRow}>
-              <button
-                type="button"
-                className={styles.ldFlowBackLink}
-                onClick={() => setWantsToChangePayout(true)}
-              >
-                ← Change payout method
-              </button>
-            </div>
+          <div className={styles.bldBackRow}>
+            <button
+              type="button"
+              className={styles.bldTextBtn}
+              onClick={() => setWantsToChangePayout(true)}
+            >
+              ← Change payout method
+            </button>
           </div>
-        </main>
+        </motion.main>
       </div>
     );
   }
@@ -4238,38 +4015,91 @@ const LoanApp = () => {
 
   if (!token || !application) {
     return (
-      <main className={styles.page}>
-        <NavBar />
-        <section className={styles.chatOnly} style={{ paddingTop: "4rem" }}>
-          <div className={styles.signupCard} style={{ maxWidth: "46rem", margin: "0 auto" }}>
-            <div className={styles.signupCardHeader}>
-              <p className={styles.kicker}>Returning borrower</p>
-              <h1>Welcome back.</h1>
-              <p>Sign in to manage your advance and repayment.</p>
-            </div>
-            <div className={styles.signupCardBody}>
-              <form className={styles.intakeComposer} onSubmit={login}>
-                <label>
-                  Email address
-                  <input required type="email" value={loginForm.email} placeholder="jane@example.com"
-                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })} />
-                </label>
-                <label>
-                  Password
-                  <input required type="password" value={loginForm.password} placeholder="Your password"
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} />
-                </label>
-                {error && <p className={styles.error}>{error}</p>}
-                <button disabled={isBusy} style={{ width: "100%" }}>{isBusy ? "Signing in…" : "Sign in"}</button>
-                <p style={{ textAlign: "center", margin: 0, fontSize: "1.35rem", color: "var(--muted)" }}>
-                  Don't have an account?{" "}
-                  <a href="/" style={{ color: "var(--brand)", fontWeight: 700 }}>Apply now — it's free</a>
-                </p>
-              </form>
-            </div>
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
+            </a>
+            <a href="/" className={styles.bldNavLink}>New here? Apply</a>
           </div>
-        </section>
-      </main>
+        </header>
+
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>Welcome back</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Sign in to <em>advance.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Pick up where you left off — track your advance and manage repayment.
+          </motion.p>
+
+          <form onSubmit={login}>
+            <motion.label className={styles.bldField} variants={flowChildVariants}>
+              <span className={styles.bldLabel}>Email</span>
+              <input
+                required
+                type="email"
+                autoComplete="email"
+                value={loginForm.email}
+                placeholder="you@example.com"
+                onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                className={styles.bldInput}
+              />
+            </motion.label>
+            <motion.label className={styles.bldField} variants={flowChildVariants}>
+              <span className={styles.bldLabel}>Password</span>
+              <input
+                required
+                type="password"
+                autoComplete="current-password"
+                value={loginForm.password}
+                placeholder="Your password"
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                className={styles.bldInput}
+              />
+            </motion.label>
+
+            {error && <p className={styles.bldError}>{error}</p>}
+
+            <motion.button
+              disabled={isBusy}
+              className={styles.bldBtn}
+              style={{ marginTop: 16 }}
+              variants={flowChildVariants}
+              whileTap={{ scale: 0.98 }}
+            >
+              {isBusy ? "Signing in…" : <>Sign in <span aria-hidden="true">→</span></>}
+            </motion.button>
+          </form>
+
+          <p className={styles.bldFootnote}>
+            Don&apos;t have an account?{" "}
+            <a href="/" className={styles.bldFootLink}>Apply now — it&apos;s free</a>
+          </p>
+
+          <ul className={styles.bldTrust} aria-label="Account security">
+            <li>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              </svg>
+              Bank-grade encryption
+            </li>
+            <li>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              No credit pull, ever
+            </li>
+          </ul>
+        </motion.main>
+      </div>
     );
   }
 
@@ -4297,249 +4127,242 @@ const LoanApp = () => {
     || application.status === "funded"
     || application.status === "repayment_scheduled";
 
+  const employers = (application.income_sources?.length > 0
+    ? application.income_sources.map(s => s.employer)
+    : [application.customer.employer]).join(", ") || "—";
+  const nextPayday = application.income_sources?.[0]?.payday ?? application.payday ?? "—";
+
   return (
-    <div className={styles.ldPage}>
-      <header className={styles.ldDashNav}>
-        <div className={styles.ldDashNavInner}>
-          <a className={styles.ldBrand} href="/" onClick={(e) => { e.preventDefault(); window.location.href = "/"; }}>
-            <span className={styles.ldBrandMark}>
-              <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                <circle cx="11" cy="11" r="10" fill="#fff" />
-                <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            advance<span className={styles.ldBrandDot}>.</span>
+    <div className={styles.bldPage}>
+      <header className={styles.bldNav}>
+        <div className={styles.bldNavInner}>
+          <a className={styles.bldBrand} href="/" onClick={(e) => { e.preventDefault(); window.location.href = "/"; }}>
+            <span className={styles.bldBrandMark}>✓</span>
+            advance<span className={styles.bldBrandDot}>.</span>
           </a>
-          <div className={styles.ldDashNavRight}>
-            <div className={styles.ldDashNavUser}>
-              <span className={styles.ldDashAvatar} aria-hidden="true">{initials}</span>
-              <span className={styles.ldDashNavUserText}>
-                <span className={styles.ldDashNavUserName}>{application.customer.name}</span>
-                <span className={styles.ldDashNavUserEmail}>{application.customer.email}</span>
-              </span>
-            </div>
-            <button type="button" className={styles.ldDashSignOut} onClick={logout}>Sign out</button>
+          <div className={styles.bldDashUser}>
+            <span className={styles.bldAvatar} title={application.customer.name} aria-hidden="true">{initials}</span>
+            <button type="button" className={styles.bldNavLink} onClick={logout}>Sign out</button>
           </div>
         </div>
       </header>
 
-      <main className={styles.ldDash}>
-        <div className={styles.ldDashInner}>
-          {/* Hero — greeting, amount, status */}
-          <section className={styles.ldDashHero} data-status={statusTone}>
-            <div className={styles.ldDashHeroBgGlow} aria-hidden="true" />
-            <div className={styles.ldDashHeroBgGrid} aria-hidden="true" />
-            <div className={styles.ldDashHeroContent}>
-              <p className={styles.ldDashGreeting}>Hi, {firstName} <span aria-hidden="true">👋</span></p>
-              <p className={styles.ldDashHeroLabel}>You&apos;re approved for</p>
-              <p className={styles.ldDashAmount}>$25</p>
-              <div className={styles.ldDashStatus} data-tone={statusTone}>
-                <span className={styles.ldDashStatusDot} aria-hidden="true" />
-                {statusLabel[application.status]}
-              </div>
+      <motion.main
+        className={styles.bldMain}
+        data-wide="true"
+        variants={flowPageVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Hero — greeting + huge $25 + status */}
+        <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>
+          Hi, {firstName}
+        </motion.span>
+        <motion.p
+          variants={flowChildVariants}
+          style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--bld-text-muted)" }}
+        >
+          {statusTone === "positive" && application.status === "funded" ? "Funded for" : "Approved for"}
+        </motion.p>
+        <motion.div
+          className={styles.bldHeroAmount}
+          initial={{ opacity: 0, scale: 0.7 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: "spring", stiffness: 180, damping: 18, delay: 0.15 }}
+        >
+          $25
+        </motion.div>
+        <motion.div variants={flowChildVariants} style={{ marginBottom: 48 }}>
+          <span className={styles.bldStatusPill} data-tone={statusTone}>
+            <span className={styles.bldStatusPillDot} aria-hidden="true" />
+            {statusLabel[application.status]}
+          </span>
+        </motion.div>
+
+        {/* Loan details */}
+        <motion.div variants={flowChildVariants}>
+          <p className={styles.bldSectionLabel}>Loan details</p>
+          <ul className={styles.bldFees}>
+            <li className={styles.bldFeesRow}>
+              <span>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</span>
+              <strong style={{ color: "var(--bld-text)" }}>{employers}</strong>
+            </li>
+            <li className={styles.bldFeesRow}>
+              <span>Next payday</span>
+              <strong style={{ color: "var(--bld-text)", fontVariantNumeric: "tabular-nums" }}>{nextPayday}</strong>
+            </li>
+            <li className={styles.bldFeesRow}>
+              <span>Bank</span>
+              {application.plaid_connected ? (
+                <span className={styles.bldChip} data-tone="ok">
+                  <span aria-hidden="true">✓</span> Connected
+                </span>
+              ) : (
+                <span className={styles.bldChip} data-tone="neutral">Not connected</span>
+              )}
+            </li>
+          </ul>
+        </motion.div>
+
+        {/* Repayment */}
+        <motion.div variants={flowChildVariants}>
+          <p className={styles.bldSectionLabel}>Repayment</p>
+
+          {application.status === "repaid" ? (
+            <div className={styles.bldNote}>
+              <p className={styles.bldNoteTitle}>✓ Repayment collected — thank you!</p>
             </div>
-          </section>
-
-          {/* Detail cards */}
-          <div className={styles.ldDashGrid}>
-            {/* Loan details */}
-            <section className={styles.ldDashCard}>
-              <header className={styles.ldDashCardHead}>
-                <span className={styles.ldDashCardIcon} aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
-                    <path d="M3 10h18" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                </span>
-                <h2 className={styles.ldDashCardTitle}>Loan details</h2>
-              </header>
-              <dl className={styles.ldDashDl}>
-                <div className={styles.ldDashDlRow}>
-                  <dt>Employer{(application.income_sources?.length ?? 0) > 1 ? "s" : ""}</dt>
-                  <dd>{(application.income_sources?.length > 0 ? application.income_sources.map(s => s.employer) : [application.customer.employer]).join(", ") || "—"}</dd>
-                </div>
-                <div className={styles.ldDashDlRow}>
-                  <dt>Next payday</dt>
-                  <dd>{application.income_sources?.[0]?.payday ?? application.payday}</dd>
-                </div>
-                <div className={styles.ldDashDlRow}>
-                  <dt>Bank</dt>
-                  <dd>
-                    {application.plaid_connected ? (
-                      <span className={styles.ldDashChipOk}>
-                        <span aria-hidden="true">✓</span> Connected
-                      </span>
+          ) : application.plaid_connected ? (
+            <>
+              {rep && (
+                <ul className={styles.bldFees}>
+                  <li className={styles.bldFeesRow}>
+                    <span>Due date</span>
+                    <strong style={{ color: "var(--bld-accent)" }}>{rep.due_date}</strong>
+                  </li>
+                  <li className={styles.bldFeesRow}>
+                    <span>Status</span>
+                    {rep.status === "paid" ? (
+                      <span className={styles.bldChip} data-tone="ok"><span aria-hidden="true">✓</span> Paid</span>
                     ) : (
-                      <span className={styles.ldDashChipNeutral}>Not connected</span>
+                      <span className={styles.bldChip} data-tone="pending">Pending</span>
                     )}
-                  </dd>
-                </div>
-              </dl>
-            </section>
-
-            {/* Repayment */}
-            <section className={styles.ldDashCard}>
-              <header className={styles.ldDashCardHead}>
-                <span className={styles.ldDashCardIcon} aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M4 7h16M4 12h10M4 17h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <h2 className={styles.ldDashCardTitle}>Repayment</h2>
-              </header>
-
-              {application.status === "repaid" ? (
-                <p className={styles.ldDashNoteOk}>
-                  <span aria-hidden="true">✓</span> Repayment collected — thank you!
-                </p>
-              ) : application.plaid_connected ? (
-                <>
-                  <p className={styles.ldDashNoteOk}>
-                    <span aria-hidden="true">✓</span> Bank verified via Plaid.
-                  </p>
-                  {rep && (
-                    <dl className={styles.ldDashDl} style={{ marginTop: "16px" }}>
-                      <div className={styles.ldDashDlRow}>
-                        <dt>Due date</dt>
-                        <dd className={styles.ldDashDueDate}>{rep.due_date}</dd>
-                      </div>
-                      <div className={styles.ldDashDlRow}>
-                        <dt>Status</dt>
-                        <dd>
-                          {rep.status === "paid" ? (
-                            <span className={styles.ldDashChipOk}><span aria-hidden="true">✓</span> Paid</span>
-                          ) : (
-                            <span className={styles.ldDashChipProgress}>Pending</span>
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-                  )}
-                  {/* Card setup removed — ACH-only collection.
-                      Repayment is debited from the FC-linked bank on the due date. */}
-                  {showCardSetup && application.stripe_payment_method_id && (
-                    <div style={{ marginTop: "20px" }}>
-                      <p className={styles.ldDashNoteOk}>
-                        <span aria-hidden="true">✓</span> Bank on file — repayment will be collected automatically via ACH on the due date.
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : application.stripe_card_saved ? (
-                <>
-                  {rep && (
-                    <dl className={styles.ldDashDl}>
-                      <div className={styles.ldDashDlRow}>
-                        <dt>Due date</dt>
-                        <dd className={styles.ldDashDueDate}>{rep.due_date}</dd>
-                      </div>
-                      <div className={styles.ldDashDlRow}>
-                        <dt>Status</dt>
-                        <dd>
-                          {rep.status === "paid" ? (
-                            <span className={styles.ldDashChipOk}><span aria-hidden="true">✓</span> Paid</span>
-                          ) : (
-                            <span className={styles.ldDashChipProgress}>Pending</span>
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-                  )}
-                  <p className={styles.ldDashNoteOk}>
-                    <span aria-hidden="true">✓</span> Bank on file — repayment will be collected automatically via ACH on the due date.
-                  </p>
-                </>
-              ) : (
-                <p className={styles.ldDashMuted}>No repayment scheduled yet. A reviewer will reach out once your advance is funded.</p>
+                  </li>
+                </ul>
               )}
-              {error && <p className={styles.ldDashError}>{error}</p>}
-            </section>
-          </div>
-
-          {/* Payout section — full width below the grid */}
-          {showPayoutSection && (
-            <section className={styles.ldDashCard}>
-              <header className={styles.ldDashCardHead}>
-                <span className={styles.ldDashCardIcon} aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" strokeWidth="2" />
-                  </svg>
-                </span>
-                <div className={styles.ldDashCardHeadText}>
-                  <h2 className={styles.ldDashCardTitle}>How should we send you the money?</h2>
-                  <p className={styles.ldDashCardSub}>Select one or more and enter your contact info.</p>
+              {showCardSetup && application.stripe_payment_method_id && (
+                <div className={styles.bldNote} style={{ marginTop: rep ? 20 : 0 }}>
+                  <p className={styles.bldNoteTitle}>✓ Bank on file</p>
+                  <p className={styles.bldNoteBody}>
+                    Repayment will be collected automatically via ACH on the due date.
+                  </p>
                 </div>
-              </header>
-
-              <div className={styles.ldDashPayoutMethods}>
-                {[
-                  { id: "PayPal", label: "PayPal", emoji: "🅿️" },
-                  { id: "CashApp", label: "Cash App", emoji: "💚" },
-                  { id: "Zelle", label: "Zelle", emoji: "💜" },
-                  { id: "Bank transfer", label: "Bank transfer", emoji: "🏦" },
-                ].map(method => {
-                  const selected = payoutMethods.includes(method.id);
-                  return (
-                    <button
-                      key={method.id}
-                      type="button"
-                      onClick={() => togglePayoutMethod(method.id)}
-                      className={styles.ldDashPayoutMethod}
-                      data-selected={selected}
-                    >
-                      <span className={styles.ldDashPayoutMethodEmoji} aria-hidden="true">{method.emoji}</span>
-                      <span>{method.label}</span>
-                      {selected && (
-                        <span className={styles.ldDashPayoutMethodCheck} aria-hidden="true">✓</span>
-                      )}
-                    </button>
-                  );
-                })}
+              )}
+              {!rep && !application.stripe_payment_method_id && (
+                <div className={styles.bldNote}>
+                  <p className={styles.bldNoteTitle}>✓ Bank verified via Plaid</p>
+                  <p className={styles.bldNoteBody}>
+                    No repayment scheduled yet. We&apos;ll automate it from your linked bank.
+                  </p>
+                </div>
+              )}
+            </>
+          ) : application.stripe_card_saved ? (
+            <>
+              {rep && (
+                <ul className={styles.bldFees}>
+                  <li className={styles.bldFeesRow}>
+                    <span>Due date</span>
+                    <strong style={{ color: "var(--bld-accent)" }}>{rep.due_date}</strong>
+                  </li>
+                  <li className={styles.bldFeesRow}>
+                    <span>Status</span>
+                    {rep.status === "paid" ? (
+                      <span className={styles.bldChip} data-tone="ok"><span aria-hidden="true">✓</span> Paid</span>
+                    ) : (
+                      <span className={styles.bldChip} data-tone="pending">Pending</span>
+                    )}
+                  </li>
+                </ul>
+              )}
+              <div className={styles.bldNote} style={{ marginTop: rep ? 20 : 0 }}>
+                <p className={styles.bldNoteTitle}>✓ Bank on file</p>
+                <p className={styles.bldNoteBody}>
+                  Repayment will be collected automatically via ACH on the due date.
+                </p>
               </div>
-
-              {isBankTransferPayout ? (
-                <div className={styles.ldDashPayoutBankNote}>
-                  <p>
-                    <span aria-hidden="true">✓</span> We&apos;ll send funds directly to your connected bank account — no extra info needed.
-                  </p>
-                  {!application.plaid_connected && (
-                    <p className={styles.ldDashPayoutBankWarn}>
-                      You&apos;ll need to connect your bank first from this page.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <label className={styles.ldDashField}>
-                  <span className={styles.ldDashFieldLabel}>
-                    {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} username / email / phone` : "Your username, email, or phone number"}
-                  </span>
-                  <input
-                    className={styles.ldDashInput}
-                    value={payoutContact}
-                    placeholder="e.g. @username or email@example.com"
-                    onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
-                  />
-                </label>
-              )}
-
-              {payoutError && <p className={styles.ldDashError}>{payoutError}</p>}
-              {payoutSaved && (
-                <p className={styles.ldDashNoteOk}>
-                  <span aria-hidden="true">✓</span> Payout preference saved!
-                </p>
-              )}
-              <button
-                type="button"
-                disabled={payoutBusy}
-                onClick={submitPayoutPreference}
-                className={styles.ldDashSubmit}
-              >
-                {payoutBusy ? "Saving…" : <>Submit <span aria-hidden="true">→</span></>}
-              </button>
-            </section>
+            </>
+          ) : (
+            <p style={{ margin: 0, fontSize: 14, color: "var(--bld-text-muted)", lineHeight: 1.55 }}>
+              No repayment scheduled yet. A reviewer will reach out once your advance is funded.
+            </p>
           )}
-        </div>
-      </main>
+          {error && <p className={styles.bldError} style={{ marginTop: 16 }}>{error}</p>}
+        </motion.div>
+
+        {/* Payout method */}
+        {showPayoutSection && (
+          <motion.div variants={flowChildVariants}>
+            <p className={styles.bldSectionLabel}>Where to send the money?</p>
+            <p style={{ margin: "0 0 20px", fontSize: 13.5, color: "var(--bld-text-muted)", lineHeight: 1.5 }}>
+              Select one or more and enter your contact info.
+            </p>
+
+            <ul className={styles.bldTiles}>
+              {[
+                { id: "PayPal", label: "PayPal", logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P" },
+                { id: "CashApp", label: "Cash App", logoBg: "#00D632", logoText: "$" },
+                { id: "Zelle", label: "Zelle", logoBg: "#6D1ED4", logoText: "Z" },
+                { id: "Bank transfer", label: "Bank transfer", logoBg: "var(--bld-surface-2)", logoText: "🏦" },
+              ].map(method => {
+                const selected = payoutMethods.includes(method.id);
+                return (
+                  <motion.button
+                    key={method.id}
+                    type="button"
+                    onClick={() => togglePayoutMethod(method.id)}
+                    className={styles.bldTile}
+                    data-selected={selected}
+                    whileTap={{ scale: 0.99 }}
+                  >
+                    <span className={styles.bldTileLogo} style={{ background: method.logoBg }}>{method.logoText}</span>
+                    <span className={styles.bldTileName}>{method.label}</span>
+                    {selected ? (
+                      <span style={{ color: "var(--bld-accent)", fontSize: 18, fontWeight: 700 }} aria-hidden="true">✓</span>
+                    ) : (
+                      <span className={styles.bldTileArrow} aria-hidden="true">+</span>
+                    )}
+                  </motion.button>
+                );
+              })}
+            </ul>
+
+            {isBankTransferPayout ? (
+              <div className={styles.bldNote} style={{ marginTop: 24 }}>
+                <p className={styles.bldNoteTitle}>✓ Sent to your connected bank</p>
+                <p className={styles.bldNoteBody}>
+                  We&apos;ll send funds directly via ACH — no extra info needed.
+                </p>
+                {!application.plaid_connected && (
+                  <p className={styles.bldNoteBody} style={{ marginTop: 8, color: "var(--bld-danger)" }}>
+                    <strong style={{ color: "var(--bld-danger)" }}>You&apos;ll need to connect your bank first.</strong>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <label className={styles.bldField} style={{ marginTop: 24 }}>
+                <span className={styles.bldLabel}>
+                  {payoutMethods.length === 1 ? `Your ${payoutMethods[0]} handle` : "Your username, email, or phone"}
+                </span>
+                <input
+                  className={styles.bldInput}
+                  value={payoutContact}
+                  placeholder="@username or email@example.com"
+                  onChange={e => { setPayoutContact(e.target.value); setPayoutSaved(false); }}
+                />
+              </label>
+            )}
+
+            {payoutError && <p className={styles.bldError} style={{ marginTop: 16 }}>{payoutError}</p>}
+            {payoutSaved && (
+              <div className={styles.bldNote} style={{ marginTop: 16 }}>
+                <p className={styles.bldNoteTitle}>✓ Payout preference saved</p>
+              </div>
+            )}
+
+            <motion.button
+              type="button"
+              disabled={payoutBusy}
+              onClick={submitPayoutPreference}
+              className={styles.bldBtn}
+              style={{ marginTop: 24 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {payoutBusy ? "Saving…" : <>Submit <span aria-hidden="true">→</span></>}
+            </motion.button>
+          </motion.div>
+        )}
+      </motion.main>
     </div>
   );
 };
