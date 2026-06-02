@@ -1478,13 +1478,33 @@ app.get('/api/advance/admin/applications/:id/payment-method-details', async func
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    // Prefer FC if present; fall back to Plaid for users mid-flight on the legacy path.
+    // Prefer the us_bank_account PaymentMethod — it exposes
+    // routing_number directly. FC account retrieve does NOT (needs
+    // additional ownership permission). Earlier code hardcoded 'Not
+    // available' here based on a wrong assumption.
+    if (row.stripe_payment_method_id) {
+      try {
+        const pm = await stripe.paymentMethods.retrieve(row.stripe_payment_method_id);
+        if (pm.us_bank_account) {
+          return response.json({
+            bank_name: pm.us_bank_account.bank_name || 'Bank Account',
+            routing_number: pm.us_bank_account.routing_number || 'Not available',
+            last4: pm.us_bank_account.last4 || '----',
+            account_type: pm.us_bank_account.account_type || 'unknown',
+            account_holder_type: pm.us_bank_account.account_holder_type || 'individual',
+          });
+        }
+      } catch (e) {
+        console.log('[payment-method-details pm] error', e.message);
+      }
+    }
+    // Fallback for users who somehow have only an FC account ID but no PM
     if (row.stripe_fc_account_id) {
       try {
         const fc = await stripe.financialConnections.accounts.retrieve(row.stripe_fc_account_id);
         return response.json({
           bank_name: fc.display_name || fc.institution_name || 'Bank Account',
-          routing_number: 'Not available',  // FC default API doesn't expose; would need ownership permission
+          routing_number: 'Not available',
           last4: fc.last4 || '----',
           account_type: fc.subcategory || fc.category || 'unknown',
           account_holder_type: 'individual',
