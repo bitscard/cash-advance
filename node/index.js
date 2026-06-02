@@ -655,6 +655,22 @@ app.post('/api/advance/applications', async function (request, response, next) {
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
+    // Phone: must be a valid US number per NANP rules. Defense-in-depth
+    // alongside the client-side check.
+    {
+      const digits = (phone || '').replace(/\D/g, '');
+      const d = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+      const areaCode = d.slice(0, 3);
+      const exchange = d.slice(3, 6);
+      const validShape = d.length === 10
+        && /^[2-9][0-9]{2}$/.test(areaCode)
+        && /^[2-9][0-9]{2}$/.test(exchange)
+        && !/^[2-9]11$/.test(areaCode)
+        && areaCode !== '555';
+      if (!validShape) {
+        return response.status(400).json({ error: { error_message: 'Please enter a valid 10-digit US phone number.' } });
+      }
+    }
     if (!dob) {
       return response.status(400).json({ error: { error_message: 'Date of birth is required.' } });
     }
