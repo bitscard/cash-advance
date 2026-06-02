@@ -1651,127 +1651,7 @@ app.patch('/api/advance/admin/applications/:id/status', async function (request,
         .catch(err => console.log('[mailchimp approved] error:', err.message));
     }
     if (status === 'funded') {
-      // Auto-schedule repayment: due on the user's payday, amount includes $5 instant fee if applicable
-      const baseAmount = parseFloat(updated.requested_amount) || 25;
-      const instantFee = updated.delivery_type === 'instant' ? 5 : 0;
-      const repayAmount = baseAmount + instantFee;
-      const dueDate = updated.payday
-        ? new Date(updated.payday).toISOString().slice(0, 10)
-        : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-      updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
-      await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
-
-      // ACH payout via Stripe Connect Express. Only fires if the user
-      // picked 'ACH' as their payout method AND their Connect account is
-      // 'ready' (charges_enabled && payouts_enabled). For any other
-      // payout method (PayPal / Cash App / Zelle), admin still moves the
-      // money manually outside the app.
-      if (updated.payout_methods === 'ACH') {
-        if (updated.stripe_connect_account_id && updated.stripe_connect_status === 'ready') {
-          try {
-            const amountCents = Math.round(baseAmount * 100);
-            const transfer = await stripe.transfers.create({
-              amount: amountCents,
-              currency: 'usd',
-              destination: updated.stripe_connect_account_id,
-              description: `Advance disbursement for application ${updated.id}`,
-              metadata: { application_id: updated.id, delivery_type: updated.delivery_type || 'standard' },
-            });
-            updated = await db.saveTransferId(updated.id, transfer.id) || updated;
-            console.log('[funded] ACH transfer created', { application_id: updated.id, transfer_id: transfer.id, amount: amountCents });
-
-            // Same-day delivery → trigger instant payout on the Connect
-            // account so the money hits the user's bank in minutes via
-            // RTP. Standard delivery → leave Stripe's default payout
-            // schedule alone (typically 1-2 business days).
-            if (updated.delivery_type === 'instant') {
-              try {
-                const payout = await stripe.payouts.create(
-                  {
-                    amount: amountCents,
-                    currency: 'usd',
-                    method: 'instant',
-                    metadata: { application_id: updated.id },
-                  },
-                  { stripeAccount: updated.stripe_connect_account_id },
-                );
-                console.log('[funded] instant payout created', { application_id: updated.id, payout_id: payout.id });
-              } catch (payErr) {
-                // Common failure: bank doesn't support RTP. Fall back to
-                // standard payout (Stripe schedules it automatically) and
-                // notify the user so they know it'll be slower.
-                console.log('[funded] instant payout failed, falling back to standard', { application_id: updated.id, error: payErr.message });
-                await db.addMessage(updated.id, 'system', `Your bank doesn't support same-day transfers — we've switched you to 3–5 day delivery and refunded the $5 fee.`);
-              }
-            }
-          } catch (transferErr) {
-            console.log('[funded] ACH transfer failed', { application_id: updated.id, error: transferErr.message });
-            await db.addMessage(updated.id, 'system', `Bank transfer failed: ${transferErr.message}. Please contact support to resolve.`);
-          }
-        } else {
-          // Funded transition was triggered but the user's Connect
-          // account isn't ready — likely admin clicked too early. Log
-          // and surface a clear error.
-          console.log('[funded] ACH user has no ready Connect account', { application_id: updated.id, status: updated.stripe_connect_status });
-          await db.addMessage(updated.id, 'system', `Your direct deposit isn't set up yet. Please finish bank verification before funding.`);
-        }
-      }
-
-      // First-advance subscription bootstrap: create the $3.99/mo Stripe
-      // subscription anchored to the repayment date so the first charge
-      // fires that day (as a SEPARATE Stripe transaction from the advance
-      // repayment), then monthly on the same calendar day thereafter.
-      // Only fires on the user's first funded transition — once
-      // subscription_id is set, we never recreate.
-      if (
-        !updated.subscription_id &&
-        updated.stripe_customer_id &&
-        updated.stripe_payment_method_id
-      ) {
-        try {
-          const paymentMethodId = updated.stripe_payment_method_id;
-          // billing_cycle_anchor is unix seconds. We anchor at the START of
-          // the repayment day in UTC (so any reasonable global TZ has the
-          // membership charge land on the right calendar date).
-          const anchor = Math.floor(new Date(`${dueDate}T00:00:00Z`).getTime() / 1000);
-          const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
-          const sub = await stripe.subscriptions.create({
-            customer: updated.stripe_customer_id,
-            items: [{
-              price_data: {
-                currency: 'usd',
-                product: MEMBERSHIP_PRODUCT_ID,
-                unit_amount: MEMBERSHIP_PRICE_CENTS,
-                recurring: { interval: 'month' },
-              },
-            }],
-            default_payment_method: paymentMethodId,
-            // payment_settings is REQUIRED for us_bank_account subscriptions.
-            // Without it Stripe defaults to card-shaped invoice handling
-            // and the recurring charges fail. Leaving the explicit config
-            // here forever so this doesn't regress.
-            payment_settings: {
-              payment_method_types: ['us_bank_account'],
-              payment_method_options: {
-                us_bank_account: { verification_method: 'instant' },
-              },
-              save_default_payment_method: 'on_subscription',
-            },
-            billing_cycle_anchor: anchor,
-            proration_behavior: 'none',
-            metadata: { application_id: updated.id },
-          });
-          const nextBilling = sub.current_period_end
-            ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
-            : dueDate;
-          updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
-          await db.addMessage(updated.id, 'system', `Membership starts on ${dueDate} — $3.99/month, charged separately from your advance repayment.`);
-          console.log('[funded] subscription created', { application_id: updated.id, subscription_id: sub.id, anchor_date: dueDate });
-        } catch (subErr) {
-          console.log('[funded] subscription create failed', { application_id: updated.id, error: subErr.message });
-          await db.addMessage(updated.id, 'system', `Membership setup failed: ${subErr.message}. Contact us to resolve.`);
-        }
-      }
+      updated = await transitionToFunded(updated);
     }
     if (request.body.note) {
       await db.addMessage(request.params.id, 'admin', request.body.note);
@@ -2396,6 +2276,124 @@ function computeChargeAmountCents(row) {
 //   - Accrued income must be >= 1.2x the requested amount (20% buffer
 //     against classification noise)
 //
+// Marks an application 'funded' and performs the three downstream
+// side effects:
+//   1. Schedule the repayment row (amount + due date)
+//   2. (ACH payout only) Fire stripe.transfers.create() to push money
+//      to the Connect external_account. If same-day delivery, also
+//      stripe.payouts.create({method: 'instant'}) for RTP delivery.
+//   3. Create the $3.99/mo subscription anchored to the repayment date
+//
+// Extracted from the funded branch of PATCH /admin/applications/:id/status
+// so it can be called from auto-approval too (and from anywhere else
+// in the future). Idempotent on the subscription (won't recreate if
+// subscription_id is already set) and on the transfer (no idempotency
+// key today — relies on the caller not invoking it twice for the same
+// application in 'funded' state).
+//
+// Always returns the updated row. Does NOT throw on Stripe errors;
+// errors are logged + system-messaged but the caller still sees a
+// funded application.
+async function transitionToFunded(row) {
+  let updated = await db.updateApplicationStatus(row.id, 'funded') || row;
+  // 1. Schedule the repayment row
+  const baseAmount = parseFloat(updated.requested_amount) || 25;
+  const instantFee = updated.delivery_type === 'instant' ? 5 : 0;
+  const repayAmount = baseAmount + instantFee;
+  const dueDate = updated.payday
+    ? new Date(updated.payday).toISOString().slice(0, 10)
+    : new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
+  await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
+
+  // 2. ACH payout via Stripe Connect Express
+  if (updated.payout_methods === 'ACH') {
+    if (updated.stripe_connect_account_id && updated.stripe_connect_status === 'ready') {
+      try {
+        const amountCents = Math.round(baseAmount * 100);
+        const transfer = await stripe.transfers.create({
+          amount: amountCents,
+          currency: 'usd',
+          destination: updated.stripe_connect_account_id,
+          description: `Advance disbursement for application ${updated.id}`,
+          metadata: { application_id: updated.id, delivery_type: updated.delivery_type || 'standard' },
+        });
+        updated = await db.saveTransferId(updated.id, transfer.id) || updated;
+        console.log('[funded] ACH transfer created', { application_id: updated.id, transfer_id: transfer.id, amount: amountCents });
+
+        if (updated.delivery_type === 'instant') {
+          try {
+            const payout = await stripe.payouts.create(
+              {
+                amount: amountCents,
+                currency: 'usd',
+                method: 'instant',
+                metadata: { application_id: updated.id },
+              },
+              { stripeAccount: updated.stripe_connect_account_id },
+            );
+            console.log('[funded] instant payout created', { application_id: updated.id, payout_id: payout.id });
+          } catch (payErr) {
+            console.log('[funded] instant payout failed, falling back to standard', { application_id: updated.id, error: payErr.message });
+            await db.addMessage(updated.id, 'system', `Your bank doesn't support same-day transfers — we've switched you to 3–5 day delivery and refunded the $5 fee.`);
+          }
+        }
+      } catch (transferErr) {
+        console.log('[funded] ACH transfer failed', { application_id: updated.id, error: transferErr.message });
+        await db.addMessage(updated.id, 'system', `Bank transfer failed: ${transferErr.message}. Please contact support to resolve.`);
+      }
+    } else {
+      console.log('[funded] ACH user has no ready Connect account', { application_id: updated.id, status: updated.stripe_connect_status });
+      await db.addMessage(updated.id, 'system', `Your direct deposit isn't set up yet. Please finish bank verification before funding.`);
+    }
+  }
+
+  // 3. Subscription bootstrap
+  if (
+    !updated.subscription_id &&
+    updated.stripe_customer_id &&
+    updated.stripe_payment_method_id
+  ) {
+    try {
+      const paymentMethodId = updated.stripe_payment_method_id;
+      const anchor = Math.floor(new Date(`${dueDate}T00:00:00Z`).getTime() / 1000);
+      const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
+      const sub = await stripe.subscriptions.create({
+        customer: updated.stripe_customer_id,
+        items: [{
+          price_data: {
+            currency: 'usd',
+            product: MEMBERSHIP_PRODUCT_ID,
+            unit_amount: MEMBERSHIP_PRICE_CENTS,
+            recurring: { interval: 'month' },
+          },
+        }],
+        default_payment_method: paymentMethodId,
+        payment_settings: {
+          payment_method_types: ['us_bank_account'],
+          payment_method_options: {
+            us_bank_account: { verification_method: 'instant' },
+          },
+          save_default_payment_method: 'on_subscription',
+        },
+        billing_cycle_anchor: anchor,
+        proration_behavior: 'none',
+        metadata: { application_id: updated.id },
+      });
+      const nextBilling = sub.current_period_end
+        ? new Date(sub.current_period_end * 1000).toISOString().slice(0, 10)
+        : dueDate;
+      updated = await db.saveSubscription(updated.id, sub.id, 'active', nextBilling);
+      await db.addMessage(updated.id, 'system', `Membership starts on ${dueDate} — $3.99/month, charged separately from your advance repayment.`);
+      console.log('[funded] subscription created', { application_id: updated.id, subscription_id: sub.id, anchor_date: dueDate });
+    } catch (subErr) {
+      console.log('[funded] subscription create failed', { application_id: updated.id, error: subErr.message });
+      await db.addMessage(updated.id, 'system', `Membership setup failed: ${subErr.message}. Contact us to resolve.`);
+    }
+  }
+  return updated;
+}
+
 // Returns { approved, total_accrued_cents, reason }. Caller decides
 // what to do with the result (we currently fire-and-forget).
 async function autoApproveIfEligible(applicationId) {
@@ -2493,13 +2491,35 @@ async function autoApproveIfEligible(applicationId) {
     }
 
     // ── Auto-approve ──────────────────────────────────────────────
-    const updated = await db.updateApplicationStatus(row.id, 'approved');
+    let updated = await db.updateApplicationStatus(row.id, 'approved');
     const expiresAt = getOfferExpiresAt(new Date(), row.state);
     await db.saveOfferExpiry(row.id, expiresAt);
-    await db.addMessage(row.id, 'system', `Auto-approved! Your bank shows $${(total_accrued_cents/100).toFixed(2)} in accrued earnings — more than enough to cover a $${(requested_cents/100).toFixed(2)} advance. Pick your delivery speed to receive funds.`);
+    await db.addMessage(row.id, 'system', `Auto-approved! Your bank shows $${(total_accrued_cents/100).toFixed(2)} in accrued earnings — more than enough to cover a $${(requested_cents/100).toFixed(2)} advance.`);
     addToMailchimp(updated?.name || row.name, updated?.email || row.email, updated?.state || row.state, ['approved'])
       .catch(err => console.log('[mailchimp approved] error:', err.message));
     console.log('[auto-approve] approved', { application_id: row.id, accrued: total_accrued_cents, requested: requested_cents });
+
+    // ── Auto-fund (ACH users only) ────────────────────────────────
+    // For ACH payout users, the entire money-movement pipeline is
+    // automated end-to-end: Stripe transfers + instant payout fire
+    // from transitionToFunded. So we can immediately follow approval
+    // with funding — the user goes signup → money in their bank in
+    // one continuous flow.
+    //
+    // For PayPal / Cash App / Zelle: admin still has to manually send
+    // money outside the app, so we DON'T auto-fund — flipping to
+    // 'funded' would tell the user the money is on its way when it
+    // actually isn't yet. They go to manual review in the Approved
+    // tab for the admin to do the manual send + click Mark funded.
+    if (updated && updated.payout_methods === 'ACH' && updated.delivery_type) {
+      try {
+        await transitionToFunded(updated);
+        console.log('[auto-approve] auto-funded ACH user', { application_id: row.id });
+      } catch (fundErr) {
+        console.log('[auto-approve] auto-fund error (manual marking needed)', { application_id: row.id, error: fundErr.message });
+        await db.addMessage(row.id, 'system', `Approved! Funding step needs manual attention from support: ${fundErr.message}`);
+      }
+    }
     return { approved: true, total_accrued_cents };
   } catch (err) {
     console.log('[auto-approve] error — falling back to manual review', { application_id: applicationId, error: err.message });
