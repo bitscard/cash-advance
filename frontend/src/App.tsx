@@ -623,7 +623,14 @@ const CustomerApp = () => {
     }
     for (const [i, src] of form.income_sources.entries()) {
       const label = form.income_sources.length > 1 ? ` (source ${i + 1})` : "";
-      // Pay frequency no longer collected — derived from bank transactions later.
+      if (!src.pay_frequency) {
+        setError(`Please select how often you get paid${label}`);
+        return;
+      }
+      if (src.pay_frequency === "other" && !src.pay_frequency_other.trim()) {
+        setError(`Please describe your pay schedule${label}`);
+        return;
+      }
       // Payday: must be set, in the future, and within 30 days.
       if (!src.payday) {
         setError(`Please enter your next payday${label}`);
@@ -669,7 +676,10 @@ const CustomerApp = () => {
         ssn: ssn.replace(/-/g, ""),
         // pay_frequency dropped from signup — strip the lingering fields
         // off the form state before sending; backend treats null as fine.
-        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => s),
+        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => ({
+          ...s,
+          pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
+        })),
         requested_amount: 25,
         ...(normalizedGateCode ? { referral_code: normalizedGateCode } : {}),
       };
@@ -1628,6 +1638,37 @@ const CustomerApp = () => {
                           <input className={styles.ldSignupInput} required min={today} max={thirtyDaysFromNow} type="date" value={src.payday}
                             onChange={e => updateSource(i, "payday", e.target.value)} />
                         </label>
+                        <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
+                          <span className={styles.ldSignupFieldLabel}>How often do you get paid?</span>
+                          <div className={styles.ldSignupSelectWrap}>
+                            <select
+                              className={styles.ldSignupSelect}
+                              required
+                              value={src.pay_frequency}
+                              onChange={e => updateSource(i, "pay_frequency", e.target.value)}
+                            >
+                              <option value="" disabled>Select frequency…</option>
+                              <option value="weekly">Weekly</option>
+                              <option value="biweekly">Every 2 weeks (biweekly)</option>
+                              <option value="semimonthly">Twice a month (1st and 15th, etc.)</option>
+                              <option value="monthly">Monthly</option>
+                              <option value="daily">Daily</option>
+                              <option value="other">Other</option>
+                            </select>
+                            <svg className={styles.ldSignupSelectCaret} width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </div>
+                        </label>
+                        {src.pay_frequency === "other" && (
+                          <label className={`${styles.ldSignupField} ${styles.ldSignupFieldFull}`}>
+                            <span className={styles.ldSignupFieldLabel}>Describe your pay schedule</span>
+                            <input className={styles.ldSignupInput} required type="text"
+                              placeholder="e.g. every Friday, on the 1st and 15th…"
+                              value={src.pay_frequency_other}
+                              onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
+                          </label>
+                        )}
                       </div>
                     </div>
                   ))}
