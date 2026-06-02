@@ -1116,6 +1116,22 @@ function lookupWireRouting(bankName) {
   return null;
 }
 
+// Compute a billing_cycle_anchor that Stripe will accept. Anchor must be
+// in the future. If the requested target date (e.g. user's payday) has
+// already passed — common for users funded close to their payday and
+// then re-onboarded later, or for backfills via the admin button —
+// roll forward by 30-day increments until we land on a future date.
+// Preserves the original calendar day.
+function safeFutureAnchorUnix(targetDateStr) {
+  let target = new Date(`${targetDateStr}T00:00:00Z`).getTime();
+  const now = Date.now();
+  if (target > now) return Math.floor(target / 1000);
+  while (target <= now) {
+    target += 30 * 86400 * 1000;
+  }
+  return Math.floor(target / 1000);
+}
+
 const MEMBERSHIP_PRICE_CENTS = 399;
 const MEMBERSHIP_PRODUCT_NAME = 'Advance Membership';
 
@@ -2427,7 +2443,7 @@ async function transitionToFunded(row) {
   ) {
     try {
       const paymentMethodId = updated.stripe_payment_method_id;
-      const anchor = Math.floor(new Date(`${dueDate}T00:00:00Z`).getTime() / 1000);
+      const anchor = safeFutureAnchorUnix(dueDate);
       const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
       const sub = await stripe.subscriptions.create({
         customer: updated.stripe_customer_id,
@@ -2829,10 +2845,13 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
 
     // Anchor: prefer the user's first repayment date; fall back to today
     // if they don't have one yet (which would be unusual for backfill).
+    // safeFutureAnchorUnix bumps the anchor forward in 30-day increments
+    // if the target date has already passed — common for backfilling
+    // legacy users where the original payday is in the past.
     const anchorDate = row.repayment_due_date
       ? new Date(row.repayment_due_date).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
-    const anchor = Math.floor(new Date(`${anchorDate}T00:00:00Z`).getTime() / 1000);
+    const anchor = safeFutureAnchorUnix(anchorDate);
     const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
 
     const sub = await stripe.subscriptions.create({
