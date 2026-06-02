@@ -2751,7 +2751,7 @@ const CustomerApp = () => {
                   }}
                   style={{
                     fontSize: 13, fontWeight: 600,
-                    background: "var(--bld-accent)", color: "#fff",
+                    background: "var(--bld-accent)", color: "#000",
                     border: "none", borderRadius: 10,
                     padding: "0 18px", cursor: "pointer",
                     minWidth: 92,
