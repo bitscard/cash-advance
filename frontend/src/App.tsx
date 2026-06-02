@@ -2722,106 +2722,129 @@ const CustomerApp = () => {
       )}
 
       {showConfirmation && application.referral_code && (
-        <div style={{ maxWidth: "56rem", margin: "0 auto", padding: "4rem 2.4rem 8rem" }}>
-
-          {/* Hero */}
-          {(() => {
-            const advance = application.requested_amount;
-            const instantFee = application.delivery_type === "instant" ? 5 : 0;
-            const repayOnPayday = advance + instantFee;
-            const firstMonthTotal = repayOnPayday + 3.99;
-            return (
-              <div style={{ textAlign: "center", marginBottom: "3.2rem" }}>
-                <div style={{ fontSize: "4.8rem", marginBottom: "1.2rem" }}>🎉</div>
-                <h1 style={{ fontSize: "3rem", fontWeight: 800, color: "var(--ink)", marginBottom: "0.8rem" }}>
-                  You're all set!
-                </h1>
-                <p style={{ fontSize: "1.6rem", color: "var(--muted)", lineHeight: 1.6, marginBottom: "1.6rem" }}>
-                  Your <strong style={{ color: "var(--ink)" }}>${advance} advance</strong> is{" "}
-                  {application.delivery_type === "instant" ? "on its way — same-day delivery." : "on its way — arriving in 3–5 business days."}
-                </p>
-                <div style={{ display: "inline-block", padding: "1.4rem 2rem", background: "var(--surface)", border: "1.5px solid var(--border)", borderRadius: "var(--r-lg)", textAlign: "left", minWidth: "28rem" }}>
-                  <p style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", margin: "0 0 0.6rem" }}>First month</p>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.3rem", color: "var(--ink-2)" }}>
-                    <span>Advance + {instantFee > 0 ? "same-day fee" : "delivery (free)"}</span>
-                    <span>${repayOnPayday}.00 on payday</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "1.3rem", color: "var(--ink-2)", marginTop: "0.3rem" }}>
-                    <span>Membership</span>
-                    <span>$3.99 monthly</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1.5px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.5rem", fontWeight: 800, fontSize: "1.45rem", color: "var(--ink)" }}>
-                    <span>Total first month</span>
-                    <span>${firstMonthTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Referral code card */}
-          <div style={{
-            background: "var(--brand-tint)", border: "2px solid var(--brand-tint2)",
-            borderRadius: "var(--r-lg)", padding: "2.4rem 2.8rem", marginBottom: "2rem",
-          }}>
-            <p style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.6rem" }}>
-              Your referral code
-            </p>
-            <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1.4rem" }}>
-              <code style={{ fontSize: "2.6rem", fontWeight: 900, color: "var(--brand)", letterSpacing: "0.06em" }}>
-                {application.referral_code}
-              </code>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(application.referral_code!);
-                  setCodeCopied(true);
-                  setTimeout(() => setCodeCopied(false), 2000);
-                }}
-                style={{ fontSize: "1.3rem", padding: "0.6rem 1.4rem" }}
-              >
-                {codeCopied ? "Copied!" : "Copy code"}
-              </button>
+        <div className={styles.bldPage}>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="/">
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
+              </a>
+              <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
             </div>
+          </header>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
-              <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
-                <span style={{ fontSize: "2rem", flexShrink: 0 }}>🎰</span>
-                <div>
-                  <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Earn extra raffle entries</p>
-                  <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6 }}>
-                    Every friend who uses your code and gets their first advance earns you <strong>an extra entry</strong> into the weekly $300 cash raffle — on top of your automatic entry.
-                  </p>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
-                <span style={{ fontSize: "2rem", flexShrink: 0 }}>📈</span>
-                <div>
-                  <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Help them, help yourself</p>
-                  <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6 }}>
-                    Your referrals let friends skip the waitlist and get early access — even if Advance isn't live in their state yet.
-                  </p>
-                </div>
-              </div>
-              <div style={{
-                background: "#fffbeb", border: "1.5px solid #fcd34d",
-                borderRadius: "var(--r-sm)", padding: "1rem 1.2rem",
-                display: "flex", gap: "1rem", alignItems: "flex-start",
-              }}>
-                <span style={{ fontSize: "1.6rem", flexShrink: 0 }}>⚠️</span>
-                <p style={{ fontSize: "1.3rem", color: "#92400e", lineHeight: 1.6, margin: 0 }}>
-                  One thing to keep in mind: if someone you refer doesn't pay back their first advance on time, it will slow down your ability to unlock higher credit limits. Only share with people you trust.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            style={{ width: "100%" }}
-            onClick={() => setShowConfirmation(false)}
+          <motion.main
+            className={styles.bldMain}
+            variants={flowPageVariants}
+            initial="hidden"
+            animate="visible"
           >
-            Go to my dashboard →
-          </button>
+            <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+              <span className={styles.bldProgressLabel}>Done</span>
+              <span className={styles.bldProgressDot} data-state="done" />
+              <span className={styles.bldProgressDot} data-state="done" />
+              <span className={styles.bldProgressDot} data-state="done" />
+              <span className={styles.bldProgressDot} data-state="done" />
+            </motion.div>
+
+            <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>All set</motion.span>
+            <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+              You're <em>all set!</em>
+            </motion.h1>
+            <motion.p className={styles.bldLead} variants={flowChildVariants}>
+              Your <strong>${application.requested_amount} advance</strong> is{" "}
+              {application.delivery_type === "instant" ? "on its way — same-day delivery." : "on its way — arriving in 3–5 business days."}
+            </motion.p>
+
+            {/* Cost breakdown — reuses bldCost styling from delivery picker */}
+            {(() => {
+              const advance = application.requested_amount;
+              const instantFee = application.delivery_type === "instant" ? 5 : 0;
+              const repayOnPayday = advance + instantFee;
+              const firstMonthTotal = repayOnPayday + 3.99;
+              return (
+                <motion.div className={styles.bldCost} variants={flowChildVariants}>
+                  <p className={styles.bldCostKicker}>Your first month</p>
+                  <div className={styles.bldCostRow}><span>Advance</span><span>${advance}.00</span></div>
+                  {instantFee > 0 && <div className={styles.bldCostRow}><span>Same-day fee</span><span>$5.00</span></div>}
+                  <div className={styles.bldCostRow}><span>Membership (monthly)</span><span>$3.99</span></div>
+                  <div className={styles.bldCostTotal}>
+                    <span>Total</span><span>${firstMonthTotal.toFixed(2)}</span>
+                  </div>
+                </motion.div>
+              );
+            })()}
+
+            {/* Referral code card — keeps the brand-tint highlight since
+                that's its point. Wrapped in motion for the same enter
+                animation as the rest of the bld* design system. */}
+            <motion.div variants={flowChildVariants} style={{
+              background: "var(--brand-tint)", border: "2px solid var(--brand-tint2)",
+              borderRadius: "16px", padding: "2.4rem 2.8rem", marginTop: "2.4rem",
+            }}>
+              <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--brand)", letterSpacing: "0.12em", textTransform: "uppercase", margin: "0 0 0.8rem" }}>
+                Your referral code
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1.6rem" }}>
+                <code style={{ fontSize: "2.6rem", fontWeight: 900, color: "var(--brand)", letterSpacing: "0.06em" }}>
+                  {application.referral_code}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(application.referral_code!);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  }}
+                  style={{ fontSize: "1.3rem", padding: "0.6rem 1.4rem", borderRadius: "8px", border: "1.5px solid var(--brand)", background: "var(--brand)", color: "#fff", fontWeight: 600, cursor: "pointer" }}
+                >
+                  {codeCopied ? "Copied!" : "Copy code"}
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
+                <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: "2rem", flexShrink: 0 }}>🎰</span>
+                  <div>
+                    <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Earn extra raffle entries</p>
+                    <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
+                      Every friend who uses your code and gets their first advance earns you <strong>an extra entry</strong> into the weekly $300 cash raffle — on top of your automatic entry.
+                    </p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "1.2rem", alignItems: "flex-start" }}>
+                  <span style={{ fontSize: "2rem", flexShrink: 0 }}>📈</span>
+                  <div>
+                    <p style={{ fontSize: "1.4rem", fontWeight: 700, color: "var(--ink)", marginBottom: "0.2rem" }}>Help them, help yourself</p>
+                    <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
+                      Your referrals let friends skip the waitlist and get early access — even if Advance isn't live in their state yet.
+                    </p>
+                  </div>
+                </div>
+                <div style={{
+                  background: "#fffbeb", border: "1.5px solid #fcd34d",
+                  borderRadius: "8px", padding: "1rem 1.2rem",
+                  display: "flex", gap: "1rem", alignItems: "flex-start",
+                }}>
+                  <span style={{ fontSize: "1.6rem", flexShrink: 0 }}>⚠️</span>
+                  <p style={{ fontSize: "1.3rem", color: "#92400e", lineHeight: 1.6, margin: 0 }}>
+                    One thing to keep in mind: if someone you refer doesn't pay back their first advance on time, it will slow down your ability to unlock higher credit limits. Only share with people you trust.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.button
+              type="button"
+              className={styles.bldBtn}
+              variants={flowChildVariants}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowConfirmation(false)}
+              style={{ marginTop: "2.4rem" }}
+            >
+              Go to my dashboard <span aria-hidden="true">→</span>
+            </motion.button>
+          </motion.main>
         </div>
       )}
 
