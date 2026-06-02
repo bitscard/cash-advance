@@ -2282,9 +2282,15 @@ const CustomerApp = () => {
   // small Skip link — most users add a card, the few who don't fall
   // through to ACH-only collection. The card-first-then-ACH cascade in
   // the backend (chargeRepaymentWithCascade) tries card first when
-  // available. Card is REQUIRED — no skip path. Users must save a
-  // debit card before they can advance past this step.
-  if (preBankActive && hasBankPm && !application.stripe_card_pm_id && !needsConnectIdentity) {
+  // available. Card is REQUIRED for real users — no skip link shows
+  // by default. Owner/testers pass ?dev_skip=1 in the URL to reveal
+  // a 'Skip — testing only' link that bypasses this step via a
+  // sessionStorage flag (no card actually saved).
+  const devSkipAllowed = typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("dev_skip") === "1";
+  const cardSkippedKey = `advance_card_skipped_${application.id}`;
+  const cardSkipped = typeof window !== "undefined" && sessionStorage.getItem(cardSkippedKey) === "1";
+  if (preBankActive && hasBankPm && !application.stripe_card_pm_id && !cardSkipped && !needsConnectIdentity) {
     return (
       <main className={styles.page}>
         <NavBar onLogout={handleLogout} />
@@ -2304,6 +2310,21 @@ const CustomerApp = () => {
                 onSaved={() => loadApplication(application.id)}
               />
             </Elements>
+          )}
+          {devSkipAllowed && (
+            <p style={{ marginTop: "2.4rem", textAlign: "center", fontSize: "1.1rem" }}>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (typeof window !== "undefined") sessionStorage.setItem(cardSkippedKey, "1");
+                  loadApplication(application.id);
+                }}
+                style={{ color: "var(--muted)", textDecoration: "underline" }}
+              >
+                Skip — testing only (dev mode)
+              </a>
+            </p>
           )}
         </div>
         <StatesFooter />
