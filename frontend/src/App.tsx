@@ -2724,7 +2724,7 @@ const CustomerApp = () => {
               }}>
                 Share your code
               </p>
-              <p style={{ fontSize: 14, color: "var(--bld-text-dim)", margin: "0 0 20px", lineHeight: 1.5 }}>
+              <p style={{ fontSize: 14, color: "var(--bld-text)", margin: "0 0 20px", lineHeight: 1.5 }}>
                 Each friend who joins earns you an extra entry in the weekly $300 raffle.
               </p>
               <div style={{
@@ -2862,9 +2862,22 @@ const CustomerApp = () => {
               // ── 1. Still being reviewed (pre-approval) ──
               if (["reviewing", "intake", "bank_connected"].includes(application.status)) {
                 return (
-                  <div className={styles.appCardAction}>
-                    <p>Your application is being reviewed. We'll update this page as soon as there's news — no action needed from you right now.</p>
-                  </div>
+                  <motion.div
+                    variants={flowChildVariants}
+                    className={styles.bldNote}
+                    style={{ marginTop: 32, padding: 24 }}
+                  >
+                    <p style={{
+                      fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
+                      textTransform: "uppercase", color: "var(--bld-accent)",
+                      margin: "0 0 8px",
+                    }}>
+                      In review
+                    </p>
+                    <p style={{ fontSize: 15, color: "var(--bld-text)", margin: 0, lineHeight: 1.55 }}>
+                      We&apos;re looking at your application. We&apos;ll update this page as soon as there&apos;s news — nothing to do on your end.
+                    </p>
+                  </motion.div>
                 );
               }
 
@@ -2999,15 +3012,34 @@ const CustomerApp = () => {
 
             {/* ── Referral code card — shown only after first advance ── */}
             {application.referral_code && application.delivery_type && (
-              <div style={{
-                background: "var(--brand-tint)", border: "1.5px solid var(--brand-tint2)",
-                borderRadius: "var(--r-lg)", padding: "1.6rem 2rem", marginTop: "1.2rem",
-              }}>
-                <p style={{ fontSize: "1.15rem", fontWeight: 700, color: "var(--muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.4rem" }}>
-                  Your referral code
+              <motion.div
+                variants={flowChildVariants}
+                className={styles.bldNote}
+                style={{ marginTop: 24, padding: 24, textAlign: "center" }}
+              >
+                <p style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
+                  textTransform: "uppercase", color: "var(--bld-accent)",
+                  margin: "0 0 8px",
+                }}>
+                  Share your code
                 </p>
-                <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-                  <code style={{ fontSize: "2rem", fontWeight: 800, color: "var(--brand)", letterSpacing: "0.04em" }}>
+                <p style={{ fontSize: 14, color: "var(--bld-text)", margin: "0 0 20px", lineHeight: 1.5 }}>
+                  Each friend who joins earns you an extra entry in the weekly $300 raffle.
+                </p>
+                <div style={{
+                  display: "flex", alignItems: "stretch", gap: 10,
+                  maxWidth: 360, margin: "0 auto",
+                }}>
+                  <code style={{
+                    flex: 1, fontSize: 22, fontWeight: 800,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    letterSpacing: "0.08em", color: "var(--bld-text)",
+                    background: "var(--bld-surface)", border: "1px solid var(--bld-border)",
+                    borderRadius: 10, padding: "12px 16px",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    textTransform: "uppercase",
+                  }}>
                     {application.referral_code}
                   </code>
                   <button
@@ -3017,18 +3049,18 @@ const CustomerApp = () => {
                       setCodeCopied(true);
                       setTimeout(() => setCodeCopied(false), 2000);
                     }}
-                    style={{ fontSize: "1.25rem", padding: "0.5rem 1.2rem" }}
+                    style={{
+                      fontSize: 13, fontWeight: 600,
+                      background: "var(--bld-accent)", color: "#fff",
+                      border: "none", borderRadius: 10,
+                      padding: "0 18px", cursor: "pointer",
+                      minWidth: 92,
+                    }}
                   >
-                    {codeCopied ? "Copied!" : "Copy"}
+                    {codeCopied ? "Copied" : "Copy"}
                   </button>
                 </div>
-                <p style={{ fontSize: "1.35rem", color: "var(--ink-2)", lineHeight: 1.65 }}>
-                  Share this code with friends so they can get early access to Advance. Every person you refer who gets their first advance earns you <strong>an extra entry</strong> into the weekly $300 raffle.
-                </p>
-                <p style={{ fontSize: "1.25rem", color: "#b45309", marginTop: "0.8rem", lineHeight: 1.6, background: "#fffbeb", borderRadius: "var(--r-sm)", padding: "0.8rem 1rem" }}>
-                  Heads up: if someone you refer doesn't repay their first advance on time, it will make it harder for you to unlock higher credit limits going forward.
-                </p>
-              </div>
+              </motion.div>
             )}
 
             {error && <p className={styles.bldError}>{error}</p>}
