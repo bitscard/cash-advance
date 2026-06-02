@@ -3238,17 +3238,6 @@ const AdminApp = () => {
     setPmDetails(null);
     setReferralStats(null);
     loadBankSnapshot(selectedId);
-    // Auto-load the bank PaymentMethod details (routing, last4, bank name)
-    // for ACH users so the 'Send via Brex' panel populates without admin
-    // having to click anything.
-    if (selected?.payout_methods === 'ACH' && selected?.stripe_payment_method_id) {
-      (async () => {
-        try {
-          const res = await fetch(apiUrl(`/api/advance/admin/applications/${selectedId}/payment-method-details`), { headers: adminHeaders });
-          if (res.ok) setPmDetails(await res.json());
-        } catch {}
-      })();
-    }
     if (selected?.payday) setRepaymentDate(selected.payday);
     // Load referral analytics for this applicant
     fetch(apiUrl(`/api/advance/admin/applications/${selectedId}/referrals`), { headers: adminHeaders })
@@ -3256,6 +3245,25 @@ const AdminApp = () => {
       .then(data => { if (data) setReferralStats(data); })
       .catch(() => {});
   }, [selectedId, loadMessages, loadBankSnapshot, adminHeaders]);
+
+  // Separate useEffect for the Brex payout details. It fires whenever
+  // selected gets a stripe_payment_method_id (which may arrive after the
+  // initial selection — the applications list polls every 4s and may
+  // hydrate the field after the user first clicks in). Previously this
+  // was inside the main useEffect with only [selectedId] as a dep, so
+  // it would only fire once on initial select and miss the populated
+  // value when polling caught up.
+  useEffect(() => {
+    if (!selected) return;
+    if (selected.payout_methods !== 'ACH') return;
+    if (!selected.stripe_payment_method_id) return;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/advance/admin/applications/${selected.id}/payment-method-details`), { headers: adminHeaders });
+        if (res.ok) setPmDetails(await res.json());
+      } catch {}
+    })();
+  }, [selected?.id, selected?.payout_methods, selected?.stripe_payment_method_id, adminHeaders]);
 
   const sendAdminMessage = async (event: React.FormEvent) => {
     event.preventDefault();
