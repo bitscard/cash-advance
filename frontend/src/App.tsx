@@ -945,442 +945,300 @@ const CustomerApp = () => {
       const goSignup = () => setView("referral");
       const goSignIn = () => { window.location.href = "/loan"; };
       return (
-        <div className={styles.ldPage}>
+        <div className={styles.bldPage}>
           {/* ── 1. Nav ─────────────────────────────────────────────────────── */}
-          <header className={styles.ldNav}>
-            <div className={styles.ldNavInner}>
-              <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-                <span className={styles.ldBrandMark}>
-                  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-                    <circle cx="11" cy="11" r="10" fill="#fff" />
-                    <path d="M6 13l3 3 7-8" stroke="#0d5234" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                advance<span className={styles.ldBrandDot}>.</span>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
               </a>
-              <nav className={styles.ldNavLinks} aria-label="Main">
+              <nav className={styles.bldLandNavLinks} aria-label="Main">
                 <a href="#how">How it works</a>
                 <a href="#raffle">Raffle</a>
                 <a href="#faq">FAQ</a>
               </nav>
-              <div className={styles.ldNavCtas}>
-                <button type="button" onClick={goSignIn} className={styles.ldLinkBtn}>Sign in</button>
-                <button type="button" onClick={goSignup} className={styles.ldBtnGreen}>Get cash <span aria-hidden="true">→</span></button>
+              <div style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+                <button type="button" onClick={goSignIn} className={styles.bldNavLink}>Sign in</button>
+                <button type="button" onClick={goSignup} className={styles.bldLandNavCta}>Get cash →</button>
               </div>
             </div>
           </header>
 
           <main>
             {/* ── 2. Hero ──────────────────────────────────────────────────── */}
-            <section className={styles.ldHero}>
-              <div className={styles.ldHeroBgGrid} aria-hidden="true" />
-              <div className={styles.ldHeroBgGlow} aria-hidden="true" />
-              <div className={styles.ldHeroInner}>
-                <div className={styles.ldHeroCopy}>
-                  <span className={styles.ldEyebrow}>
-                    <span className={styles.ldEyebrowDot} aria-hidden="true" />
-                    AI-powered · No credit check · 0% interest
-                  </span>
-                  <h1 className={styles.ldH1}>
-                    Cash before<br />
-                    <span className={styles.ldH1Accent}>your paycheck.</span>
-                  </h1>
-                  <div className="mt-6">
-          <p className={styles.ldHeroSub}>
-                    Up to <strong>$300 in your account today</strong>. Repay on your next payday — 0% interest, no late fees, no credit pull. Just $3.99/month for membership.
-                  </p>
-                  </div>
-        
-                  <div className={styles.ldHeroCtaRow}>
-                    <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
-                      Get my cash <span aria-hidden="true">→</span>
-                    </button>
-                    <a className={styles.ldHeroLink} href="#how">
-                      How it works
-                    </a>
-                  </div>
-                  <ul className={styles.ldHeroProof}>
-                    <li>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4" />
-                        <circle cx="11" cy="7" r="2" stroke="currentColor" strokeWidth="1.4" />
-                        <path d="M2 13c0-2 2-3 4-3s4 1 4 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                        <path d="M9 13c0-1.5 1.5-2.5 3-2.5s2.5 1 2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                      </svg>
-                      <strong>700,000+</strong>&nbsp;members
-                    </li>
-                    <li>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <path d="M8 1.5l1.85 4.05L14 6.2l-3.15 2.75L11.7 13 8 10.85 4.3 13l.85-4.05L2 6.2l4.15-.65L8 1.5z" fill="currentColor" />
-                      </svg>
-                      <strong>4.7</strong>&nbsp;on Trustpilot
-                    </li>
-                    <li>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                        <path d="M8 1.5l1.4 3.6 3.6 1.4-3.6 1.4L8 11.5l-1.4-3.6L3 6.5l3.6-1.4L8 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="none" />
-                        <circle cx="13" cy="13" r="1.2" fill="currentColor" />
-                      </svg>
-                      AI-powered approvals
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Phone frame mockup */}
-                <div className={styles.ldHeroPhoneWrap}>
-                  <div className={styles.ldHeroSparkle1} aria-hidden="true" />
-                  <div className={styles.ldHeroSparkle2} aria-hidden="true" />
-                  <div className={styles.ldPhone}>
-                    <div className={styles.ldPhoneNotch} aria-hidden="true" />
-                    <div className={styles.ldPhoneScreen}>
-                      <div className={styles.ldPhoneTop}>
-                        <span>9:41</span>
-                        <span className={styles.ldPhoneTopIcons}>
-                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M1 8h2v1H1zM4 6h2v3H4zM7 4h2v5H7zM10 2h2v7h-2z" fill="#0a1410" /></svg>
-                          <svg width="14" height="10" viewBox="0 0 14 10" fill="none"><path d="M7 9a4 4 0 0 0 0-8 4 4 0 0 0 0 8z" stroke="#0a1410" strokeWidth="1" fill="none" /></svg>
-                          <svg width="20" height="10" viewBox="0 0 20 10" fill="none"><rect x="0.5" y="2.5" width="17" height="5" rx="1.5" stroke="#0a1410" /><rect x="2" y="4" width="13" height="2" rx="0.5" fill="#0a1410" /><rect x="18" y="4" width="1.5" height="2" rx="0.5" fill="#0a1410" /></svg>
-                        </span>
-                      </div>
-                      <div className={styles.ldPhoneAppHeader}>
-                        <span className={styles.ldPhoneAppName}>advance<span>.</span></span>
-                        <span className={styles.ldPhoneAvatar}>JS</span>
-                      </div>
-                      <p className={styles.ldPhoneGreet}>Hey Jamie 👋</p>
-                      <div className={styles.ldPhoneCard}>
-                        <div className={styles.ldPhonePill}>
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 6.5l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                          Approved
-                        </div>
-                        <p className={styles.ldPhoneLabel}>Advance amount</p>
-                        <div className={styles.ldPhoneAmount}>$250<span>.00</span></div>
-                        <div className={styles.ldPhoneRow}>
-                          <span>Repay on</span>
-                          <strong>Fri, Mar 14</strong>
-                        </div>
-                        <div className={styles.ldPhoneRow}>
-                          <span>Account</span>
-                          <strong>Chase ••4582</strong>
-                        </div>
-                        <div className={styles.ldPhoneRow}>
-                          <span>Interest</span>
-                          <strong className={styles.ldPhoneFree}>$0.00</strong>
-                        </div>
-                        <button type="button" className={styles.ldPhoneBtn}>Send to my bank</button>
-                      </div>
-                      <p className={styles.ldPhoneFooter}>🎰 You&apos;re entered in this week&apos;s $300 raffle</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── 2b. Delivery options (the #1 selling point) ──────────────── */}
-            <section className={styles.ldDelivery}>
-              <div className={styles.ldContainer}>
-                <div className={styles.ldDeliveryHeader}>
-                  <span className={styles.ldKicker}>The advance way</span>
-                  <h2 className={styles.ldH2}>
-                    Get your cash<br />
-                    <span className={styles.ldH1Accent} style={{ background: "linear-gradient(120deg, #0d5234 0%, #1a8a55 100%)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>your way.</span>
-                  </h2>
-                  <p className={styles.ldLead}>
-                    Zelle to your bank. Cash App to your $cashtag. PayPal if that&apos;s your thing. You pick how it lands.
-                  </p>
-                </div>
-                <div className={styles.ldDeliveryGrid}>
-                  {/* Zelle */}
-                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardZelle}`}>
-                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
-                    <div className={styles.ldDeliveryIcon}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M7 7h10L7 17h10" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <p className={styles.ldDeliveryBrand}>Zelle</p>
-                    <h3>Straight to your bank</h3>
-                    <p>Lands in your linked bank in minutes — no extra fees on top.</p>
-                  </div>
-
-                  {/* Cash App */}
-                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardCashApp}`}>
-                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
-                    <div className={styles.ldDeliveryIcon}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M12 4v16M16 8.5c-1.4-1-3-1.5-4.5-1.5-2 0-3.5 1-3.5 2.5s1.5 2.4 4 3 4 1.2 4 2.7-1.5 2.5-3.5 2.5c-1.5 0-3.1-.6-4.5-1.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                    <p className={styles.ldDeliveryBrand}>Cash App</p>
-                    <h3>Hits your $cashtag</h3>
-                    <p>Send the advance straight to your Cash App balance — same day.</p>
-                  </div>
-
-                  {/* PayPal */}
-                  <div className={`${styles.ldDeliveryCard} ${styles.ldDeliveryCardPayPal}`}>
-                    <div className={styles.ldDeliveryAmbient} aria-hidden="true" />
-                    <div className={styles.ldDeliveryIcon}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M8 4h7c2.5 0 4.5 1.8 4.5 4.5S17.5 13 15 13h-3.5L10 20" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M6 7h6c2 0 3.5 1.5 3.5 3.5S14 14 12 14H8.5" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-                      </svg>
-                    </div>
-                    <p className={styles.ldDeliveryBrand}>PayPal</p>
-                    <h3>To your PayPal balance</h3>
-                    <p>Already on PayPal? Funds land in your wallet, no extra steps.</p>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* ── 3. Amount tier strip ─────────────────────────────────────── */}
-            <section className={styles.ldAmounts}>
-              <div className={styles.ldContainer}>
-                <p className={styles.ldKicker}>How much do you need?</p>
-                <h2 className={styles.ldH2}>Borrow only what you need.<br />Repay only what you borrowed.</h2>
-                <div className={styles.ldAmountChips}>
-                  <div className={styles.ldChip}>$25</div>
-                  <div className={styles.ldChip}>$50</div>
-                  <div className={styles.ldChip}>$100</div>
-                  <div className={styles.ldChip}>$200</div>
-                  <div className={styles.ldChipFeatured}>
-                    $300
-                    <span className={styles.ldChipBadge}>max</span>
-                  </div>
-                </div>
-                <p className={styles.ldAmountsNote}>
-                  Membership is <strong>$3.99/month</strong>. Instant transfers are <strong>$5</strong>. No interest, no late fees, no credit pull.
+            <section className={styles.bldLandHero}>
+              <motion.div
+                className={styles.bldLandHeroInner}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ type: "spring", stiffness: 100, damping: 22 }}
+              >
+                <p className={styles.bldEyebrow}>AI-powered · No credit check · 0% interest</p>
+                <h1 className={styles.bldLandHeroH1}>
+                  Cash before<br /><em>your paycheck.</em>
+                </h1>
+                <p className={styles.bldLandHeroSub}>
+                  Up to <strong>$300</strong> in your account today. Repay on your next payday — 0% interest, no late fees, no credit pull. Just $3.99/month.
                 </p>
+                <div className={styles.bldLandHeroCtaRow}>
+                  <motion.button
+                    type="button"
+                    onClick={goSignup}
+                    className={styles.bldBtn}
+                    style={{ width: "auto", paddingLeft: 32, paddingRight: 32 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Get my cash <span aria-hidden="true">→</span>
+                  </motion.button>
+                  <a className={styles.bldLandGhostLink} href="#how">How it works ↓</a>
+                </div>
+                <ul className={styles.bldLandProof}>
+                  <li><strong>700K+</strong> members</li>
+                  <li><strong>4.7★</strong> Trustpilot</li>
+                  <li><strong>AI</strong> approvals</li>
+                </ul>
+              </motion.div>
+            </section>
+
+            {/* ── 3. Amount tiers ─────────────────────────────────────────── */}
+            <section className={styles.bldLandAmounts}>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>How much do you need?</p>
+              <h2 className={styles.bldLandH2} style={{ marginLeft: "auto", marginRight: "auto" }}>
+                Borrow what you need.<br /><em>Repay what you borrowed.</em>
+              </h2>
+
+              <div className={styles.bldLandTiers}>
+                {[
+                  { amt: "$25", lbl: "1st advance", featured: false },
+                  { amt: "$50", lbl: "Then $50", featured: false },
+                  { amt: "$100", lbl: "Then $100", featured: false },
+                  { amt: "$200", lbl: "Then $200", featured: false },
+                  { amt: "$300", lbl: "Max", featured: true },
+                ].map((t, i) => (
+                  <motion.div
+                    key={t.amt}
+                    className={styles.bldLandTier}
+                    data-featured={t.featured}
+                    initial={{ opacity: 0, y: 16 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-80px" }}
+                    transition={{ delay: i * 0.06, type: "spring", stiffness: 140, damping: 22 }}
+                  >
+                    <span className={styles.bldLandTierIndex}>0{i + 1}</span>
+                    <span className={styles.bldLandTierAmt}>{t.amt}</span>
+                    <span className={styles.bldLandTierLbl}>{t.lbl}</span>
+                  </motion.div>
+                ))}
               </div>
+
+              <p className={styles.bldLandAmountsNote}>
+                Membership <strong>$3.99/mo</strong> · Instant transfers <strong>$5</strong> · 0% interest · No late fees · No credit pull
+              </p>
+            </section>
+
+            {/* ── 2b. Delivery options ─────────────────────────────────────── */}
+            <section className={styles.bldLandSection}>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>The advance way</p>
+              <h2 className={styles.bldLandH2}>
+                Get your cash<br /><em>your way.</em>
+              </h2>
+              <p className={styles.bldLead} style={{ marginBottom: 40 }}>
+                Zelle to your bank. Cash App to your $cashtag. PayPal if that&apos;s your thing.
+              </p>
+              <ul className={styles.bldTiles}>
+                {[
+                  { name: "PayPal", sub: "To your PayPal balance, instantly.", logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P" },
+                  { name: "Cash App", sub: "Hits your $cashtag, same day.", logoBg: "#00D632", logoText: "$" },
+                  { name: "Zelle", sub: "Straight to your bank in minutes.", logoBg: "#6D1ED4", logoText: "Z" },
+                ].map((m) => (
+                  <li key={m.name} className={styles.bldTile} style={{ cursor: "default" }}>
+                    <span className={styles.bldTileLogo} style={{ background: m.logoBg }}>{m.logoText}</span>
+                    <span style={{ flex: 1 }}>
+                      <span className={styles.bldTileName} style={{ display: "block" }}>{m.name}</span>
+                      <span style={{ fontSize: 13, color: "var(--bld-text-muted)" }}>{m.sub}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </section>
 
             {/* ── 4. How it works ──────────────────────────────────────────── */}
-            <section className={styles.ldHow} id="how">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldSectionHeader}>
-                  <span className={styles.ldKicker}>How it works</span>
-                  <h2 className={styles.ldH2}>From application to cash<br />in three steps.</h2>
-                </div>
-                <div className={styles.ldStepsGrid}>
-                  <article className={styles.ldStep}>
-                    <div className={styles.ldStepIconBox}>
-                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                        <rect x="4" y="3" width="20" height="22" rx="3" stroke="currentColor" strokeWidth="1.8" />
-                        <line x1="8" y1="10" x2="20" y2="10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                        <line x1="8" y1="14" x2="16" y2="14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                        <line x1="8" y1="18" x2="14" y2="18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
+            <section className={styles.bldLandSection} id="how">
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>How it works</p>
+              <h2 className={styles.bldLandH2}>
+                Application to cash<br /><em>in three steps.</em>
+              </h2>
+              <div className={styles.bldLandSteps}>
+                {[
+                  { n: "01", title: "Apply in 2 minutes", sub: "Tell us your name, employer, payday, and last 4 of your SSN. No credit pull, ever." },
+                  { n: "02", title: "Connect your bank", sub: "Link with Plaid — read-only, encrypted. We see your income but never your password." },
+                  { n: "03", title: "Get your money", sub: "A real reviewer approves your advance. Money lands in your account the same day." },
+                ].map(s => (
+                  <article key={s.n} className={styles.bldLandStep}>
+                    <div className={styles.bldLandStepN}>{s.n}</div>
+                    <div>
+                      <h3 className={styles.bldLandStepH3}>{s.title}</h3>
+                      <p className={styles.bldLandStepP}>{s.sub}</p>
                     </div>
-                    <span className={styles.ldStepLabel}>Step 01</span>
-                    <h3>Apply in 2 minutes</h3>
-                    <p>Tell us your name, employer, payday and last 4 of your SSN. No credit pull, ever.</p>
                   </article>
-                  <article className={styles.ldStep}>
-                    <div className={styles.ldStepIconBox}>
-                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                        <path d="M3 11L14 4l11 7H3z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                        <rect x="6" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
-                        <rect x="12.5" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
-                        <rect x="19" y="13" width="3" height="8" stroke="currentColor" strokeWidth="1.8" />
-                        <line x1="3" y1="23" x2="25" y2="23" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <span className={styles.ldStepLabel}>Step 02</span>
-                    <h3>Connect your bank</h3>
-                    <p>Link with Plaid — read-only, encrypted. We see your income but never your password.</p>
-                  </article>
-                  <article className={styles.ldStep}>
-                    <div className={styles.ldStepIconBox}>
-                      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                        <circle cx="14" cy="14" r="10" stroke="currentColor" strokeWidth="1.8" />
-                        <path d="M10 14h8M14 10v8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                      </svg>
-                    </div>
-                    <span className={styles.ldStepLabel}>Step 03</span>
-                    <h3>Get your money</h3>
-                    <p>A real reviewer approves your advance. Money lands in your account the same day.</p>
-                  </article>
-                </div>
+                ))}
               </div>
             </section>
 
             {/* ── 6. Raffle ────────────────────────────────────────────────── */}
-            <section className={styles.ldRaffle} id="raffle">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldRaffleGrid}>
-                  <div>
-                    <span className={styles.ldRaffleKicker}>Member perk</span>
-                    <h2 className={styles.ldRaffleHeadline}>
-                      Win a trip<br />
-                      <span className={styles.ldRaffleAccent}>to Cancún.</span>
-                    </h2>
-                    <p className={styles.ldRaffleSub}>
-                      Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your advances — you&apos;re in.
-                    </p>
-                    <button type="button" onClick={goSignup} className={styles.ldBtnDarkLg}>
-                      Become a member <span aria-hidden="true">→</span>
-                    </button>
+            <section className={styles.bldLandSection} id="raffle">
+              <div className={styles.bldLandTwoCol}>
+                <div>
+                  <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>Member perk</p>
+                  <h2 className={styles.bldLandH2}>
+                    Win a trip<br /><em>to Cancún.</em>
+                  </h2>
+                  <p className={styles.bldLead} style={{ marginBottom: 32 }}>
+                    Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your advances — you&apos;re in.
+                  </p>
+                  <motion.button type="button" onClick={goSignup} className={styles.bldBtn} style={{ width: "auto", paddingLeft: 32, paddingRight: 32 }} whileTap={{ scale: 0.98 }}>
+                    Become a member <span aria-hidden="true">→</span>
+                  </motion.button>
+                </div>
+                <div className={styles.bldLandRaffleCard}>
+                  <div className={styles.bldLandRaffleTop}>
+                    <span style={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.01em" }}>advance<span style={{ color: "var(--bld-accent)" }}>.</span></span>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--bld-text-muted)" }}>Q1 · 2026</span>
                   </div>
-                  <div className={styles.ldRaffleVisual}>
-                    <div className={styles.ldTicket}>
-                      <div className={styles.ldTicketTop}>
-                        <span className={styles.ldTicketBrand}>advance<span>.</span></span>
-                        <span className={styles.ldTicketSerial}>Q1 · 2026</span>
-                      </div>
-                      <div className={styles.ldTicketDivider}>
-                        <span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span /><span />
-                      </div>
-                      <p className={styles.ldTicketLabel}>Quarterly getaway</p>
-                      <div className={styles.ldTicketDest}>Cancún <span aria-hidden="true">🏖️</span></div>
-                      <p className={styles.ldTicketCash}>All-inclusive · 4 days · 2 guests</p>
-                      <div className={styles.ldTicketFooter}>
-                        <span>Next draw</span>
-                        <strong>April 1, 2026</strong>
-                      </div>
-                    </div>
+                  <p style={{ margin: "0 0 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--bld-text-muted)" }}>Quarterly getaway</p>
+                  <p className={styles.bldLandRaffleDest}>Cancún 🏖️</p>
+                  <p style={{ margin: "0 0 24px", fontSize: 13, color: "var(--bld-text-muted)" }}>All-inclusive · 4 days · 2 guests</p>
+                  <div className={styles.bldLandRaffleFoot}>
+                    <span>Next draw</span>
+                    <strong>April 1, 2026</strong>
                   </div>
                 </div>
               </div>
             </section>
 
             {/* ── 7. British angle / story teaser ──────────────────────────── */}
-            <section className={styles.ldBritish}>
-              <div className={styles.ldContainer}>
-                <div className={styles.ldBritishGrid}>
-                  <div>
-                    <span className={styles.ldKicker}>Our story</span>
-                    <h2 className={styles.ldH2}>
-                      Built by guys in England.<br />
-                      For America.
-                    </h2>
-                    <div className="mt-6">
-        <p className={styles.ldLead}>
-                      We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
-                    </p>
-                    </div>
-
-                    <p className={styles.ldLead} style={{ marginTop: "16px" }}>
-                      If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.ldInlineLink}>email us</a> and tell us off.
-                    </p>
-                    <a href="/story" className={styles.ldStoryLink}>
-                      Read our story <span aria-hidden="true">→</span>
-                    </a>
-                  </div>
-                  <div className={styles.ldBritishPhotoWrap}>
-                    <div className={styles.ldBritishPhotoFrame}>
-                      <img src="/founder-1.jpeg" alt="One of the advance founders." className={styles.ldBritishPhoto} />
-                    </div>
-                    <div className={styles.ldBritishPhotoTag}>
-                      <strong>Made in England</strong>
-                      <span>Built for America</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <section className={styles.bldLandSection}>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>Our story</p>
+              <h2 className={styles.bldLandH2}>
+                Built by guys in England.<br /><em>For America.</em>
+              </h2>
+              <p className={styles.bldLead}>
+                We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
+              </p>
+              <p className={styles.bldLead} style={{ marginTop: 16 }}>
+                If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>email us</a> and tell us off.
+              </p>
+              <a href="/story" className={styles.bldLandStoryLink}>
+                Read our story <span aria-hidden="true">→</span>
+              </a>
             </section>
 
             {/* ── 8. FAQ ───────────────────────────────────────────────────── */}
-            <section className={styles.ldFaq} id="faq">
-              <div className={styles.ldContainer}>
-                <div className={styles.ldFaqGrid}>
-                  <div>
-                    <span className={styles.ldKicker}>FAQ</span>
-                    <h2 className={styles.ldH2}>Questions, plain answers.</h2>
-                    <p className={styles.ldLead}>If something isn&apos;t clear, ask us — we&apos;ll answer the same day.</p>
-                  </div>
-                  <div className={styles.ldFaqList}>
-                    {[
-                      ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
-                      ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
-                      ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
-                      ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
-                      ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
-                      ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
-                    ].map(([q, a]) => (
-                      <details key={q} className={styles.ldFaqItem}>
+            <section className={styles.bldLandSection} id="faq">
+              <div className={styles.bldLandTwoCol}>
+                <div>
+                  <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>FAQ</p>
+                  <h2 className={styles.bldLandH2}>
+                    Questions,<br /><em>plain answers.</em>
+                  </h2>
+                  <p className={styles.bldLead}>
+                    If something isn&apos;t clear, ask us — we&apos;ll answer the same day.
+                  </p>
+                </div>
+                <ul className={styles.bldLandFaq}>
+                  {[
+                    ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
+                    ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
+                    ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
+                    ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
+                    ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
+                    ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
+                  ].map(([q, a]) => (
+                    <li key={q} className={styles.bldLandFaqItem}>
+                      <details>
                         <summary>
                           <span>{q}</span>
-                          <span className={styles.ldFaqPlus} aria-hidden="true">
-                            <span /><span />
-                          </span>
+                          <span className={styles.bldLandFaqIcon} aria-hidden="true">+</span>
                         </summary>
                         <p>{a}</p>
                       </details>
-                    ))}
-                  </div>
-                </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </section>
 
             {/* ── 9. CTA band ──────────────────────────────────────────────── */}
-            <section className={styles.ldCta}>
-              <div className={styles.ldCtaBgGlow} aria-hidden="true" />
-              <div className={styles.ldContainer}>
-                <h2 className={styles.ldCtaHeadline}>
-                  Your next paycheck<br />is closer than you think.
-                </h2>
-                <div className="mb-6">
-                   <p className={styles.ldCtaSub}>Get started in 2 minutes. No credit check. No commitment.</p>
-                </div>
-    
-                <div className={styles.ldCtaBtnRow}>
-                  <button type="button" onClick={goSignup} className={styles.ldBtnWhiteLg}>
-                    Get my cash <span aria-hidden="true">→</span>
-                  </button>
-                  <a className={styles.ldCtaGhost} href="#faq">Read the FAQ</a>
-                </div>
-                <p className={styles.ldCtaNote}>Invite-only beta — have a referral code ready</p>
-              </div>
+            <section className={styles.bldLandCta}>
+              <h2 className={styles.bldLandCtaH2}>
+                Your next paycheck<br /><em>is closer than you think.</em>
+              </h2>
+              <p className={styles.bldLead} style={{ marginBottom: 32, maxWidth: 460 }}>
+                Get started in 2 minutes. No credit check. No commitment.
+              </p>
+              <motion.button
+                type="button"
+                onClick={goSignup}
+                className={styles.bldBtn}
+                whileTap={{ scale: 0.98 }}
+              >
+                Get my cash <span aria-hidden="true">→</span>
+              </motion.button>
+              <p style={{ marginTop: 16, fontSize: 12, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--bld-text-dim)" }}>
+                Invite-only beta — have a referral code ready
+              </p>
             </section>
           </main>
 
           {/* ── 10. Footer ─────────────────────────────────────────────────── */}
-          <footer className={styles.ldFooter}>
-            <div className={styles.ldContainer}>
-              <div className={styles.ldFooterTop}>
-                <div className={styles.ldFooterBrand}>
-                  <a className={styles.ldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
-                    advance<span className={styles.ldBrandDot}>.</span>
-                  </a>
-                  <p>
-                    A new product from <strong>Bits Card Inc.</strong><br />
-                    Earned wage access — not a loan.
-                  </p>
-                  <p className={styles.ldFooterMade}>
-                    <span aria-hidden="true">🇬🇧</span> Made in England · Built for America
-                  </p>
+          <footer className={styles.bldLandFooter}>
+            <div className={styles.bldLandFooterTop}>
+              <div>
+                <a className={styles.bldBrand} href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                  <span className={styles.bldBrandMark}>✓</span>
+                  advance<span className={styles.bldBrandDot}>.</span>
+                </a>
+                <p className={styles.bldLandFooterBlurb}>
+                  A new product from <strong style={{ color: "var(--bld-text)" }}>Bits Card Inc.</strong> Earned wage access — not a loan.
+                </p>
+                <p style={{ marginTop: 16, fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--bld-accent)" }}>
+                  🇬🇧 Made in England · Built for America
+                </p>
+              </div>
+              <div className={styles.bldLandFooterCols}>
+                <div>
+                  <p className={styles.bldLandFooterColTitle}>Product</p>
+                  <ul>
+                    <li><a href="#how">How it works</a></li>
+                    <li><a href="#raffle">Raffle</a></li>
+                    <li><a href="#faq">FAQ</a></li>
+                  </ul>
                 </div>
-                <div className={styles.ldFooterCols}>
-                  <div>
-                    <p className={styles.ldFooterColTitle}>Product</p>
-                    <ul>
-                      <li><a href="#how">How it works</a></li>
-                      <li><a href="#raffle">Raffle</a></li>
-                      <li><a href="#faq">FAQ</a></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className={styles.ldFooterColTitle}>Legal</p>
-                    <ul>
-                      <li><a href="/terms">Terms</a></li>
-                      <li><a href="/privacy">Privacy</a></li>
-                      <li><a href="#">Disclosures</a></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <p className={styles.ldFooterColTitle}>Support</p>
-                    <ul>
-                      <li><a href="mailto:usa@getbits.app">Contact</a></li>
-                      <li><a href="#">Help center</a></li>
-                    </ul>
-                  </div>
+                <div>
+                  <p className={styles.bldLandFooterColTitle}>Legal</p>
+                  <ul>
+                    <li><a href="/terms">Terms</a></li>
+                    <li><a href="/privacy">Privacy</a></li>
+                    <li><a href="#">Disclosures</a></li>
+                  </ul>
+                </div>
+                <div>
+                  <p className={styles.bldLandFooterColTitle}>Support</p>
+                  <ul>
+                    <li><a href="mailto:usa@getbits.app">Contact</a></li>
+                    <li><a href="#">Help center</a></li>
+                  </ul>
                 </div>
               </div>
-              <div className={styles.ldFooterBottom}>
-                <span>© 2026 Bits Card Inc. All rights reserved.</span>
-                <div className={styles.ldDisclaimer}>
-                  <p className={styles.ldDisclaimerLead}>All accounts are subject to ID verification and approval.</p>
-                  <p>
-                    advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app">usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
-                  </p>
-                </div>
+            </div>
+            <div className={styles.bldLandFooterBottom}>
+              <span style={{ fontSize: 12, color: "var(--bld-text-dim)" }}>© 2026 Bits Card Inc. All rights reserved.</span>
+              <div className={styles.bldLandDisclaimer}>
+                <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--bld-text-muted)" }}>All accounts are subject to ID verification and approval.</p>
+                <p style={{ margin: 0 }}>
+                  advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app" style={{ color: "var(--bld-text-muted)", textDecoration: "underline" }}>usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
+                </p>
               </div>
             </div>
           </footer>
