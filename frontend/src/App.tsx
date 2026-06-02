@@ -2506,9 +2506,15 @@ const CustomerApp = () => {
   // Kept as a variable for diff clarity; can be inlined later.
   const needsCard = false;
 
+  // The confirmation view + dashboard view use the bldPage layout
+  // which has its own bldNav header — don't double-stack the outer
+  // NavBar above them. NavBar still renders for the old payout step
+  // and delivery modal which use the legacy design.
+  const hideOuterNavBar = showConfirmation || (!showPayoutStep && !showDeliveryModal);
+
   return (
     <main className={styles.page}>
-      <NavBar onLogout={handleLogout} />
+      {!hideOuterNavBar && <NavBar onLogout={handleLogout} />}
 
       {showDeliveryModal && (
         <div className={styles.modalBackdrop}>
@@ -2767,7 +2773,7 @@ const CustomerApp = () => {
                   }}
                   style={{
                     fontSize: 13, fontWeight: 600,
-                    background: "var(--bld-accent)", color: "#000",
+                    background: "#000", color: "#fff",
                     border: "none", borderRadius: 10,
                     padding: "0 18px", cursor: "pointer",
                     minWidth: 92,
