@@ -1253,22 +1253,37 @@ app.patch('/api/advance/applications/:id/payout-preference', async function (req
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
   }
   try {
-    const { methods, contact } = request.body;
+    const { methods, contact, bank_account_number } = request.body;
     if (!methods) {
       return response.status(400).json({ error: { error_message: 'methods is required' } });
     }
-    // ACH and legacy 'Bank transfer' both skip the contact requirement —
-    // the bank info lives on the Stripe Connect account, not on a handle.
     const isAch = methods === 'ACH' || methods.includes('ACH');
     const isBankTransfer = methods === 'Bank transfer' || methods.includes('Bank transfer');
-    const skipContact = isAch || isBankTransfer;
-    if (!skipContact && (!contact || !contact.trim())) {
+    // ACH: needs a typed account number (admin sends manually via Brex
+    // using routing-number from FC + this account number). Legacy
+    // 'Bank transfer' still uses Plaid for the bank reference. Other
+    // payout rails (PayPal/Cash App/Zelle) use a handle in 'contact'.
+    if (isAch) {
+      const acct = (bank_account_number || '').replace(/\s/g, '');
+      if (!/^\d{4,17}$/.test(acct)) {
+        return response.status(400).json({ error: { error_message: 'Bank account number must be 4–17 digits (no spaces or letters).' } });
+      }
+      const updated = await db.savePayoutPreference(
+        request.params.id,
+        methods,
+        'manual_brex_ach', // contact field is now a marker — see bank_account_number for the actual number
+      );
+      if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
+      const final = await db.saveBankAccountNumber(request.params.id, acct);
+      return response.json({ application: db.publicApp(final || updated) });
+    }
+    if (!isBankTransfer && (!contact || !contact.trim())) {
       return response.status(400).json({ error: { error_message: 'contact is required for this payout method' } });
     }
     const updated = await db.savePayoutPreference(
       request.params.id,
       methods,
-      isAch ? 'stripe_connect' : (isBankTransfer ? 'connected_bank_account' : contact.trim()),
+      isBankTransfer ? 'connected_bank_account' : contact.trim(),
     );
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     response.json({ application: db.publicApp(updated) });
@@ -2322,47 +2337,11 @@ async function transitionToFunded(row) {
   updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
   await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
 
-  // 2. ACH payout via Stripe Connect Express
-  if (updated.payout_methods === 'ACH') {
-    if (updated.stripe_connect_account_id && updated.stripe_connect_status === 'ready') {
-      try {
-        const amountCents = Math.round(baseAmount * 100);
-        const transfer = await stripe.transfers.create({
-          amount: amountCents,
-          currency: 'usd',
-          destination: updated.stripe_connect_account_id,
-          description: `Advance disbursement for application ${updated.id}`,
-          metadata: { application_id: updated.id, delivery_type: updated.delivery_type || 'standard' },
-        });
-        updated = await db.saveTransferId(updated.id, transfer.id) || updated;
-        console.log('[funded] ACH transfer created', { application_id: updated.id, transfer_id: transfer.id, amount: amountCents });
-
-        if (updated.delivery_type === 'instant') {
-          try {
-            const payout = await stripe.payouts.create(
-              {
-                amount: amountCents,
-                currency: 'usd',
-                method: 'instant',
-                metadata: { application_id: updated.id },
-              },
-              { stripeAccount: updated.stripe_connect_account_id },
-            );
-            console.log('[funded] instant payout created', { application_id: updated.id, payout_id: payout.id });
-          } catch (payErr) {
-            console.log('[funded] instant payout failed, falling back to standard', { application_id: updated.id, error: payErr.message });
-            await db.addMessage(updated.id, 'system', `Your bank doesn't support same-day transfers — we've switched you to 3–5 day delivery and refunded the $5 fee.`);
-          }
-        }
-      } catch (transferErr) {
-        console.log('[funded] ACH transfer failed', { application_id: updated.id, error: transferErr.message });
-        await db.addMessage(updated.id, 'system', `Bank transfer failed: ${transferErr.message}. Please contact support to resolve.`);
-      }
-    } else {
-      console.log('[funded] ACH user has no ready Connect account', { application_id: updated.id, status: updated.stripe_connect_status });
-      await db.addMessage(updated.id, 'system', `Your direct deposit isn't set up yet. Please finish bank verification before funding.`);
-    }
-  }
+  // 2. (Removed) ACH payout via Stripe Connect Express.
+  // Payouts are now done MANUALLY by admin via Brex using the bank
+  // routing number (from FC's us_bank_account.routing_number) +
+  // account number (typed by the user at Step 2). Surfaced in the
+  // admin panel for copy-paste into Brex.
 
   // 3. Subscription bootstrap
   if (
@@ -2515,27 +2494,13 @@ async function autoApproveIfEligible(applicationId) {
       .catch(err => console.log('[mailchimp approved] error:', err.message));
     console.log('[auto-approve] approved', { application_id: row.id, accrued: total_accrued_cents, requested: requested_cents });
 
-    // ── Auto-fund (ACH users only) ────────────────────────────────
-    // For ACH payout users, the entire money-movement pipeline is
-    // automated end-to-end: Stripe transfers + instant payout fire
-    // from transitionToFunded. So we can immediately follow approval
-    // with funding — the user goes signup → money in their bank in
-    // one continuous flow.
-    //
-    // For PayPal / Cash App / Zelle: admin still has to manually send
-    // money outside the app, so we DON'T auto-fund — flipping to
-    // 'funded' would tell the user the money is on its way when it
-    // actually isn't yet. They go to manual review in the Approved
-    // tab for the admin to do the manual send + click Mark funded.
-    if (updated && updated.payout_methods === 'ACH' && updated.delivery_type) {
-      try {
-        await transitionToFunded(updated);
-        console.log('[auto-approve] auto-funded ACH user', { application_id: row.id });
-      } catch (fundErr) {
-        console.log('[auto-approve] auto-fund error (manual marking needed)', { application_id: row.id, error: fundErr.message });
-        await db.addMessage(row.id, 'system', `Approved! Funding step needs manual attention from support: ${fundErr.message}`);
-      }
-    }
+    // (Removed) Auto-fund. Since we now send money manually via
+    // Brex using the user's bank routing + account number, the
+    // funded transition only fires when admin explicitly clicks
+    // 'Mark funded' in the admin panel — that's when the repayment
+    // gets scheduled and the membership subscription is created.
+    // Until then the application sits in the Approved tab waiting
+    // for the manual Brex send.
     return { approved: true, total_accrued_cents };
   } catch (err) {
     console.log('[auto-approve] error — falling back to manual review', { application_id: applicationId, error: err.message });
