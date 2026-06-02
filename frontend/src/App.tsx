@@ -3217,6 +3217,17 @@ const AdminApp = () => {
     setPmDetails(null);
     setReferralStats(null);
     loadBankSnapshot(selectedId);
+    // Auto-load the bank PaymentMethod details (routing, last4, bank name)
+    // for ACH users so the 'Send via Brex' panel populates without admin
+    // having to click anything.
+    if (selected?.payout_methods === 'ACH' && selected?.stripe_payment_method_id) {
+      (async () => {
+        try {
+          const res = await fetch(apiUrl(`/api/advance/admin/applications/${selectedId}/payment-method-details`), { headers: adminHeaders });
+          if (res.ok) setPmDetails(await res.json());
+        } catch {}
+      })();
+    }
     if (selected?.payday) setRepaymentDate(selected.payday);
     // Load referral analytics for this applicant
     fetch(apiUrl(`/api/advance/admin/applications/${selectedId}/referrals`), { headers: adminHeaders })
