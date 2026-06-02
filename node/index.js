@@ -1116,18 +1116,40 @@ function lookupWireRouting(bankName) {
   return null;
 }
 
-// Compute a billing_cycle_anchor that Stripe will accept. Anchor must be
-// in the future. If the requested target date (e.g. user's payday) has
-// already passed — common for users funded close to their payday and
-// then re-onboarded later, or for backfills via the admin button —
-// roll forward by 30-day increments until we land on a future date.
-// Preserves the original calendar day.
-function safeFutureAnchorUnix(targetDateStr) {
-  let target = new Date(`${targetDateStr}T00:00:00Z`).getTime();
+// Compute a billing_cycle_anchor that Stripe will accept. Two failure
+// modes the helper guards against:
+//
+//   1. Timezone shift in pg DATE → ISO conversion. node-postgres returns
+//      DATE columns as JS Date objects at midnight in the server's
+//      LOCAL TZ. Calling .toISOString() converts to UTC; if the server
+//      runs anywhere ahead of UTC, the resulting ISO date string is
+//      the PREVIOUS day. Symptom: user picks June 3rd, anchor sent as
+//      June 2nd, Stripe rejects 'in the past' even though the user's
+//      intended date is in the future. Fix: read LOCAL components
+//      (.getFullYear/Month/Date) instead of UTC for Date inputs.
+//
+//   2. Anchor lands too close to 'now'. Even with the correct date,
+//      anchoring at midnight UTC of the target day can land in the
+//      past if the server clock is already past midnight UTC. Fix:
+//      anchor at NOON UTC of the target date — gives 12h tolerance
+//      either side of the intended day — and if that's still ≤ 1h
+//      in the future, bump forward by 1-day increments until safe.
+function safeFutureAnchorUnix(dateOrString) {
+  let ymd;
+  if (typeof dateOrString === 'string') {
+    ymd = dateOrString.slice(0, 10);
+  } else if (dateOrString instanceof Date) {
+    const y = dateOrString.getFullYear();
+    const m = String(dateOrString.getMonth() + 1).padStart(2, '0');
+    const day = String(dateOrString.getDate()).padStart(2, '0');
+    ymd = `${y}-${m}-${day}`;
+  } else {
+    ymd = new Date().toISOString().slice(0, 10);
+  }
+  let target = new Date(`${ymd}T12:00:00Z`).getTime();
   const now = Date.now();
-  if (target > now) return Math.floor(target / 1000);
-  while (target <= now) {
-    target += 30 * 86400 * 1000;
+  while (target <= now + 3600 * 1000) {
+    target += 86400 * 1000;
   }
   return Math.floor(target / 1000);
 }
@@ -2845,13 +2867,11 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
 
     // Anchor: prefer the user's first repayment date; fall back to today
     // if they don't have one yet (which would be unusual for backfill).
-    // safeFutureAnchorUnix bumps the anchor forward in 30-day increments
-    // if the target date has already passed — common for backfilling
-    // legacy users where the original payday is in the past.
-    const anchorDate = row.repayment_due_date
-      ? new Date(row.repayment_due_date).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
-    const anchor = safeFutureAnchorUnix(anchorDate);
+    // Pass row.repayment_due_date directly — the helper handles both
+    // pg Date objects and string types and avoids the TZ shift bug
+    // we previously had with new Date(d).toISOString().slice(0, 10).
+    const anchor = safeFutureAnchorUnix(row.repayment_due_date);
+    const anchorDate = new Date(anchor * 1000).toISOString().slice(0, 10);
     const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
 
     const sub = await stripe.subscriptions.create({
