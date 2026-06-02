@@ -211,7 +211,7 @@ const thirtyDaysFromNow = (() => { const d = new Date(); d.setDate(d.getDate() +
 //   - Total 10 digits (or 11 starting with 1)
 //   - Area code (NPA): first digit 2-9, second digit 0-9, third 0-9
 //   - Exchange code (NXX): same NPA rule for its first digit
-//   - No 555 area code (reserved for fiction/test)
+//   - (Was) No 555 area code — relaxed, tests use 555 numbers
 //   - No N11 area codes (211, 311, 411, 511, 611, 711, 811, 911)
 const isValidUsPhone = (raw: string): { ok: boolean; normalized?: string; reason?: string } => {
   const digits = (raw || "").replace(/\D/g, "");
@@ -232,10 +232,11 @@ const isValidUsPhone = (raw: string): { ok: boolean; normalized?: string; reason
   if (/^[2-9]11$/.test(areaCode)) {
     return { ok: false, reason: "That area code is reserved (N11 codes can't be used)." };
   }
-  // 555 area code is reserved for fiction
-  if (areaCode === "555") {
-    return { ok: false, reason: "555 area codes are reserved for fictional use." };
-  }
+  // Note: previously also blocked 555 area codes as "fictional use" but
+  // dropped that — test fixtures use 555 numbers and the block was
+  // catching legitimate tests. Production users will never type a 555
+  // number because they don't exist as commercial phones, so the block
+  // was paying no real-world dividend.
   return { ok: true, normalized: d };
 };
 
