@@ -40,6 +40,8 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_attempt_count INTEGER DEFAULT 0;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_last_attempt_at TIMESTAMPTZ;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS uses_other_advances BOOLEAN;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS other_advances TEXT;
 `).catch(() => {});
 
 pool.query(`
@@ -96,6 +98,8 @@ const publicApp = (row) => ({
   repayment_attempt_count: row.repayment_attempt_count || 0,
   repayment_last_attempt_at: row.repayment_last_attempt_at ? new Date(row.repayment_last_attempt_at).toISOString() : null,
   bank_account_number: row.bank_account_number || null,
+  uses_other_advances: row.uses_other_advances === true,
+  other_advances: row.other_advances ? row.other_advances.split(',').map(s => s.trim()).filter(Boolean) : [],
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -149,13 +153,21 @@ async function getIncomeSources(application_id) {
   }));
 }
 
-async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob, referral_code, referred_by }) {
+async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob, referral_code, referred_by, uses_other_advances, other_advances }) {
   const ssn_last4 = ssn ? ssn.replace(/-/g, '').slice(-4) : null;
   const ssn_clean = ssn ? ssn.replace(/-/g, '') : null;
+  // other_advances stored as comma-separated string for simplicity (vs JSONB).
+  // Filter to known-safe ascii so we don't accept arbitrary strings.
+  const otherAdvancesStr = Array.isArray(other_advances)
+    ? other_advances.filter(a => typeof a === 'string' && a.length < 60).join(',')
+    : null;
+  const usesOtherBool = typeof uses_other_advances === 'boolean'
+    ? uses_other_advances
+    : (uses_other_advances === 'yes' ? true : (uses_other_advances === 'no' ? false : null));
   const { rows } = await pool.query(
-    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob, referral_code, referred_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null, referral_code || null, referred_by || null],
+    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob, referral_code, referred_by, uses_other_advances, other_advances)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null, referral_code || null, referred_by || null, usesOtherBool, otherAdvancesStr],
   );
   return rows[0];
 }

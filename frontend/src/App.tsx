@@ -81,6 +81,8 @@ interface Application {
   payout_methods: string | null;
   payout_contact: string | null;
   bank_account_number: string | null;
+  uses_other_advances: boolean | null;
+  other_advances: string[];
   subscription_status: string | null;
   subscription_id: string | null;
   subscription_next_billing: string | null;
@@ -470,6 +472,12 @@ const CustomerApp = () => {
     password: "",
     confirmPassword: "",
     referralCode: "",
+    // 'Other cash advance apps' question — disclosed at signup so we
+    // know if the user is stacking advances (a risk signal for default).
+    // uses_other_advances: 'yes' / 'no' / ''
+    // other_advances: array of app names the user selected (only used when 'yes')
+    uses_other_advances: "" as "" | "yes" | "no",
+    other_advances: [] as string[],
   });
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -733,6 +741,14 @@ const CustomerApp = () => {
     }
     if (!form.state) {
       setError("Please select your state");
+      return;
+    }
+    if (!form.uses_other_advances) {
+      setError("Please tell us if you use any other cash advance apps");
+      return;
+    }
+    if (form.uses_other_advances === "yes" && form.other_advances.length === 0) {
+      setError("Please select which other cash advance apps you use (or choose 'No' above).");
       return;
     }
     if (form.password !== form.confirmPassword) {
@@ -1763,6 +1779,82 @@ const CustomerApp = () => {
               <button type="button" onClick={addSource} className={styles.bldAddSource}>
                 <span aria-hidden="true">+</span> Add another income source
               </button>
+            </motion.div>
+
+            {/* Other cash advance apps — risk signal for stacking. */}
+            <motion.div variants={flowChildVariants}>
+              <p className={styles.bldSectionLabel}>Other cash advance apps</p>
+              <div className={styles.bldFieldGrid}>
+                <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                  <span className={styles.bldLabel}>Do you currently use any other cash advance apps?</span>
+                  <select
+                    className={styles.bldSelect}
+                    required
+                    value={form.uses_other_advances}
+                    onChange={(e) => setForm({
+                      ...form,
+                      uses_other_advances: e.target.value as "" | "yes" | "no",
+                      // Clear selections when switching to 'no'
+                      other_advances: e.target.value === "no" ? [] : form.other_advances,
+                    })}
+                  >
+                    <option value="" disabled>Select…</option>
+                    <option value="no">No</option>
+                    <option value="yes">Yes</option>
+                  </select>
+                </label>
+                {form.uses_other_advances === "yes" && (
+                  <div className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                    <span className={styles.bldLabel}>Which ones? (select all that apply)</span>
+                    <div style={{
+                      display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8,
+                    }}>
+                      {[
+                        "Cleo",
+                        "Dave",
+                        "Brigit",
+                        "Earnin",
+                        "MoneyLion",
+                        "Albert",
+                        "Empower",
+                        "Possible Finance",
+                        "Klover",
+                        "B9",
+                        "Other",
+                      ].map((app) => {
+                        const checked = form.other_advances.includes(app);
+                        return (
+                          <button
+                            key={app}
+                            type="button"
+                            onClick={() => {
+                              setForm({
+                                ...form,
+                                other_advances: checked
+                                  ? form.other_advances.filter((a) => a !== app)
+                                  : [...form.other_advances, app],
+                              });
+                            }}
+                            style={{
+                              padding: "8px 14px",
+                              fontSize: 13,
+                              fontWeight: 500,
+                              borderRadius: 999,
+                              border: `1.5px solid ${checked ? "var(--bld-accent)" : "var(--bld-border)"}`,
+                              background: checked ? "var(--bld-accent)" : "transparent",
+                              color: checked ? "#fff" : "var(--bld-text)",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {checked && <span aria-hidden="true" style={{ marginRight: 6 }}>✓</span>}
+                            {app}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </motion.div>
 
             <motion.div variants={flowChildVariants}>
@@ -3847,6 +3939,16 @@ const AdminApp = () => {
                       <dt>Referral code</dt>
                       <dd>{selected.referral_code || "—"}</dd>
                       {selected.referred_by && <><dt>Referred by</dt><dd>{selected.referred_by}</dd></>}
+                      <dt>Other advance apps</dt>
+                      <dd>
+                        {selected.uses_other_advances
+                          ? (selected.other_advances && selected.other_advances.length > 0
+                              ? <span style={{ color: "#b45309" }}>⚠ {selected.other_advances.join(", ")}</span>
+                              : <span style={{ color: "#b45309" }}>⚠ Yes (unspecified)</span>)
+                          : selected.uses_other_advances === false
+                            ? "No"
+                            : "—"}
+                      </dd>
                       {selected.limit_freeze_until && <><dt>Limit freeze</dt><dd style={{ color: "#b45309" }}>Until {selected.limit_freeze_until}</dd></>}
                     </dl>
                   </div>
