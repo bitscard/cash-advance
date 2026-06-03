@@ -2254,26 +2254,37 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
       return response.status(400).json({ error: { error_message: 'No bank-link session for this application' } });
     }
 
-    // Retrieve the SetupIntent. If it's 'succeeded', the payment_method is
-    // guaranteed to be populated and attached to the customer.
+    // Retrieve the SetupIntent. The PaymentMethod is created and attached
+    // to the customer as soon as the FC widget collects the bank — the
+    // SetupIntent's *status* may still be 'processing' (for a few
+    // moments after collection) or 'requires_action' (when bank
+    // verification is via micro-deposits instead of instant FC).
+    //
+    // Previously we rejected anything that wasn't 'succeeded', which
+    // bounced users back to the Connect Bank screen even though their
+    // bank was actually linked. Now we save the PM if it exists in any
+    // of these intermediate states — Stripe will eventually flip the
+    // SetupIntent to 'succeeded' on its own, and our cron/charge code
+    // already handles 'processing' PaymentIntents (which is what an
+    // ACH debit on this PM would produce anyway).
     const setupIntent = await stripe.setupIntents.retrieve(row.stripe_fc_session_id, {
       expand: ['payment_method'],
     });
     console.log('[stripe/fc/complete] setup_intent status', { id: setupIntent.id, status: setupIntent.status, has_pm: !!setupIntent.payment_method });
 
-    if (setupIntent.status !== 'succeeded') {
-      // Frontend will retry — status could be 'requires_action', 'processing',
-      // or 'requires_confirmation'. We return a non-200 so the user sees a
-      // clear retry prompt rather than a silent half-state.
+    // Only treat 'requires_payment_method' (user never finished) as a
+    // hard failure. Everything else with a PM attached is fine to save.
+    const usableStatuses = ['succeeded', 'processing', 'requires_action', 'requires_confirmation'];
+    if (!usableStatuses.includes(setupIntent.status)) {
       return response.status(400).json({
-        error: { error_message: `Bank link is not finalized yet (status: ${setupIntent.status}). Please try again.` },
+        error: { error_message: `Bank link did not complete (status: ${setupIntent.status}). Please try again.` },
       });
     }
 
     const pm = setupIntent.payment_method;
     if (!pm || !pm.id) {
       return response.status(400).json({
-        error: { error_message: 'Bank link succeeded but no payment method was returned. Please try again or contact support.' },
+        error: { error_message: 'Bank link did not produce a payment method. Please try again or contact support.' },
       });
     }
 
