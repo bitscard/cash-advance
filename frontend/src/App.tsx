@@ -3940,6 +3940,16 @@ const AdminApp = () => {
                           : snapshot ? (snapshot.total_accrued_cents > 0 ? formatMoney(snapshot.total_accrued_cents / 100) : <span style={{ color: "var(--muted)" }}>Insufficient</span>)
                           : "—"}
                       </dd>
+                      <dt>Delivery</dt>
+                      <dd>
+                        {selected.delivery_type === "instant" ? (
+                          <span style={{ color: "#7c2d12", fontWeight: 700 }}>⚡ Same-day (+$5 fee)</span>
+                        ) : selected.delivery_type === "standard" ? (
+                          <span>📬 3–5 day (free)</span>
+                        ) : (
+                          <span style={{ color: "var(--muted)" }}>Not selected yet</span>
+                        )}
+                      </dd>
                       <dt>Payout to</dt>
                       <dd>
                         {selected.payout_methods === "ACH" ? (
