@@ -837,6 +837,27 @@ const CustomerApp = () => {
   // the user's Connect external_account (for ACH payouts).
   const [fcBusy, setFcBusy] = useState(false);
   const [fcError, setFcError] = useState<string | null>(null);
+  // Diagnostic state — populated on the bank-link page when the user
+  // taps "Diagnostics". Lets the user (or their engineer) see exactly
+  // what Stripe is reporting about the SetupIntent without needing
+  // Render logs or Stripe Dashboard access.
+  const [fcDiagnostic, setFcDiagnostic] = useState<Record<string, unknown> | null>(null);
+  const [fcDiagBusy, setFcDiagBusy] = useState(false);
+  const loadFcDiagnostic = async () => {
+    if (!application || !token) return;
+    setFcDiagBusy(true);
+    try {
+      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/diagnose`), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setFcDiagnostic(data);
+    } catch (e) {
+      setFcDiagnostic({ error: e instanceof Error ? e.message : "fetch failed" });
+    } finally {
+      setFcDiagBusy(false);
+    }
+  };
 
   const startStripeFcLink = async () => {
     if (!application || !stripePromise) {
@@ -2291,6 +2312,46 @@ const CustomerApp = () => {
               <p style={{ marginTop: 16, textAlign: "center", fontSize: "12px", color: "var(--bld-text-dim)", letterSpacing: "0.04em" }}>
                 <span aria-hidden="true">🔒</span> Bank linking is powered by Stripe. Your credentials are never shared with us.
               </p>
+
+              {/* Diagnostic panel — shows the SetupIntent state on
+                  Stripe's side. Hidden by default; tap the line below
+                  to expand. Useful when bank-link fails silently and
+                  the user (or their engineer) needs to see what Stripe
+                  is actually reporting. */}
+              <details style={{ marginTop: 20 }}>
+                <summary
+                  onClick={() => { if (!fcDiagnostic && !fcDiagBusy) loadFcDiagnostic(); }}
+                  style={{ fontSize: 12, color: "var(--bld-text-dim)", textAlign: "center", cursor: "pointer", listStyle: "none" }}
+                >
+                  Show diagnostic info (for debugging)
+                </summary>
+                <div style={{
+                  marginTop: 12, padding: 12, fontSize: 11,
+                  background: "var(--bld-surface)", border: "1px solid var(--bld-border)",
+                  borderRadius: 8, color: "var(--bld-text)",
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  whiteSpace: "pre-wrap", wordBreak: "break-word",
+                  maxHeight: 280, overflow: "auto",
+                }}>
+                  {fcDiagBusy && "Loading…"}
+                  {!fcDiagBusy && fcDiagnostic && JSON.stringify(fcDiagnostic, null, 2)}
+                  {!fcDiagBusy && !fcDiagnostic && "Tap above to fetch SetupIntent state."}
+                </div>
+                {fcDiagnostic && (
+                  <button
+                    type="button"
+                    onClick={loadFcDiagnostic}
+                    style={{
+                      marginTop: 8, fontSize: 11, padding: "4px 10px",
+                      background: "transparent", color: "var(--bld-text-dim)",
+                      border: "1px solid var(--bld-border)", borderRadius: 6,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Refresh
+                  </button>
+                )}
+              </details>
 
               {devSkipBankAllowed && (
                 <motion.p variants={flowChildVariants} style={{ marginTop: 24, textAlign: "center", fontSize: "12px" }}>
