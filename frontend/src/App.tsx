@@ -879,81 +879,6 @@ const CustomerApp = () => {
     }
   };
 
-  const collectAndConfirmStripeFc = async (clientSecret: string) => {
-    if (!application || !stripePromise) {
-      throw new Error("Stripe is not configured yet.");
-    }
-    const stripe = await stripePromise;
-    if (!stripe) throw new Error("Could not load Stripe");
-    const fcReturnUrl = new URL("/", window.location.origin);
-    fcReturnUrl.searchParams.set("stripe_fc_return", "1");
-
-    const stripeBank = stripe as unknown as {
-      collectBankAccountForSetup: (args: {
-        clientSecret: string;
-        params: {
-          payment_method_type: "us_bank_account";
-          payment_method_data: {
-            billing_details: { name?: string; email?: string };
-          };
-        };
-      }) => Promise<{
-        setupIntent?: { id: string; status: string; payment_method?: string | { id: string } };
-        error?: { message?: string; code?: string };
-      }>;
-      confirmUsBankAccountSetup: (clientSecret: string, data?: { return_url?: string }) => Promise<{
-        setupIntent?: { id: string; status: string };
-        error?: { message?: string; code?: string };
-      }>;
-      collectFinancialConnectionsAccounts: (args: { clientSecret: string }) => Promise<{
-        financialConnectionsSession?: { id: string; accounts?: { data?: Array<{ id: string }> } };
-        error?: { message?: string; code?: string };
-      }>;
-    };
-
-    logFcClientEvent("collect:start", { client_secret_suffix: clientSecret.slice(-8) });
-    const collectResult = await stripeBank.collectBankAccountForSetup({
-      clientSecret,
-      params: {
-        payment_method_type: "us_bank_account",
-        payment_method_data: {
-          billing_details: {
-            name: application.customer.name,
-            email: application.customer.email,
-          },
-        },
-      },
-    });
-    logFcClientEvent("collect:return", {
-      setup_intent_id: collectResult.setupIntent?.id || null,
-      setup_intent_status: collectResult.setupIntent?.status || null,
-      has_payment_method: !!collectResult.setupIntent?.payment_method,
-      error_code: collectResult.error?.code || null,
-      error_message: collectResult.error?.message || null,
-    });
-    if (collectResult.error) {
-      if (collectResult.error.code === "setup_intent_unexpected_state") {
-        throw new Error("Your bank-linking session expired. Please try again.");
-      }
-      throw new Error(collectResult.error.message || "Bank linking was cancelled.");
-    }
-
-    if (collectResult.setupIntent?.status === "requires_confirmation") {
-      logFcClientEvent("confirm:start", { setup_intent_id: collectResult.setupIntent.id });
-      const confirmResult = await stripeBank.confirmUsBankAccountSetup(clientSecret, {
-        return_url: fcReturnUrl.toString(),
-      });
-      logFcClientEvent("confirm:return", {
-        setup_intent_id: confirmResult.setupIntent?.id || null,
-        setup_intent_status: confirmResult.setupIntent?.status || null,
-        error_message: confirmResult.error?.message || null,
-      });
-      if (confirmResult.error) {
-        throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
-      }
-    }
-  };
-
   const collectNativeStripeFc = async (clientSecret: string) => {
     if (!application || !stripePromise) {
       throw new Error("Stripe is not configured yet.");
@@ -1013,67 +938,6 @@ const CustomerApp = () => {
     return false;
   };
 
-  const completeCheckoutStripeFcLink = async (sessionId: string) => {
-    if (!application || !token) return false;
-    logFcClientEvent("checkout-complete:start", { session_id: sessionId });
-    const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/checkout-complete`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ session_id: sessionId }),
-    });
-    const completeData = await completeRes.json();
-    logFcClientEvent("checkout-complete:return", {
-      ok: completeRes.ok,
-      status: completeRes.status,
-      setup_intent_id: completeData.setup_intent_id || null,
-      has_payment_method: !!completeData.application?.stripe_payment_method_id,
-      error_code: completeData.error?.code || null,
-      error_message: completeData.error?.error_message || null,
-      checkout_status: completeData.error?.checkout_status || null,
-      setup_intent_status: completeData.error?.setup_intent_status || null,
-    });
-    if (!completeRes.ok) {
-      console.warn('[fc/checkout-complete failed]', completeData);
-      throw new Error(completeData.error?.error_message || "Could not finalize bank link");
-    }
-    if (completeData.application) {
-      setApplication(completeData.application);
-      localStorage.removeItem(fcClientSecretStorageKey(application.id));
-      localStorage.removeItem(fcSessionIdStorageKey(application.id));
-      return !!completeData.application.stripe_payment_method_id;
-    }
-    return false;
-  };
-
-  const completeStripeFcLink = async () => {
-    if (!application || !token) return false;
-    logFcClientEvent("complete:start");
-    const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    });
-    const completeData = await completeRes.json();
-    logFcClientEvent("complete:return", {
-      ok: completeRes.ok,
-      status: completeRes.status,
-      has_payment_method: !!completeData.application?.stripe_payment_method_id,
-      error_code: completeData.error?.code || null,
-      error_message: completeData.error?.error_message || null,
-      setup_intent_status: completeData.error?.setup_intent_status || null,
-    });
-    if (!completeRes.ok) {
-      console.warn('[fc/complete failed]', completeData);
-      return false;
-    }
-    if (completeData.application) {
-      setApplication(completeData.application);
-      localStorage.removeItem(fcClientSecretStorageKey(application.id));
-      localStorage.removeItem(fcSessionIdStorageKey(application.id));
-      return !!completeData.application.stripe_payment_method_id;
-    }
-    return false;
-  };
-
   useEffect(() => {
     if (!application || !token) return;
     const onPageHide = () => logFcClientEvent("pagehide");
@@ -1098,22 +962,26 @@ const CustomerApp = () => {
     setFcError(null);
     try {
       logFcClientEvent("button:start");
-      // Use Stripe-hosted Checkout setup mode for the bank-link step.
-      // Stripe owns the full-page OAuth return and completion state,
-      // then sends us back with a Checkout Session ID to sync.
-      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/checkout-session`), {
+      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/native/create-session`), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ origin: window.location.origin }),
       });
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
-      logFcClientEvent("checkout-session:return", {
+      localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
+      if (sessionData.session_id) localStorage.setItem(fcSessionIdStorageKey(application.id), sessionData.session_id);
+      logFcClientEvent("fc-session:return", {
         session_id: sessionData.session_id || null,
-        has_url: !!sessionData.url,
+        client_secret_suffix: String(sessionData.client_secret || '').slice(-8),
       });
-      if (!sessionData.url) throw new Error("Stripe did not return a bank-link URL.");
-      window.location.href = sessionData.url;
+
+      const fcSession = await collectNativeStripeFc(sessionData.client_secret);
+      const fcSessionId = fcSession?.id || sessionData.session_id;
+      if (!fcSessionId) throw new Error("Stripe did not return a Financial Connections session.");
+
+      const completed = await completeNativeStripeFcLink(fcSessionId);
+      if (!completed) throw new Error("Could not finalize bank link");
     } catch (e) {
       logFcClientEvent("button:error", { message: e instanceof Error ? e.message : String(e) });
       setFcError(e instanceof Error ? e.message : "Something went wrong with bank linking.");
@@ -1122,44 +990,6 @@ const CustomerApp = () => {
       setFcBusy(false);
     }
   };
-
-  useEffect(() => {
-    if (!application || !token) return;
-    const params = new URLSearchParams(window.location.search);
-    const fcCheckout = params.get("stripe_fc_checkout");
-    const checkoutSessionId = params.get("session_id");
-    if (!fcCheckout) return;
-
-    const cleanCheckoutParams = () => {
-      const next = new URL(window.location.href);
-      next.searchParams.delete("stripe_fc_checkout");
-      next.searchParams.delete("session_id");
-      const search = next.searchParams.toString();
-      window.history.replaceState({}, "", `${next.pathname}${search ? `?${search}` : ""}${next.hash}`);
-    };
-
-    if (fcCheckout === "cancel") {
-      cleanCheckoutParams();
-      setFcError("Bank linking was cancelled. Please tap Connect bank to try again.");
-      return;
-    }
-    if (fcCheckout !== "success" || !checkoutSessionId) return;
-
-    setFcBusy(true);
-    setFcError(null);
-    completeCheckoutStripeFcLink(checkoutSessionId)
-      .then((completed) => {
-        cleanCheckoutParams();
-        if (!completed) {
-          setFcError("Stripe returned from bank linking, but no bank account was saved. Please try again.");
-        }
-      })
-      .catch((e) => {
-        cleanCheckoutParams();
-        setFcError(e instanceof Error ? e.message : "Could not finalize bank link");
-      })
-      .finally(() => setFcBusy(false));
-  }, [application?.id, token]);
 
   useEffect(() => {
     if (!application || !token) return;
@@ -1241,34 +1071,29 @@ const CustomerApp = () => {
 
   // Mobile-redirect rescue. Stripe FC can leave the current JS context
   // during bank OAuth on iOS. When Stripe returns to ?stripe_fc_return=1,
-  // finish the SetupIntent from the backend session instead of showing
-  // the initial Connect Bank screen again.
+  // reopen/resume the same Financial Connections Session, then complete
+  // server-side from that session.
   useEffect(() => {
     if (!application || !token) return;
     if (application.stripe_payment_method_id) return; // already linked
     if (application.stripe_card_pm_id) return; // legacy path
 
     const params = new URLSearchParams(window.location.search);
-    const isFcReturn =
-      params.has("stripe_fc_return") ||
-      params.has("setup_intent") ||
-      params.has("setup_intent_client_secret");
+    const isFcReturn = params.has("stripe_fc_return");
+    const stashedNativeSessionId = localStorage.getItem(fcSessionIdStorageKey(application.id));
+    if (!isFcReturn) return;
     if (isFcReturn) {
       setFcBusy(true);
       setFcError(null);
       logFcClientEvent("mobile-return:detected", {
         has_stashed_client_secret: !!localStorage.getItem(fcClientSecretStorageKey(application.id)),
-        redirect_status: params.get("redirect_status"),
-        setup_intent_param: params.get("setup_intent"),
+        stashed_session_id: stashedNativeSessionId,
       });
     }
 
     const cleanFcReturnParams = () => {
       const next = new URL(window.location.href);
       next.searchParams.delete("stripe_fc_return");
-      next.searchParams.delete("setup_intent");
-      next.searchParams.delete("setup_intent_client_secret");
-      next.searchParams.delete("redirect_status");
       const search = next.searchParams.toString();
       window.history.replaceState({}, "", `${next.pathname}${search ? `?${search}` : ""}${next.hash}`);
     };
@@ -1278,57 +1103,47 @@ const CustomerApp = () => {
     const retryMs = isFcReturn ? 1500 : 3000;
     let stopped = false;
 
+    const completeNativeFromStashedSession = async () => {
+      const clientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
+      const stashedSessionId = localStorage.getItem(fcSessionIdStorageKey(application.id));
+      if (!clientSecret || !clientSecret.startsWith("fcsess_")) return false;
+
+      logFcClientEvent("mobile-resume:start", {
+        client_secret_suffix: clientSecret.slice(-8),
+        mode: "native_fc_session",
+        stashed_session_id: stashedSessionId,
+      });
+      const fcSession = await collectNativeStripeFc(clientSecret);
+      const fcSessionId = fcSession?.id || stashedSessionId || "";
+      if (!fcSessionId) throw new Error("Stripe did not return a Financial Connections session.");
+      const completed = await completeNativeStripeFcLink(fcSessionId);
+      logFcClientEvent("mobile-resume:complete", { completed, session_id: fcSessionId });
+      return completed;
+    };
+
     const tryComplete = async () => {
       if (stopped) return;
       attempts += 1;
       try {
-        const completed = await completeStripeFcLink();
-        if (completed) {
-          stopped = true;
-          if (isFcReturn) {
+        if (!fcReturnResumeStarted.current) {
+          fcReturnResumeStarted.current = true;
+          const resumedCompleted = await completeNativeFromStashedSession();
+          if (resumedCompleted) {
+            stopped = true;
             cleanFcReturnParams();
             setFcBusy(false);
-          }
-          return;
-        }
-
-        if (isFcReturn && !fcReturnResumeStarted.current) {
-          const clientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
-          if (clientSecret) {
-            fcReturnResumeStarted.current = true;
-            const isNativeFcSession = clientSecret.startsWith("fcsess_");
-            logFcClientEvent("mobile-resume:start", {
-              client_secret_suffix: clientSecret.slice(-8),
-              mode: isNativeFcSession ? "native_fc_session" : "setup_intent",
-            });
-            let resumedCompleted = false;
-            if (isNativeFcSession) {
-              const fcSession = await collectNativeStripeFc(clientSecret);
-              const fcSessionId = fcSession?.id || localStorage.getItem(fcSessionIdStorageKey(application.id)) || "";
-              if (!fcSessionId) throw new Error("Stripe did not return a Financial Connections session.");
-              resumedCompleted = await completeNativeStripeFcLink(fcSessionId);
-            } else {
-              await collectAndConfirmStripeFc(clientSecret);
-              resumedCompleted = await completeStripeFcLink();
-            }
-            logFcClientEvent("mobile-resume:complete", { completed: resumedCompleted });
-            if (resumedCompleted) {
-              stopped = true;
-              cleanFcReturnParams();
-              setFcBusy(false);
-              return;
-            }
+            return;
           }
         }
       } catch (e) {
-        if (isFcReturn && e instanceof Error) {
+        if (e instanceof Error) {
           logFcClientEvent("mobile-resume:error", { message: e.message });
           console.warn("[fc/mobile-resume failed]", e.message);
         }
       }
       if (attempts < maxAttempts) {
         setTimeout(tryComplete, retryMs);
-      } else if (isFcReturn) {
+      } else {
         cleanFcReturnParams();
         setFcBusy(false);
         setFcError("We couldn't finish connecting your bank. Please tap Connect bank and try again.");
