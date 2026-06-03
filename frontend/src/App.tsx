@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { motion } from "framer-motion";
@@ -175,6 +175,7 @@ const adminTokenStorageKey = "advance_admin_token";
 // same link_token back up and resume the OAuth flow (Plaid rejects a new token
 // for an in-progress OAuth session).
 const oauthLinkTokenStorageKey = "advance_plaid_oauth_link_token";
+const fcClientSecretStorageKey = (applicationId: string) => `advance_fc_client_secret_${applicationId}`;
 
 const statusLabel: Record<Status, string> = {
   intake: "Intake",
@@ -843,6 +844,7 @@ const CustomerApp = () => {
   // Render logs or Stripe Dashboard access.
   const [fcDiagnostic, setFcDiagnostic] = useState<Record<string, unknown> | null>(null);
   const [fcDiagBusy, setFcDiagBusy] = useState(false);
+  const fcReturnResumeStarted = useRef(false);
   const loadFcDiagnostic = async () => {
     if (!application || !token) return;
     setFcDiagBusy(true);
@@ -859,6 +861,82 @@ const CustomerApp = () => {
     }
   };
 
+  const collectAndConfirmStripeFc = async (clientSecret: string) => {
+    if (!application || !stripePromise) {
+      throw new Error("Stripe is not configured yet.");
+    }
+    const stripe = await stripePromise;
+    if (!stripe) throw new Error("Could not load Stripe");
+    const fcReturnUrl = new URL("/", window.location.origin);
+    fcReturnUrl.searchParams.set("stripe_fc_return", "1");
+
+    const stripeBank = stripe as unknown as {
+      collectBankAccountForSetup: (args: {
+        clientSecret: string;
+        params: {
+          payment_method_type: "us_bank_account";
+          payment_method_data: {
+            billing_details: { name?: string; email?: string };
+          };
+        };
+      }) => Promise<{
+        setupIntent?: { id: string; status: string; payment_method?: string | { id: string } };
+        error?: { message?: string; code?: string };
+      }>;
+      confirmUsBankAccountSetup: (clientSecret: string, data?: { return_url?: string }) => Promise<{
+        setupIntent?: { id: string; status: string };
+        error?: { message?: string; code?: string };
+      }>;
+    };
+
+    const collectResult = await stripeBank.collectBankAccountForSetup({
+      clientSecret,
+      params: {
+        payment_method_type: "us_bank_account",
+        payment_method_data: {
+          billing_details: {
+            name: application.customer.name,
+            email: application.customer.email,
+          },
+        },
+      },
+    });
+    if (collectResult.error) {
+      if (collectResult.error.code === "setup_intent_unexpected_state") {
+        throw new Error("Your bank-linking session expired. Please try again.");
+      }
+      throw new Error(collectResult.error.message || "Bank linking was cancelled.");
+    }
+
+    if (collectResult.setupIntent?.status === "requires_confirmation") {
+      const confirmResult = await stripeBank.confirmUsBankAccountSetup(clientSecret, {
+        return_url: fcReturnUrl.toString(),
+      });
+      if (confirmResult.error) {
+        throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
+      }
+    }
+  };
+
+  const completeStripeFcLink = async () => {
+    if (!application || !token) return false;
+    const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    });
+    const completeData = await completeRes.json();
+    if (!completeRes.ok) {
+      console.warn('[fc/complete failed]', completeData);
+      return false;
+    }
+    if (completeData.application) {
+      setApplication(completeData.application);
+      localStorage.removeItem(fcClientSecretStorageKey(application.id));
+      return !!completeData.application.stripe_payment_method_id;
+    }
+    return false;
+  };
+
   const startStripeFcLink = async () => {
     if (!application || !stripePromise) {
       setFcError("Stripe is not configured yet.");
@@ -867,11 +945,6 @@ const CustomerApp = () => {
     setFcBusy(true);
     setFcError(null);
     try {
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error("Could not load Stripe");
-      const fcReturnUrl = new URL("/", window.location.origin);
-      fcReturnUrl.searchParams.set("stripe_fc_return", "1");
-
       // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled).
       //    Pass our origin so Stripe's return_url routes back here on
       //    mobile redirect flows.
@@ -882,79 +955,17 @@ const CustomerApp = () => {
       });
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
+      localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
 
       // 2. collectBankAccountForSetup launches FC under the hood and walks
       //    the user through bank selection + auth. Returns a SetupIntent
       //    with payment_method populated (or null if user cancelled).
-      //
-      //    Cast for types — @stripe/stripe-js may not declare these
-      //    methods in older minor versions; runtime support is fine.
-      const stripeBank = stripe as unknown as {
-        collectBankAccountForSetup: (args: {
-          clientSecret: string;
-          params: {
-            payment_method_type: "us_bank_account";
-            payment_method_data: {
-              billing_details: { name?: string; email?: string };
-            };
-          };
-        }) => Promise<{
-          setupIntent?: { id: string; status: string; payment_method?: string | { id: string } };
-          error?: { message?: string; code?: string };
-        }>;
-        confirmUsBankAccountSetup: (clientSecret: string, data?: { return_url?: string }) => Promise<{
-          setupIntent?: { id: string; status: string };
-          error?: { message?: string; code?: string };
-        }>;
-      };
-
-      const collectResult = await stripeBank.collectBankAccountForSetup({
-        clientSecret: sessionData.client_secret,
-        params: {
-          payment_method_type: "us_bank_account",
-          payment_method_data: {
-            billing_details: {
-              name: application.customer.name,
-              email: application.customer.email,
-            },
-          },
-        },
-      });
-      if (collectResult.error) {
-        if (collectResult.error.code === "setup_intent_unexpected_state") {
-          throw new Error("Your bank-linking session expired. Please try again.");
-        }
-        throw new Error(collectResult.error.message || "Bank linking was cancelled.");
-      }
-
-      // 3. If the SetupIntent is requires_confirmation, confirm it.
-      //    Confirmation finalizes PM creation + attachment.
-      if (collectResult.setupIntent?.status === "requires_confirmation") {
-        const confirmResult = await stripeBank.confirmUsBankAccountSetup(sessionData.client_secret, {
-          return_url: fcReturnUrl.toString(),
-        });
-        if (confirmResult.error) {
-          throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
-        }
-      }
+      await collectAndConfirmStripeFc(sessionData.client_secret);
 
       // 4. Tell the backend to retrieve the SetupIntent and save the
       //    PaymentMethod + FC account id.
-      const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      });
-      const completeData = await completeRes.json();
-      if (!completeRes.ok) {
-        // Log the full diagnostic payload so we can see exactly what
-        // failed in the browser console — Stripe surfaces details like
-        // 'payment_intent_authentication_failure' / 'setup_intent_authentication_failure'
-        // in last_setup_error.code which tell us the real root cause.
-        console.warn('[fc/complete failed]', completeData);
-        throw new Error(completeData.error?.error_message || "Could not finalize bank link");
-      }
-
-      if (completeData.application) setApplication(completeData.application);
+      const completed = await completeStripeFcLink();
+      if (!completed) throw new Error("Could not finalize bank link");
     } catch (e) {
       setFcError(e instanceof Error ? e.message : "Something went wrong with bank linking.");
     } finally {
@@ -1078,23 +1089,35 @@ const CustomerApp = () => {
       if (stopped) return;
       attempts += 1;
       try {
-        const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.application?.stripe_payment_method_id) {
-            stopped = true;
-            setApplication(data.application);
-            if (isFcReturn) {
+        const completed = await completeStripeFcLink();
+        if (completed) {
+          stopped = true;
+          if (isFcReturn) {
+            cleanFcReturnParams();
+            setFcBusy(false);
+          }
+          return;
+        }
+
+        if (isFcReturn && !fcReturnResumeStarted.current) {
+          const clientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
+          if (clientSecret) {
+            fcReturnResumeStarted.current = true;
+            await collectAndConfirmStripeFc(clientSecret);
+            const resumedCompleted = await completeStripeFcLink();
+            if (resumedCompleted) {
+              stopped = true;
               cleanFcReturnParams();
               setFcBusy(false);
+              return;
             }
-            return;
           }
         }
-      } catch (_) { /* ignore — keep polling */ }
+      } catch (e) {
+        if (isFcReturn && e instanceof Error) {
+          console.warn("[fc/mobile-resume failed]", e.message);
+        }
+      }
       if (attempts < maxAttempts) {
         setTimeout(tryComplete, retryMs);
       } else if (isFcReturn) {
