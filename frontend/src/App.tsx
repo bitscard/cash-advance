@@ -1013,6 +1013,38 @@ const CustomerApp = () => {
     return false;
   };
 
+  const completeCheckoutStripeFcLink = async (sessionId: string) => {
+    if (!application || !token) return false;
+    logFcClientEvent("checkout-complete:start", { session_id: sessionId });
+    const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/checkout-complete`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    const completeData = await completeRes.json();
+    logFcClientEvent("checkout-complete:return", {
+      ok: completeRes.ok,
+      status: completeRes.status,
+      setup_intent_id: completeData.setup_intent_id || null,
+      has_payment_method: !!completeData.application?.stripe_payment_method_id,
+      error_code: completeData.error?.code || null,
+      error_message: completeData.error?.error_message || null,
+      checkout_status: completeData.error?.checkout_status || null,
+      setup_intent_status: completeData.error?.setup_intent_status || null,
+    });
+    if (!completeRes.ok) {
+      console.warn('[fc/checkout-complete failed]', completeData);
+      throw new Error(completeData.error?.error_message || "Could not finalize bank link");
+    }
+    if (completeData.application) {
+      setApplication(completeData.application);
+      localStorage.removeItem(fcClientSecretStorageKey(application.id));
+      localStorage.removeItem(fcSessionIdStorageKey(application.id));
+      return !!completeData.application.stripe_payment_method_id;
+    }
+    return false;
+  };
+
   const completeStripeFcLink = async () => {
     if (!application || !token) return false;
     logFcClientEvent("complete:start");
@@ -1066,34 +1098,22 @@ const CustomerApp = () => {
     setFcError(null);
     try {
       logFcClientEvent("button:start");
-      // 1. Backend creates a native Financial Connections Session.
-      //    We collect the FCA first, then the backend creates/confirms
-      //    a SetupIntent from that FCA server-side. This avoids the
-      //    mobile OAuth path where collectBankAccountForSetup returns
-      //    with zero SetupAttempts.
-      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/native/create-session`), {
+      // Use Stripe-hosted Checkout setup mode for the bank-link step.
+      // Stripe owns the full-page OAuth return and completion state,
+      // then sends us back with a Checkout Session ID to sync.
+      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/checkout-session`), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ origin: window.location.origin }),
       });
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
-      localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
-      if (sessionData.session_id) localStorage.setItem(fcSessionIdStorageKey(application.id), sessionData.session_id);
-      logFcClientEvent("create-session:return", {
+      logFcClientEvent("checkout-session:return", {
         session_id: sessionData.session_id || null,
-        client_secret_suffix: String(sessionData.client_secret || '').slice(-8),
+        has_url: !!sessionData.url,
       });
-
-      // 2. Stripe.js launches the FC account collector directly.
-      const fcSession = await collectNativeStripeFc(sessionData.client_secret);
-      const fcSessionId = fcSession?.id || sessionData.session_id;
-      if (!fcSessionId) throw new Error("Stripe did not return a Financial Connections session.");
-
-      // 3. Tell the backend to create/confirm a SetupIntent from the
-      //    collected FCA and save the resulting PaymentMethod.
-      const completed = await completeNativeStripeFcLink(fcSessionId);
-      if (!completed) throw new Error("Could not finalize bank link");
+      if (!sessionData.url) throw new Error("Stripe did not return a bank-link URL.");
+      window.location.href = sessionData.url;
     } catch (e) {
       logFcClientEvent("button:error", { message: e instanceof Error ? e.message : String(e) });
       setFcError(e instanceof Error ? e.message : "Something went wrong with bank linking.");
@@ -1102,6 +1122,44 @@ const CustomerApp = () => {
       setFcBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!application || !token) return;
+    const params = new URLSearchParams(window.location.search);
+    const fcCheckout = params.get("stripe_fc_checkout");
+    const checkoutSessionId = params.get("session_id");
+    if (!fcCheckout) return;
+
+    const cleanCheckoutParams = () => {
+      const next = new URL(window.location.href);
+      next.searchParams.delete("stripe_fc_checkout");
+      next.searchParams.delete("session_id");
+      const search = next.searchParams.toString();
+      window.history.replaceState({}, "", `${next.pathname}${search ? `?${search}` : ""}${next.hash}`);
+    };
+
+    if (fcCheckout === "cancel") {
+      cleanCheckoutParams();
+      setFcError("Bank linking was cancelled. Please tap Connect bank to try again.");
+      return;
+    }
+    if (fcCheckout !== "success" || !checkoutSessionId) return;
+
+    setFcBusy(true);
+    setFcError(null);
+    completeCheckoutStripeFcLink(checkoutSessionId)
+      .then((completed) => {
+        cleanCheckoutParams();
+        if (!completed) {
+          setFcError("Stripe returned from bank linking, but no bank account was saved. Please try again.");
+        }
+      })
+      .catch((e) => {
+        cleanCheckoutParams();
+        setFcError(e instanceof Error ? e.message : "Could not finalize bank link");
+      })
+      .finally(() => setFcBusy(false));
+  }, [application?.id, token]);
 
   useEffect(() => {
     if (!application || !token) return;

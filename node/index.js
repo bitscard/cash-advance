@@ -2369,6 +2369,157 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
   }
 });
 
+app.post('/api/advance/applications/:id/stripe/fc/checkout-session', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        phone: row.phone,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const origin = (request.body && request.body.origin) || request.headers.origin || 'http://localhost:3000';
+    const session = await stripe.checkout.sessions.create({
+      mode: 'setup',
+      customer: customerId,
+      payment_method_types: ['us_bank_account'],
+      payment_method_options: {
+        us_bank_account: {
+          verification_method: 'instant',
+          financial_connections: {
+            permissions: ['payment_method', 'transactions', 'balances'],
+            prefetch: ['balances'],
+          },
+        },
+      },
+      setup_intent_data: {
+        metadata: { application_id: row.id },
+      },
+      success_url: `${origin}/?stripe_fc_checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/?stripe_fc_checkout=cancel`,
+      metadata: { application_id: row.id },
+    });
+
+    console.log('[stripe/fc/checkout-session] created', {
+      application_id: row.id,
+      checkout_session_id: session.id,
+      customer_id: customerId,
+    });
+    response.json({ url: session.url, session_id: session.id });
+  } catch (err) {
+    console.log('[stripe/fc/checkout-session] error', err.message);
+    next(err);
+  }
+});
+
+app.post('/api/advance/applications/:id/stripe/fc/checkout-complete', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { session_id } = request.body || {};
+    if (!session_id) {
+      return response.status(400).json({ error: { error_message: 'session_id is required' } });
+    }
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    const session = await stripe.checkout.sessions.retrieve(session_id, {
+      expand: ['setup_intent.payment_method'],
+    });
+    if (!session || session.customer !== row.stripe_customer_id) {
+      return response.status(400).json({ error: { error_message: 'Checkout session does not match this application.' } });
+    }
+    if (session.status !== 'complete') {
+      return response.status(400).json({
+        error: {
+          error_message: `Bank-link Checkout session is ${session.status || 'not complete'}.`,
+          code: 'checkout_session_not_complete',
+          checkout_status: session.status || null,
+          payment_status: session.payment_status || null,
+        },
+      });
+    }
+
+    const setupIntent = session.setup_intent;
+    if (!setupIntent || typeof setupIntent === 'string') {
+      return response.status(400).json({ error: { error_message: 'Checkout session setup intent is not ready yet.' } });
+    }
+    const pm = setupIntent.payment_method;
+    if (!pm || typeof pm === 'string' || !pm.id) {
+      return response.status(400).json({
+        error: {
+          error_message: 'Stripe Checkout completed but no bank PaymentMethod was returned.',
+          code: 'checkout_no_payment_method',
+          setup_intent_id: setupIntent.id,
+          setup_intent_status: setupIntent.status,
+          last_setup_error: setupIntent.last_setup_error || null,
+        },
+      });
+    }
+
+    const fcAccountId = pm.us_bank_account?.financial_connections_account || null;
+    if (!fcAccountId) {
+      return response.status(400).json({
+        error: {
+          error_message: 'Stripe Checkout returned a bank account without Financial Connections transaction access. Please try again.',
+          code: 'checkout_missing_financial_connections_account',
+          setup_intent_id: setupIntent.id,
+          payment_method_id: pm.id,
+        },
+      });
+    }
+    let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccountId, pm.id);
+    await db.saveStripeFcSession(row.id, setupIntent.id);
+
+    if (fcAccountId && !updated.stripe_fc_subscribed_at) {
+      try {
+        await stripe.financialConnections.accounts.subscribe(fcAccountId, {
+          features: ['transactions'],
+        });
+        updated = await db.markStripeFcSubscribed(row.id) || updated;
+      } catch (e) {
+        console.log('[stripe/fc/checkout-complete] subscribe failed (non-fatal)', e.message);
+      }
+    }
+
+    await db.addMessage(row.id, 'system', 'Bank account connected via Stripe. A reviewer will check your application and respond here.');
+    addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
+      .catch(err => console.log('[mailchimp review] error:', err.message));
+
+    console.log('[stripe/fc/checkout-complete] saved', {
+      application_id: row.id,
+      checkout_session_id: session.id,
+      setup_intent_id: setupIntent.id,
+      pm: pm.id,
+      fc_account: fcAccountId,
+    });
+    response.json({
+      status: 'connected',
+      setup_intent_id: setupIntent.id,
+      application: db.publicApp(updated),
+    });
+  } catch (err) {
+    console.log('[stripe/fc/checkout-complete] error', err.message);
+    next(err);
+  }
+});
+
 app.post('/api/advance/applications/:id/stripe/fc/native/complete', async function (request, response, next) {
   const payload = requireAuth(request, response);
   if (!payload) return;
