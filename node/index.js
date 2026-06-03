@@ -852,6 +852,7 @@ const STATE_TIMEZONES = {
   Illinois: 'America/Chicago',
   Iowa: 'America/Chicago',
   Kentucky: 'America/New_York',
+  Louisiana: 'America/Chicago',
   Maine: 'America/New_York',
   Michigan: 'America/New_York',
   Minnesota: 'America/Chicago',
@@ -1080,7 +1081,7 @@ app.get('/api/advance/auth/me', async function (request, response, next) {
 // Free activation — no Stripe required
 const ELIGIBLE_STATES = new Set([
   'Alabama', 'Alaska', 'Arizona', 'Colorado', 'Delaware', 'Florida', 'Georgia',
-  'Hawaii', 'Idaho', 'Illinois', 'Iowa', 'Kentucky', 'Maine', 'Michigan', 'Minnesota',
+  'Hawaii', 'Idaho', 'Illinois', 'Iowa', 'Kentucky', 'Louisiana', 'Maine', 'Michigan', 'Minnesota',
   'Mississippi', 'Montana', 'Nebraska', 'New Hampshire', 'New Jersey',
   'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon',
   'Pennsylvania', 'Rhode Island', 'South Dakota', 'Tennessee', 'Texas',
