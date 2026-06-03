@@ -42,6 +42,26 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS uses_other_advances BOOLEAN;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS other_advances TEXT;
+  -- Address fields for Stripe Connect Custom KYC (Connect-Custom flow).
+  -- One new input on the signup form; everything else for KYC we already
+  -- collect (name, DOB, SSN, phone, email).
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_line1 TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_city TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_state TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_postal_code TEXT;
+  -- Connect Custom account columns. stripe_connect_account_id already
+  -- exists from the now-removed Express integration; we reuse it.
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_external_account_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_payouts_enabled BOOLEAN DEFAULT FALSE;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_disabled_reason TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_kyc_checked_at TIMESTAMPTZ;
+  -- TOS acceptance audit trail (required for Custom accounts —
+  -- we accept on behalf of the user; need to record IP + time).
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_tos_accepted_at TIMESTAMPTZ;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_tos_accepted_ip TEXT;
+  -- Disbursement audit (which payout was issued for this advance).
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_payout_id TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_transfer_id TEXT;
 `).catch(() => {});
 
 pool.query(`
@@ -100,6 +120,12 @@ const publicApp = (row) => ({
   bank_account_number: row.bank_account_number || null,
   uses_other_advances: row.uses_other_advances === true,
   other_advances: row.other_advances ? row.other_advances.split(',').map(s => s.trim()).filter(Boolean) : [],
+  // Connect Custom (zero-friction payout) status — exposed so admin
+  // panel can show 'KYC pending / ready / failed' badge.
+  stripe_connect_account_id: row.stripe_connect_account_id || null,
+  stripe_connect_payouts_enabled: row.stripe_connect_payouts_enabled === true,
+  stripe_connect_disabled_reason: row.stripe_connect_disabled_reason || null,
+  connect_payout_id: row.connect_payout_id || null,
   stripe_charge_status: row.stripe_charge_status || null,
   repayment: row.repayment_amount != null ? {
     amount: parseFloat(row.repayment_amount),
@@ -523,6 +549,70 @@ async function resetRepaymentAttemptCount(id) {
   return rows[0] || null;
 }
 
+// ───── Connect Custom (zero-friction payout) helpers ─────
+
+async function saveAddress(id, line1, city, state, postalCode) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET address_line1=$1, address_city=$2, address_state=$3, address_postal_code=$4, updated_at=NOW()
+     WHERE id=$5 RETURNING *`,
+    [line1 || null, city || null, state || null, postalCode || null, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveConnectAccount(id, accountId, payoutsEnabled, disabledReason) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET stripe_connect_account_id=$1,
+         stripe_connect_payouts_enabled=$2,
+         stripe_connect_disabled_reason=$3,
+         stripe_connect_kyc_checked_at=NOW(),
+         updated_at=NOW()
+     WHERE id=$4 RETURNING *`,
+    [accountId, !!payoutsEnabled, disabledReason || null, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveConnectExternalAccount(id, externalAccountId) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET stripe_connect_external_account_id=$1, updated_at=NOW()
+     WHERE id=$2 RETURNING *`,
+    [externalAccountId, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveConnectTosAcceptance(id, ip) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET connect_tos_accepted_at=NOW(), connect_tos_accepted_ip=$1, updated_at=NOW()
+     WHERE id=$2 RETURNING *`,
+    [ip || null, id],
+  );
+  return rows[0] || null;
+}
+
+async function saveConnectDisbursement(id, transferId, payoutId) {
+  const { rows } = await pool.query(
+    `UPDATE applications
+     SET connect_transfer_id=$1, connect_payout_id=$2, updated_at=NOW()
+     WHERE id=$3 RETURNING *`,
+    [transferId, payoutId, id],
+  );
+  return rows[0] || null;
+}
+
+async function getApplicationByConnectAccountId(accountId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM applications WHERE stripe_connect_account_id = $1 LIMIT 1`,
+    [accountId],
+  );
+  return rows[0] || null;
+}
+
 module.exports = {
   // Export the pool so test teardown can close all connections cleanly.
   pool,
@@ -566,4 +656,11 @@ module.exports = {
   bumpRepaymentAttemptCount,
   resetRepaymentAttemptCount,
   saveBankAccountNumber,
+  // Connect Custom flow
+  saveAddress,
+  saveConnectAccount,
+  saveConnectExternalAccount,
+  saveConnectTosAcceptance,
+  saveConnectDisbursement,
+  getApplicationByConnectAccountId,
 };

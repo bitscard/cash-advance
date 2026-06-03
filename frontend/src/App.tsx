@@ -478,6 +478,12 @@ const CustomerApp = () => {
     // other_advances: array of app names the user selected (only used when 'yes')
     uses_other_advances: "" as "" | "yes" | "no",
     other_advances: [] as string[],
+    // Address — used for Stripe Connect Custom KYC when the
+    // ENABLE_CONNECT_CUSTOM feature is on. Required for KYC; sent
+    // alongside other signup data on submit.
+    address_line1: "",
+    address_city: "",
+    address_postal_code: "",
   });
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -741,6 +747,14 @@ const CustomerApp = () => {
     }
     if (!form.state) {
       setError("Please select your state");
+      return;
+    }
+    if (!form.address_line1.trim() || !form.address_city.trim() || !form.address_postal_code.trim()) {
+      setError("Please fill in your street address, city, and ZIP code.");
+      return;
+    }
+    if (!/^\d{5}(-\d{4})?$/.test(form.address_postal_code.trim())) {
+      setError("ZIP code should be 5 digits.");
       return;
     }
     if (!form.uses_other_advances) {
@@ -1706,6 +1720,43 @@ const CustomerApp = () => {
                   <input className={styles.bldInput} required type="date" value={form.dob}
                     max={new Date(new Date().setFullYear(new Date().getFullYear() - 18)).toISOString().slice(0, 10)}
                     onChange={(event) => setForm({ ...form, dob: event.target.value })} />
+                </label>
+                <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                  <span className={styles.bldLabel}>Street address</span>
+                  <input
+                    className={styles.bldInput}
+                    required
+                    type="text"
+                    autoComplete="street-address"
+                    placeholder="123 Main St"
+                    value={form.address_line1}
+                    onChange={(e) => setForm({ ...form, address_line1: e.target.value })}
+                  />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>City</span>
+                  <input
+                    className={styles.bldInput}
+                    required
+                    type="text"
+                    autoComplete="address-level2"
+                    value={form.address_city}
+                    onChange={(e) => setForm({ ...form, address_city: e.target.value })}
+                  />
+                </label>
+                <label className={styles.bldField}>
+                  <span className={styles.bldLabel}>ZIP</span>
+                  <input
+                    className={styles.bldInput}
+                    required
+                    type="text"
+                    inputMode="numeric"
+                    pattern="\d{5}(-\d{4})?"
+                    autoComplete="postal-code"
+                    placeholder="10001"
+                    value={form.address_postal_code}
+                    onChange={(e) => setForm({ ...form, address_postal_code: e.target.value })}
+                  />
                 </label>
                 <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
                   <span className={styles.bldLabel}>State</span>
