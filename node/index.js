@@ -613,7 +613,15 @@ app.post('/api/info', function (request, response, next) {
 });
 
 const requireAdmin = (request, response) => {
-  if (!ADMIN_TOKEN) return true;
+  // Fail-CLOSED if ADMIN_TOKEN isn't configured. Earlier this returned
+  // true (open admin) when the env var was missing — a footgun if the
+  // var was ever accidentally cleared. Production must always have
+  // ADMIN_TOKEN set or admin endpoints become unreachable, which is
+  // the safer failure mode.
+  if (!ADMIN_TOKEN) {
+    response.status(500).json({ error: { error_message: 'ADMIN_TOKEN is not configured on the server.' } });
+    return false;
+  }
   if (request.headers['x-admin-token'] === ADMIN_TOKEN) return true;
   response.status(401).json({ error: { error_message: 'Admin token is required' } });
   return false;
