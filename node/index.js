@@ -2325,6 +2325,25 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
       await db.saveStripeCustomer(row.id, customerId);
     }
 
+    const requestedOrigin = typeof request.body?.origin === 'string' ? request.body.origin : '';
+    let returnUrl = null;
+    try {
+      const originUrl = requestedOrigin ? new URL(requestedOrigin) : null;
+      const isLocalDev = originUrl && ['localhost', '127.0.0.1'].includes(originUrl.hostname);
+      const isKnownFrontendHost = originUrl && (
+        originUrl.hostname === 'getbits.app' ||
+        originUrl.hostname === 'www.getbits.app' ||
+        originUrl.hostname.endsWith('.vercel.app')
+      );
+      if (originUrl && (isKnownFrontendHost || isLocalDev) && (originUrl.protocol === 'https:' || (originUrl.protocol === 'http:' && isLocalDev))) {
+        const url = new URL('/', originUrl.origin);
+        url.searchParams.set('stripe_fc_return', '1');
+        returnUrl = url.toString();
+      }
+    } catch (_) {
+      returnUrl = null;
+    }
+
     const session = await stripe.financialConnections.sessions.create({
       account_holder: { type: 'customer', customer: customerId },
       permissions: ['payment_method', 'transactions', 'balances'],
@@ -2333,6 +2352,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
         countries: ['US'],
         account_subcategories: ['checking', 'savings'],
       },
+      ...(returnUrl ? { return_url: returnUrl } : {}),
     });
 
     await db.saveStripeFcSession(row.id, session.id);
@@ -2340,6 +2360,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
       application_id: row.id,
       session_id: session.id,
       customer_id: customerId,
+      has_return_url: !!returnUrl,
     });
     response.json({ client_secret: session.client_secret, session_id: session.id });
   } catch (err) {

@@ -176,6 +176,7 @@ const adminTokenStorageKey = "advance_admin_token";
 // for an in-progress OAuth session).
 const oauthLinkTokenStorageKey = "advance_plaid_oauth_link_token";
 const fcClientSecretStorageKey = (applicationId: string) => `advance_fc_client_secret_${applicationId}`;
+const fcSessionIdStorageKey = (applicationId: string) => `advance_fc_session_id_${applicationId}`;
 
 const statusLabel: Record<Status, string> = {
   intake: "Intake",
@@ -1006,6 +1007,7 @@ const CustomerApp = () => {
     if (completeData.application) {
       setApplication(completeData.application);
       localStorage.removeItem(fcClientSecretStorageKey(application.id));
+      localStorage.removeItem(fcSessionIdStorageKey(application.id));
       return !!completeData.application.stripe_payment_method_id;
     }
     return false;
@@ -1034,6 +1036,7 @@ const CustomerApp = () => {
     if (completeData.application) {
       setApplication(completeData.application);
       localStorage.removeItem(fcClientSecretStorageKey(application.id));
+      localStorage.removeItem(fcSessionIdStorageKey(application.id));
       return !!completeData.application.stripe_payment_method_id;
     }
     return false;
@@ -1076,6 +1079,7 @@ const CustomerApp = () => {
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
       localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
+      if (sessionData.session_id) localStorage.setItem(fcSessionIdStorageKey(application.id), sessionData.session_id);
       logFcClientEvent("create-session:return", {
         session_id: sessionData.session_id || null,
         client_secret_suffix: String(sessionData.client_secret || '').slice(-8),
@@ -1234,9 +1238,21 @@ const CustomerApp = () => {
           const clientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
           if (clientSecret) {
             fcReturnResumeStarted.current = true;
-            logFcClientEvent("mobile-resume:start", { client_secret_suffix: clientSecret.slice(-8) });
-            await collectAndConfirmStripeFc(clientSecret);
-            const resumedCompleted = await completeStripeFcLink();
+            const isNativeFcSession = clientSecret.startsWith("fcsess_");
+            logFcClientEvent("mobile-resume:start", {
+              client_secret_suffix: clientSecret.slice(-8),
+              mode: isNativeFcSession ? "native_fc_session" : "setup_intent",
+            });
+            let resumedCompleted = false;
+            if (isNativeFcSession) {
+              const fcSession = await collectNativeStripeFc(clientSecret);
+              const fcSessionId = fcSession?.id || localStorage.getItem(fcSessionIdStorageKey(application.id)) || "";
+              if (!fcSessionId) throw new Error("Stripe did not return a Financial Connections session.");
+              resumedCompleted = await completeNativeStripeFcLink(fcSessionId);
+            } else {
+              await collectAndConfirmStripeFc(clientSecret);
+              resumedCompleted = await completeStripeFcLink();
+            }
             logFcClientEvent("mobile-resume:complete", { completed: resumedCompleted });
             if (resumedCompleted) {
               stopped = true;
