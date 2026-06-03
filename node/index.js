@@ -2209,24 +2209,20 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
       await db.saveStripeCustomer(row.id, customerId);
     }
 
-    // Minimal FC permissions at SetupIntent time. Asking only for
-    // 'payment_method' (vs the previous 'payment_method, transactions,
-    // balances') reduces what Chase has to negotiate with the chosen
-    // aggregator, which observably tilts Stripe toward the reliable
-    // routing (the Mastercard/Finicity path) over the flaky direct
-    // Chase path that was bouncing users back to the Connect Bank
-    // screen 1-2 attempts out of 3.
-    //
-    // We still get transactions + balance access via a separate
-    // .subscribe() call in /complete after the PM is saved — same
-    // downstream surface for income classification + overdraft checks.
+    // FC permissions: full set ('payment_method', 'transactions',
+    // 'balances'). Reducing to just 'payment_method' (tried in PR #60)
+    // observably broke the post-bank-login completion step — Stripe's
+    // 'connecting your account' confirmation popup stopped reliably
+    // appearing after the bank's logout page, leaving SetupIntents in
+    // half-states with no PM attached. Restoring the full permission
+    // set since that's the config that was working before.
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ['us_bank_account'],
       payment_method_options: {
         us_bank_account: {
           financial_connections: {
-            permissions: ['payment_method'],
+            permissions: ['payment_method', 'transactions', 'balances'],
           },
           verification_method: 'automatic',
         },
@@ -2321,22 +2317,16 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
 
     let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccountId, bankPmId);
 
-    // Subscribe to transactions + balance after PM is saved. We dropped
-    // these from the upfront SetupIntent permissions (it was making the
-    // FC widget flakier on mobile / Chase). Stripe lets us subscribe
-    // post-hoc — same downstream capability for income classification
-    // and overdraft pre-check, just deferred a step.
-    //
-    // Both subscriptions are best-effort. If either fails the bank link
-    // still succeeds; downstream code handles missing features (auto-
-    // approval falls back to manual review, overdraft check fails open).
+    // Subscribe to transactions for income classification. Only meaningful
+    // if we have a real FC account id; some banks return verified bank
+    // accounts via micro-deposit instead, which don't expose transactions.
     if (fcAccountId && !updated.stripe_fc_subscribed_at) {
       try {
         await stripe.financialConnections.accounts.subscribe(fcAccountId, {
-          features: ['transactions', 'balance'],
+          features: ['transactions'],
         });
         updated = await db.markStripeFcSubscribed(row.id) || updated;
-        console.log('[stripe/fc/complete] subscribed to transactions+balance', { account_id: fcAccountId });
+        console.log('[stripe/fc/complete] subscribed to transactions', { account_id: fcAccountId });
       } catch (e) {
         console.log('[stripe/fc/complete] subscribe failed (non-fatal)', e.message);
       }
