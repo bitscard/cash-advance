@@ -2209,6 +2209,25 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
       await db.saveStripeCustomer(row.id, customerId);
     }
 
+    const requestedOrigin = typeof request.body?.origin === 'string' ? request.body.origin : '';
+    let returnUrl = null;
+    try {
+      const originUrl = requestedOrigin ? new URL(requestedOrigin) : null;
+      const isLocalDev = originUrl && ['localhost', '127.0.0.1'].includes(originUrl.hostname);
+      const isKnownFrontendHost = originUrl && (
+        originUrl.hostname === 'getbits.app' ||
+        originUrl.hostname === 'www.getbits.app' ||
+        originUrl.hostname.endsWith('.vercel.app')
+      );
+      if (originUrl && (isKnownFrontendHost || isLocalDev) && (originUrl.protocol === 'https:' || (originUrl.protocol === 'http:' && isLocalDev))) {
+        const url = new URL('/', originUrl.origin);
+        url.searchParams.set('stripe_fc_return', '1');
+        returnUrl = url.toString();
+      }
+    } catch (_) {
+      returnUrl = null;
+    }
+
     // FC permissions: full set ('payment_method', 'transactions',
     // 'balances'). Reducing to just 'payment_method' (tried in PR #60)
     // observably broke the post-bank-login completion step.
@@ -2226,10 +2245,11 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
     // user is bounced back to our app, which (anecdotally) keeps the
     // FC confirmation popup visible long enough for the SetupIntent
     // to fully attach.
-    // return_url was REMOVED — it was redirecting the user OUT of our
-    // app on mobile when Stripe took a top-level redirect path. Without
-    // it Stripe falls back to its own default routing (back to wherever
-    // the user came from), which is what we want.
+    // return_url is required for the mobile OAuth handoff. Without it,
+    // iOS Safari/Chrome can return from the bank page to our app while
+    // the SetupIntent is still in its initial requires_payment_method
+    // state, so Stripe never reaches the "connecting your account" step
+    // that attaches the PaymentMethod.
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ['us_bank_account'],
@@ -2238,6 +2258,7 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
           financial_connections: {
             permissions: ['payment_method', 'transactions', 'balances'],
             prefetch: ['balances'],
+            ...(returnUrl ? { return_url: returnUrl } : {}),
           },
           verification_method: 'automatic',
         },
@@ -2249,7 +2270,7 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
     // column — semantically it's still "the bank-link session", and
     // we avoid a schema migration.
     await db.saveStripeFcSession(request.params.id, setupIntent.id);
-    console.log('[stripe/fc/create-session] setup_intent created', { application_id: row.id, setup_intent_id: setupIntent.id });
+    console.log('[stripe/fc/create-session] setup_intent created', { application_id: row.id, setup_intent_id: setupIntent.id, has_return_url: !!returnUrl });
     response.json({ client_secret: setupIntent.client_secret, setup_intent_id: setupIntent.id });
   } catch (err) {
     console.log('[stripe/fc/create-session] error', err.message);

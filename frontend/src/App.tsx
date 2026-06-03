@@ -869,6 +869,8 @@ const CustomerApp = () => {
     try {
       const stripe = await stripePromise;
       if (!stripe) throw new Error("Could not load Stripe");
+      const fcReturnUrl = new URL("/", window.location.origin);
+      fcReturnUrl.searchParams.set("stripe_fc_return", "1");
 
       // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled).
       //    Pass our origin so Stripe's return_url routes back here on
@@ -900,7 +902,7 @@ const CustomerApp = () => {
           setupIntent?: { id: string; status: string; payment_method?: string | { id: string } };
           error?: { message?: string; code?: string };
         }>;
-        confirmUsBankAccountSetup: (clientSecret: string) => Promise<{
+        confirmUsBankAccountSetup: (clientSecret: string, data?: { return_url?: string }) => Promise<{
           setupIntent?: { id: string; status: string };
           error?: { message?: string; code?: string };
         }>;
@@ -928,7 +930,9 @@ const CustomerApp = () => {
       // 3. If the SetupIntent is requires_confirmation, confirm it.
       //    Confirmation finalizes PM creation + attachment.
       if (collectResult.setupIntent?.status === "requires_confirmation") {
-        const confirmResult = await stripeBank.confirmUsBankAccountSetup(sessionData.client_secret);
+        const confirmResult = await stripeBank.confirmUsBankAccountSetup(sessionData.client_secret, {
+          return_url: fcReturnUrl.toString(),
+        });
         if (confirmResult.error) {
           throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
         }
@@ -1036,27 +1040,38 @@ const CustomerApp = () => {
     fetchPlaidLinkToken();
   }, [application?.id, application?.plaid_connected, token]);
 
-  // Mobile-redirect rescue: when the bank-link step would render (no
-  // PM saved yet) and we're returning from Stripe FC, the in-flight
-  // JS state from startStripeFcLink() is gone — mobile browsers
-  // sometimes use full-page redirects through the FC widget on banks
-  // like Chase. Auto-fire /complete here so the SetupIntent the user
-  // already finished gets reflected in our DB without them having to
-  // click anything again. Fails silently if there's no session-in-
-  // flight (e.g. first visit), so it's safe to always run.
-  // Mobile-rescue polling. Stripe FC sometimes returns the user to our
-  // app before the SetupIntent has fully transitioned to a state with
-  // a PaymentMethod attached — the user sees the Connect Bank screen
-  // again with no apparent error. Poll /complete every 3s for up to
-  // 30s while the bank-link page is showing; the moment Stripe
-  // finalizes the SetupIntent, we catch it and save the PM.
+  // Mobile-redirect rescue. Stripe FC can leave the current JS context
+  // during bank OAuth on iOS. When Stripe returns to ?stripe_fc_return=1,
+  // finish the SetupIntent from the backend session instead of showing
+  // the initial Connect Bank screen again.
   useEffect(() => {
     if (!application || !token) return;
     if (application.stripe_payment_method_id) return; // already linked
     if (application.stripe_card_pm_id) return; // legacy path
 
+    const params = new URLSearchParams(window.location.search);
+    const isFcReturn =
+      params.has("stripe_fc_return") ||
+      params.has("setup_intent") ||
+      params.has("setup_intent_client_secret");
+    if (isFcReturn) {
+      setFcBusy(true);
+      setFcError(null);
+    }
+
+    const cleanFcReturnParams = () => {
+      const next = new URL(window.location.href);
+      next.searchParams.delete("stripe_fc_return");
+      next.searchParams.delete("setup_intent");
+      next.searchParams.delete("setup_intent_client_secret");
+      next.searchParams.delete("redirect_status");
+      const search = next.searchParams.toString();
+      window.history.replaceState({}, "", `${next.pathname}${search ? `?${search}` : ""}${next.hash}`);
+    };
+
     let attempts = 0;
-    const maxAttempts = 10; // 10 * 3s = 30s of polling
+    const maxAttempts = isFcReturn ? 20 : 10;
+    const retryMs = isFcReturn ? 1500 : 3000;
     let stopped = false;
 
     const tryComplete = async () => {
@@ -1072,18 +1087,28 @@ const CustomerApp = () => {
           if (data.application?.stripe_payment_method_id) {
             stopped = true;
             setApplication(data.application);
+            if (isFcReturn) {
+              cleanFcReturnParams();
+              setFcBusy(false);
+            }
             return;
           }
         }
       } catch (_) { /* ignore — keep polling */ }
       if (attempts < maxAttempts) {
-        setTimeout(tryComplete, 3000);
+        setTimeout(tryComplete, retryMs);
+      } else if (isFcReturn) {
+        cleanFcReturnParams();
+        setFcBusy(false);
+        setFcError("We couldn't finish connecting your bank. Please tap Connect bank and try again.");
       }
     };
 
-    // First attempt fires immediately, then every 3s.
     tryComplete();
-    return () => { stopped = true; };
+    return () => {
+      stopped = true;
+      if (isFcReturn) setFcBusy(false);
+    };
   }, [application?.id, application?.stripe_payment_method_id, application?.stripe_card_pm_id, token]);
 
   // Membership subscription is bundled into the Card step now — the same
