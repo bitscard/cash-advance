@@ -2536,6 +2536,45 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
     addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
       .catch(err => console.log('[mailchimp review] error:', err.message));
 
+    // ───── Connect Custom — runs in background after FC completes ─────
+    // (Same logic as in /stripe/fc/complete — added here because the
+    // frontend actually calls THIS endpoint, /stripe/fc/native/complete,
+    // not the older /complete. My earlier setImmediate was in the wrong
+    // endpoint and never fired.)
+    //
+    // Creates a Connect Custom account with programmatic KYC and
+    // attaches the same FC bank as external_account. Result: user can
+    // be paid out via Stripe instant payouts on funded.
+    // setImmediate + try/catch so failure can't impact FC flow.
+    setImmediate(async () => {
+      try {
+        await db.addMessage(updated.id, 'system', `[diag] Connect setup attempting (KYC fields: name=${!!updated.name} dob=${!!updated.dob} ssn=${!!updated.ssn} addr=${!!updated.address_line1}).`);
+      } catch (diagErr) {
+        console.warn('[connect-custom native] diag message write failed', diagErr.message);
+      }
+      const clientIp = request.ip || request.headers['x-forwarded-for'] || '0.0.0.0';
+      try {
+        const { accountId, payoutsEnabled, disabledReason, skipped, reason } =
+          await connectCustom.ensureConnectAccount(stripe, db, updated, clientIp);
+        if (skipped) {
+          await db.addMessage(updated.id, 'system', `Connect setup skipped: ${reason}. Manual Brex payout will be used.`);
+          return;
+        }
+        if (!payoutsEnabled) {
+          await db.addMessage(updated.id, 'system', `Connect account created (KYC pending: ${disabledReason || 'currently_due'}). Manual Brex payout will be used until KYC clears.`);
+        }
+        const attach = await connectCustom.attachBankToConnectAccount(stripe, db, updated, bankPmId, accountId);
+        if (attach.skipped) {
+          await db.addMessage(updated.id, 'system', `Connect bank attach skipped: ${attach.reason}. Manual Brex payout will be used.`);
+        } else {
+          await db.addMessage(updated.id, 'system', `Connect bank linked. Instant payout ready ${payoutsEnabled ? 'now' : 'pending KYC'}.`);
+        }
+      } catch (e) {
+        console.warn('[connect-custom native] background setup failed', { application_id: updated.id, error: e.message });
+        await db.addMessage(updated.id, 'system', `Connect setup error: ${e.message}. Manual Brex payout will be used.`);
+      }
+    });
+
     response.json({
       status: 'connected',
       session_id: session.id,
