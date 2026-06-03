@@ -13,6 +13,7 @@ const STATE_PROVISIONS: { state: string; venue: string; regulator: string }[] = 
   { state: "Georgia", venue: "Atlanta", regulator: "Georgia Department of Banking and Finance" },
   { state: "Hawaii", venue: "Honolulu", regulator: "Hawaii Division of Financial Institutions" },
   { state: "Idaho", venue: "Boise", regulator: "Idaho Department of Finance" },
+  { state: "Illinois", venue: "Chicago", regulator: "Illinois Department of Financial and Professional Regulation" },
   { state: "Iowa", venue: "Des Moines", regulator: "Iowa Division of Banking" },
   { state: "Kentucky", venue: "Louisville", regulator: "Kentucky Department of Financial Institutions" },
   { state: "Maine", venue: "Portland", regulator: "Maine Bureau of Consumer Credit Protection" },
