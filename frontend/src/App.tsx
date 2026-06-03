@@ -1005,6 +1005,35 @@ const CustomerApp = () => {
     fetchPlaidLinkToken();
   }, [application?.id, application?.plaid_connected, token]);
 
+  // Mobile-redirect rescue: when the bank-link step would render (no
+  // PM saved yet) and we're returning from Stripe FC, the in-flight
+  // JS state from startStripeFcLink() is gone — mobile browsers
+  // sometimes use full-page redirects through the FC widget on banks
+  // like Chase. Auto-fire /complete here so the SetupIntent the user
+  // already finished gets reflected in our DB without them having to
+  // click anything again. Fails silently if there's no session-in-
+  // flight (e.g. first visit), so it's safe to always run.
+  useEffect(() => {
+    if (!application || !token) return;
+    if (application.stripe_payment_method_id) return; // already linked
+    if (application.stripe_card_pm_id) return; // legacy path
+    fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then(async (r) => {
+        if (r.ok) {
+          const data = await r.json();
+          if (data.application?.stripe_payment_method_id) {
+            setApplication(data.application);
+          }
+        }
+        // Non-OK is fine — most often means no session in flight yet,
+        // user hasn't pressed Connect Bank. Don't surface as an error.
+      })
+      .catch(() => {});
+  }, [application?.id, application?.stripe_payment_method_id, application?.stripe_card_pm_id, token]);
+
   // Membership subscription is bundled into the Card step now — the same
   // card the user saves for repayment is used to back the $3.99/mo
   // subscription. No separate Stripe Checkout step. The backend's
