@@ -57,9 +57,9 @@ describe("Eligible state list consistency across files", () => {
     expect(privacy).toEqual(frontend);
   });
 
-  test("expected list size is 36", () => {
+  test("expected list size is 37", () => {
     const list = extractStateSet(path.join(ROOT, "frontend", "src", "App.tsx"));
-    expect(list).toHaveLength(36);
+    expect(list).toHaveLength(37);
   });
 });
 

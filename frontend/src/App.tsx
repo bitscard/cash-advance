@@ -90,6 +90,9 @@ interface Application {
   // account (ACH)" in Step 2 and completes the Stripe-hosted onboarding.
   stripe_connect_account_id: string | null;
   stripe_connect_status: string | null;
+  stripe_connect_payouts_enabled: boolean;
+  stripe_connect_disabled_reason: string | null;
+  connect_payout_id: string | null;
   transfer_id: string | null;
   delivery_type: string | null;
   instant_fee_paid: boolean;
@@ -162,7 +165,7 @@ const US_STATES = [
 
 const ELIGIBLE_STATES = new Set([
   "Alabama", "Alaska", "Arizona", "Colorado", "Delaware", "Florida", "Georgia",
-  "Hawaii", "Idaho", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
+  "Hawaii", "Idaho", "Illinois", "Iowa", "Kentucky", "Maine", "Michigan", "Minnesota",
   "Mississippi", "Montana", "Nebraska", "New Hampshire", "New Jersey",
   "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
   "Pennsylvania", "Rhode Island", "South Dakota", "Tennessee", "Texas",
@@ -3999,6 +4002,32 @@ const AdminApp = () => {
                           : selected.uses_other_advances === false
                             ? "No"
                             : "—"}
+                      </dd>
+                      <dt>Auto-payout (Stripe Connect)</dt>
+                      <dd>
+                        {selected.stripe_connect_account_id ? (
+                          selected.stripe_connect_payouts_enabled ? (
+                            <>
+                              <span style={{ color: "#065f46", fontWeight: 600 }}>✓ Ready</span>
+                              {selected.connect_payout_id && (
+                                <span style={{ color: "var(--muted)", fontSize: "1.2rem", display: "block" }}>
+                                  Last payout: {selected.connect_payout_id}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ color: "#b45309" }}>⏳ KYC pending</span>
+                              {selected.stripe_connect_disabled_reason && (
+                                <span style={{ color: "var(--muted)", fontSize: "1.2rem", display: "block" }}>
+                                  Reason: {selected.stripe_connect_disabled_reason}
+                                </span>
+                              )}
+                            </>
+                          )
+                        ) : (
+                          <span style={{ color: "var(--muted)" }}>Not set up (use Brex)</span>
+                        )}
                       </dd>
                       {selected.limit_freeze_until && <><dt>Limit freeze</dt><dd style={{ color: "#b45309" }}>Until {selected.limit_freeze_until}</dd></>}
                     </dl>
