@@ -2390,15 +2390,48 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
     const session = await stripe.financialConnections.sessions.retrieve(sessionId, {
       expand: ['accounts'],
     });
-    const accounts = session.accounts?.data || [];
-    const account = accounts[0];
+    const sessionAccounts = session.accounts?.data || [];
+    let account = sessionAccounts[0];
+    let accountSource = 'session';
+    if (!account?.id) {
+      // Mobile OAuth can complete at the bank (customer gets the Chase
+      // "data shared" email) but fail to associate the returned account
+      // with the FC Session object. In that case, recover from the
+      // customer-level account list and use the latest eligible account.
+      try {
+        const listed = await stripe.financialConnections.accounts.list({
+          account_holder: { customer: row.stripe_customer_id },
+          limit: 10,
+        });
+        const customerAccounts = listed.data || [];
+        account = customerAccounts.find(a =>
+          (a.permissions || []).includes('payment_method') &&
+          (a.supported_payment_method_types || []).includes('us_bank_account')
+        ) || customerAccounts[0];
+        accountSource = 'customer_account_list';
+        console.log('[stripe/fc/native/complete] recovered account from customer list', {
+          application_id: row.id,
+          session_id: session.id,
+          customer_id: row.stripe_customer_id,
+          session_account_count: sessionAccounts.length,
+          customer_account_count: customerAccounts.length,
+          recovered_account_id: account?.id || null,
+        });
+      } catch (e) {
+        console.log('[stripe/fc/native/complete] customer account recovery failed', {
+          application_id: row.id,
+          session_id: session.id,
+          error: e.message,
+        });
+      }
+    }
     if (!account?.id) {
       return response.status(400).json({
         error: {
           error_message: 'No bank account was returned by Stripe Financial Connections.',
           code: 'no_financial_connections_account',
           session_id: session.id,
-          account_count: accounts.length,
+          account_count: sessionAccounts.length,
         },
       });
     }
@@ -2457,6 +2490,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
       setup_intent_status: setupIntent.status,
       pm: bankPmId,
       fc_account: account.id,
+      account_source: accountSource,
     });
 
     let updated = await db.saveStripeFcLinkedAccount(row.id, account.id, bankPmId);
@@ -2514,6 +2548,28 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
         return response.json({ has_session: true, session_type: 'financial_connections_session', session_id: row.stripe_fc_session_id, retrieve_error: e.message });
       }
       const accounts = session.accounts?.data || [];
+      let customerAccounts = [];
+      if (row.stripe_customer_id) {
+        try {
+          const listed = await stripe.financialConnections.accounts.list({
+            account_holder: { customer: row.stripe_customer_id },
+            limit: 10,
+          });
+          customerAccounts = (listed.data || []).map(account => ({
+            id: account.id,
+            status: account.status || null,
+            institution_name: account.institution_name || null,
+            display_name: account.display_name || null,
+            last4: account.last4 || null,
+            permissions: account.permissions || [],
+            supported_payment_method_types: account.supported_payment_method_types || [],
+            subscriptions: account.subscriptions || [],
+            created_at: account.created ? new Date(account.created * 1000).toISOString() : null,
+          }));
+        } catch (e) {
+          customerAccounts = [{ retrieve_error: e.message }];
+        }
+      }
       return response.json({
         has_session: true,
         session_type: 'financial_connections_session',
@@ -2529,6 +2585,8 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
           supported_payment_method_types: account.supported_payment_method_types || [],
           subscriptions: account.subscriptions || [],
         })),
+        customer_account_count: customerAccounts.filter(a => !a.retrieve_error).length,
+        customer_accounts: customerAccounts,
         saved_pm_in_db: row.stripe_payment_method_id || null,
         saved_fc_account_in_db: row.stripe_fc_account_id || null,
       });
