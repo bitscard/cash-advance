@@ -443,6 +443,23 @@ app.post(
           }
           break;
         }
+        case 'setup_intent.created':
+        case 'setup_intent.requires_action':
+        case 'setup_intent.setup_failed':
+        case 'setup_intent.succeeded':
+        case 'payment_method.attached': {
+          console.log('[stripe/webhook] fc event', {
+            type: event.type,
+            object_id: obj?.id,
+            application_id: appId || null,
+            setup_intent: obj?.object === 'payment_method' ? null : obj?.id,
+            payment_method: obj?.object === 'payment_method' ? obj?.id : obj?.payment_method || null,
+            status: obj?.status || null,
+            customer: obj?.customer || null,
+            last_setup_error: obj?.last_setup_error || null,
+          });
+          break;
+        }
         case 'customer.subscription.deleted': {
           // User (or system) cancelled — clear local state.
           const subId = obj?.id;
@@ -2311,6 +2328,51 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
     } catch (e) {
       return response.json({ has_session: true, setup_intent_id: row.stripe_fc_session_id, retrieve_error: e.message });
     }
+    let setupAttempts = [];
+    let stripeEvents = [];
+    try {
+      const attempts = await stripe.setupAttempts.list({
+        setup_intent: row.stripe_fc_session_id,
+        limit: 10,
+        expand: ['data.payment_method'],
+      });
+      setupAttempts = (attempts.data || []).map(attempt => ({
+        id: attempt.id,
+        created_at: attempt.created ? new Date(attempt.created * 1000).toISOString() : null,
+        status: attempt.status || null,
+        usage: attempt.usage || null,
+        customer: typeof attempt.customer === 'string' ? attempt.customer : attempt.customer?.id || null,
+        payment_method_id: typeof attempt.payment_method === 'string' ? attempt.payment_method : attempt.payment_method?.id || null,
+        payment_method_type: typeof attempt.payment_method === 'string' ? null : attempt.payment_method?.type || null,
+        setup_error: attempt.setup_error ? {
+          code: attempt.setup_error.code || null,
+          decline_code: attempt.setup_error.decline_code || null,
+          message: attempt.setup_error.message || null,
+          type: attempt.setup_error.type || null,
+        } : null,
+      }));
+    } catch (e) {
+      setupAttempts = [{ retrieve_error: e.message }];
+    }
+    try {
+      const events = await stripe.events.list({ limit: 20 });
+      stripeEvents = (events.data || [])
+        .filter(event => {
+          const object = event.data?.object || {};
+          return object.id === row.stripe_fc_session_id
+            || object.setup_intent === row.stripe_fc_session_id
+            || object.metadata?.application_id === row.id;
+        })
+        .map(event => ({
+          id: event.id,
+          type: event.type,
+          created_at: event.created ? new Date(event.created * 1000).toISOString() : null,
+          object_id: event.data?.object?.id || null,
+          object_status: event.data?.object?.status || null,
+        }));
+    } catch (e) {
+      stripeEvents = [{ retrieve_error: e.message }];
+    }
     response.json({
       has_session: true,
       setup_intent_id: si.id,
@@ -2326,7 +2388,36 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
       created_at: si.created ? new Date(si.created * 1000).toISOString() : null,
       saved_pm_in_db: row.stripe_payment_method_id || null,
       saved_fc_account_in_db: row.stripe_fc_account_id || null,
+      setup_attempt_count: Array.isArray(setupAttempts) ? setupAttempts.filter(a => !a.retrieve_error).length : 0,
+      setup_attempts: setupAttempts,
+      stripe_events: stripeEvents,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/api/advance/applications/:id/stripe/fc/client-event', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    const event = String(request.body?.event || '').slice(0, 80);
+    const details = request.body?.details && typeof request.body.details === 'object'
+      ? request.body.details
+      : {};
+    console.log('[stripe/fc/client-event]', {
+      application_id: row.id,
+      setup_intent_id: row.stripe_fc_session_id || null,
+      event,
+      details,
+      user_agent: request.headers['user-agent'] || null,
+    });
+    response.json({ ok: true });
   } catch (err) {
     next(err);
   }

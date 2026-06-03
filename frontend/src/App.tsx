@@ -845,6 +845,23 @@ const CustomerApp = () => {
   const [fcDiagnostic, setFcDiagnostic] = useState<Record<string, unknown> | null>(null);
   const [fcDiagBusy, setFcDiagBusy] = useState(false);
   const fcReturnResumeStarted = useRef(false);
+  const logFcClientEvent = useCallback((event: string, details: Record<string, unknown> = {}) => {
+    if (!application || !token) return;
+    fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/client-event`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        event,
+        details: {
+          ...details,
+          href: window.location.href,
+          visibility_state: document.visibilityState,
+          user_agent: navigator.userAgent,
+          ts: new Date().toISOString(),
+        },
+      }),
+    }).catch(() => {});
+  }, [application?.id, token]);
   const loadFcDiagnostic = async () => {
     if (!application || !token) return;
     setFcDiagBusy(true);
@@ -889,6 +906,7 @@ const CustomerApp = () => {
       }>;
     };
 
+    logFcClientEvent("collect:start", { client_secret_suffix: clientSecret.slice(-8) });
     const collectResult = await stripeBank.collectBankAccountForSetup({
       clientSecret,
       params: {
@@ -901,6 +919,13 @@ const CustomerApp = () => {
         },
       },
     });
+    logFcClientEvent("collect:return", {
+      setup_intent_id: collectResult.setupIntent?.id || null,
+      setup_intent_status: collectResult.setupIntent?.status || null,
+      has_payment_method: !!collectResult.setupIntent?.payment_method,
+      error_code: collectResult.error?.code || null,
+      error_message: collectResult.error?.message || null,
+    });
     if (collectResult.error) {
       if (collectResult.error.code === "setup_intent_unexpected_state") {
         throw new Error("Your bank-linking session expired. Please try again.");
@@ -909,8 +934,14 @@ const CustomerApp = () => {
     }
 
     if (collectResult.setupIntent?.status === "requires_confirmation") {
+      logFcClientEvent("confirm:start", { setup_intent_id: collectResult.setupIntent.id });
       const confirmResult = await stripeBank.confirmUsBankAccountSetup(clientSecret, {
         return_url: fcReturnUrl.toString(),
+      });
+      logFcClientEvent("confirm:return", {
+        setup_intent_id: confirmResult.setupIntent?.id || null,
+        setup_intent_status: confirmResult.setupIntent?.status || null,
+        error_message: confirmResult.error?.message || null,
       });
       if (confirmResult.error) {
         throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
@@ -920,11 +951,20 @@ const CustomerApp = () => {
 
   const completeStripeFcLink = async () => {
     if (!application || !token) return false;
+    logFcClientEvent("complete:start");
     const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     });
     const completeData = await completeRes.json();
+    logFcClientEvent("complete:return", {
+      ok: completeRes.ok,
+      status: completeRes.status,
+      has_payment_method: !!completeData.application?.stripe_payment_method_id,
+      error_code: completeData.error?.code || null,
+      error_message: completeData.error?.error_message || null,
+      setup_intent_status: completeData.error?.setup_intent_status || null,
+    });
     if (!completeRes.ok) {
       console.warn('[fc/complete failed]', completeData);
       return false;
@@ -937,6 +977,21 @@ const CustomerApp = () => {
     return false;
   };
 
+  useEffect(() => {
+    if (!application || !token) return;
+    const onPageHide = () => logFcClientEvent("pagehide");
+    const onPageShow = (event: PageTransitionEvent) => logFcClientEvent("pageshow", { persisted: event.persisted });
+    const onVisibilityChange = () => logFcClientEvent("visibilitychange", { visibility_state: document.visibilityState });
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [application?.id, token, logFcClientEvent]);
+
   const startStripeFcLink = async () => {
     if (!application || !stripePromise) {
       setFcError("Stripe is not configured yet.");
@@ -945,6 +1000,7 @@ const CustomerApp = () => {
     setFcBusy(true);
     setFcError(null);
     try {
+      logFcClientEvent("button:start");
       // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled).
       //    Pass our origin so Stripe's return_url routes back here on
       //    mobile redirect flows.
@@ -956,6 +1012,10 @@ const CustomerApp = () => {
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
       localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
+      logFcClientEvent("create-session:return", {
+        setup_intent_id: sessionData.setup_intent_id || null,
+        client_secret_suffix: String(sessionData.client_secret || '').slice(-8),
+      });
 
       // 2. collectBankAccountForSetup launches FC under the hood and walks
       //    the user through bank selection + auth. Returns a SetupIntent
@@ -967,8 +1027,10 @@ const CustomerApp = () => {
       const completed = await completeStripeFcLink();
       if (!completed) throw new Error("Could not finalize bank link");
     } catch (e) {
+      logFcClientEvent("button:error", { message: e instanceof Error ? e.message : String(e) });
       setFcError(e instanceof Error ? e.message : "Something went wrong with bank linking.");
     } finally {
+      logFcClientEvent("button:done");
       setFcBusy(false);
     }
   };
@@ -1068,6 +1130,11 @@ const CustomerApp = () => {
     if (isFcReturn) {
       setFcBusy(true);
       setFcError(null);
+      logFcClientEvent("mobile-return:detected", {
+        has_stashed_client_secret: !!localStorage.getItem(fcClientSecretStorageKey(application.id)),
+        redirect_status: params.get("redirect_status"),
+        setup_intent_param: params.get("setup_intent"),
+      });
     }
 
     const cleanFcReturnParams = () => {
@@ -1103,8 +1170,10 @@ const CustomerApp = () => {
           const clientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
           if (clientSecret) {
             fcReturnResumeStarted.current = true;
+            logFcClientEvent("mobile-resume:start", { client_secret_suffix: clientSecret.slice(-8) });
             await collectAndConfirmStripeFc(clientSecret);
             const resumedCompleted = await completeStripeFcLink();
+            logFcClientEvent("mobile-resume:complete", { completed: resumedCompleted });
             if (resumedCompleted) {
               stopped = true;
               cleanFcReturnParams();
@@ -1115,6 +1184,7 @@ const CustomerApp = () => {
         }
       } catch (e) {
         if (isFcReturn && e instanceof Error) {
+          logFcClientEvent("mobile-resume:error", { message: e.message });
           console.warn("[fc/mobile-resume failed]", e.message);
         }
       }
