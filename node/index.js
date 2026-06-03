@@ -2211,11 +2211,23 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
 
     // FC permissions: full set ('payment_method', 'transactions',
     // 'balances'). Reducing to just 'payment_method' (tried in PR #60)
-    // observably broke the post-bank-login completion step — Stripe's
-    // 'connecting your account' confirmation popup stopped reliably
-    // appearing after the bank's logout page, leaving SetupIntents in
-    // half-states with no PM attached. Restoring the full permission
-    // set since that's the config that was working before.
+    // observably broke the post-bank-login completion step.
+    //
+    // return_url: critical for mobile. After the bank's logout screen,
+    // some FC routes use a top-level redirect back to Stripe (rather
+    // than postMessage to our iframe). Without return_url, Stripe
+    // doesn't know where to send the user back, the FC widget never
+    // shows its 'connecting your account' confirmation, the SetupIntent
+    // ends up half-attached. Pass the originating page URL so Stripe
+    // can route the user back properly.
+    //
+    // prefetch: tells Stripe to pre-fetch balance + transaction data
+    // before closing the FC widget. Ensures data is loaded before the
+    // user is bounced back to our app, which (anecdotally) keeps the
+    // FC confirmation popup visible long enough for the SetupIntent
+    // to fully attach.
+    const origin = (request.body && request.body.origin) || request.headers.origin || request.headers.referer || `http://localhost:3000`;
+    const returnUrl = `${origin.replace(/\/$/, '')}/?fc_complete=1`;
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ['us_bank_account'],
@@ -2223,6 +2235,8 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
         us_bank_account: {
           financial_connections: {
             permissions: ['payment_method', 'transactions', 'balances'],
+            prefetch: ['balances'],
+            return_url: returnUrl,
           },
           verification_method: 'automatic',
         },

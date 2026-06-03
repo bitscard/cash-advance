@@ -849,10 +849,13 @@ const CustomerApp = () => {
       const stripe = await stripePromise;
       if (!stripe) throw new Error("Could not load Stripe");
 
-      // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled)
+      // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled).
+      //    Pass our origin so Stripe's return_url routes back here on
+      //    mobile redirect flows.
       const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/create-session`), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ origin: window.location.origin }),
       });
       const sessionData = await sessionRes.json();
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
