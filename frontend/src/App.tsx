@@ -3369,10 +3369,44 @@ const AdminApp = () => {
     [adminToken],
   );
 
-  const unlockAdmin = (event: React.FormEvent) => {
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+
+  // Validate the token against the backend before letting the user
+  // 'in'. Hits /admin/applications with the typed token in the header
+  // and only proceeds if backend returns 200. Previously this just
+  // saved the token to sessionStorage unconditionally — that meant the
+  // admin panel UI showed for ANY input (even nonsense), with all API
+  // calls silently failing in the background, which was confusing UX
+  // and looked like a security hole even though the backend was
+  // correctly enforcing.
+  const unlockAdmin = async (event: React.FormEvent) => {
     event.preventDefault();
-    sessionStorage.setItem(adminTokenStorageKey, tokenInput);
-    setAdminToken(tokenInput);
+    if (!tokenInput.trim()) {
+      setLoginError("Token is required.");
+      return;
+    }
+    setLoginBusy(true);
+    setLoginError(null);
+    try {
+      const res = await fetch(apiUrl("/api/advance/admin/applications"), {
+        headers: { "x-admin-token": tokenInput },
+      });
+      if (res.status === 401) {
+        setLoginError("Incorrect admin token.");
+        return;
+      }
+      if (!res.ok) {
+        setLoginError(`Server error (${res.status}). Try again in a moment.`);
+        return;
+      }
+      sessionStorage.setItem(adminTokenStorageKey, tokenInput);
+      setAdminToken(tokenInput);
+    } catch (e) {
+      setLoginError("Could not reach the server. Try again.");
+    } finally {
+      setLoginBusy(false);
+    }
   };
 
   const loadApplications = useCallback(async () => {
@@ -3565,10 +3599,20 @@ const AdminApp = () => {
               <input
                 type="password"
                 value={tokenInput}
-                onChange={(event) => setTokenInput(event.target.value)}
+                onChange={(event) => {
+                  setTokenInput(event.target.value);
+                  setLoginError(null);
+                }}
               />
             </label>
-            <button>Open admin</button>
+            {loginError && (
+              <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>
+                {loginError}
+              </p>
+            )}
+            <button disabled={loginBusy}>
+              {loginBusy ? "Verifying…" : "Open admin"}
+            </button>
           </form>
         </section>
       )}
