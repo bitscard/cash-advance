@@ -904,6 +904,10 @@ const CustomerApp = () => {
         setupIntent?: { id: string; status: string };
         error?: { message?: string; code?: string };
       }>;
+      collectFinancialConnectionsAccounts: (args: { clientSecret: string }) => Promise<{
+        financialConnectionsSession?: { id: string; accounts?: { data?: Array<{ id: string }> } };
+        error?: { message?: string; code?: string };
+      }>;
     };
 
     logFcClientEvent("collect:start", { client_secret_suffix: clientSecret.slice(-8) });
@@ -947,6 +951,64 @@ const CustomerApp = () => {
         throw new Error(confirmResult.error.message || "Could not finalize bank setup.");
       }
     }
+  };
+
+  const collectNativeStripeFc = async (clientSecret: string) => {
+    if (!application || !stripePromise) {
+      throw new Error("Stripe is not configured yet.");
+    }
+    const stripe = await stripePromise;
+    if (!stripe) throw new Error("Could not load Stripe");
+    const stripeFc = stripe as unknown as {
+      collectFinancialConnectionsAccounts: (args: { clientSecret: string }) => Promise<{
+        financialConnectionsSession?: { id: string; accounts?: { data?: Array<{ id: string }> } };
+        error?: { message?: string; code?: string };
+      }>;
+    };
+
+    logFcClientEvent("native-collect:start", { client_secret_suffix: clientSecret.slice(-8) });
+    const result = await stripeFc.collectFinancialConnectionsAccounts({ clientSecret });
+    logFcClientEvent("native-collect:return", {
+      session_id: result.financialConnectionsSession?.id || null,
+      account_count: result.financialConnectionsSession?.accounts?.data?.length || 0,
+      error_code: result.error?.code || null,
+      error_message: result.error?.message || null,
+    });
+    if (result.error) {
+      throw new Error(result.error.message || "Bank linking was cancelled.");
+    }
+    return result.financialConnectionsSession;
+  };
+
+  const completeNativeStripeFcLink = async (sessionId: string) => {
+    if (!application || !token) return false;
+    logFcClientEvent("native-complete:start", { session_id: sessionId });
+    const completeRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/native/complete`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    const completeData = await completeRes.json();
+    logFcClientEvent("native-complete:return", {
+      ok: completeRes.ok,
+      status: completeRes.status,
+      session_id: completeData.session_id || sessionId,
+      setup_intent_id: completeData.setup_intent_id || null,
+      has_payment_method: !!completeData.application?.stripe_payment_method_id,
+      error_code: completeData.error?.code || null,
+      error_message: completeData.error?.error_message || null,
+      setup_intent_status: completeData.error?.setup_intent_status || null,
+    });
+    if (!completeRes.ok) {
+      console.warn('[fc/native/complete failed]', completeData);
+      return false;
+    }
+    if (completeData.application) {
+      setApplication(completeData.application);
+      localStorage.removeItem(fcClientSecretStorageKey(application.id));
+      return !!completeData.application.stripe_payment_method_id;
+    }
+    return false;
   };
 
   const completeStripeFcLink = async () => {
@@ -1001,10 +1063,12 @@ const CustomerApp = () => {
     setFcError(null);
     try {
       logFcClientEvent("button:start");
-      // 1. Backend creates a SetupIntent (type us_bank_account, FC enabled).
-      //    Pass our origin so Stripe's return_url routes back here on
-      //    mobile redirect flows.
-      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/create-session`), {
+      // 1. Backend creates a native Financial Connections Session.
+      //    We collect the FCA first, then the backend creates/confirms
+      //    a SetupIntent from that FCA server-side. This avoids the
+      //    mobile OAuth path where collectBankAccountForSetup returns
+      //    with zero SetupAttempts.
+      const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/native/create-session`), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ origin: window.location.origin }),
@@ -1013,18 +1077,18 @@ const CustomerApp = () => {
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
       localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
       logFcClientEvent("create-session:return", {
-        setup_intent_id: sessionData.setup_intent_id || null,
+        session_id: sessionData.session_id || null,
         client_secret_suffix: String(sessionData.client_secret || '').slice(-8),
       });
 
-      // 2. collectBankAccountForSetup launches FC under the hood and walks
-      //    the user through bank selection + auth. Returns a SetupIntent
-      //    with payment_method populated (or null if user cancelled).
-      await collectAndConfirmStripeFc(sessionData.client_secret);
+      // 2. Stripe.js launches the FC account collector directly.
+      const fcSession = await collectNativeStripeFc(sessionData.client_secret);
+      const fcSessionId = fcSession?.id || sessionData.session_id;
+      if (!fcSessionId) throw new Error("Stripe did not return a Financial Connections session.");
 
-      // 4. Tell the backend to retrieve the SetupIntent and save the
-      //    PaymentMethod + FC account id.
-      const completed = await completeStripeFcLink();
+      // 3. Tell the backend to create/confirm a SetupIntent from the
+      //    collected FCA and save the resulting PaymentMethod.
+      const completed = await completeNativeStripeFcLink(fcSessionId);
       if (!completed) throw new Error("Could not finalize bank link");
     } catch (e) {
       logFcClientEvent("button:error", { message: e instanceof Error ? e.message : String(e) });

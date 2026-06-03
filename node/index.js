@@ -2303,6 +2303,169 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
   }
 });
 
+app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    let customerId = row.stripe_customer_id;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: row.email,
+        name: row.name,
+        phone: row.phone,
+        metadata: { application_id: row.id },
+      });
+      customerId = customer.id;
+      await db.saveStripeCustomer(row.id, customerId);
+    }
+
+    const session = await stripe.financialConnections.sessions.create({
+      account_holder: { type: 'customer', customer: customerId },
+      permissions: ['payment_method', 'transactions', 'balances'],
+      prefetch: ['balances'],
+      filters: {
+        countries: ['US'],
+        account_subcategories: ['checking', 'savings'],
+      },
+    });
+
+    await db.saveStripeFcSession(row.id, session.id);
+    console.log('[stripe/fc/native/create-session] session created', {
+      application_id: row.id,
+      session_id: session.id,
+      customer_id: customerId,
+    });
+    response.json({ client_secret: session.client_secret, session_id: session.id });
+  } catch (err) {
+    console.log('[stripe/fc/native/create-session] error', err.message);
+    next(err);
+  }
+});
+
+app.post('/api/advance/applications/:id/stripe/fc/native/complete', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    const { session_id } = request.body || {};
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    const sessionId = session_id || row.stripe_fc_session_id;
+    if (!sessionId || !String(sessionId).startsWith('fcsess_')) {
+      return response.status(400).json({ error: { error_message: 'No Financial Connections session for this application' } });
+    }
+    if (!row.stripe_customer_id) {
+      return response.status(400).json({ error: { error_message: 'Stripe customer is missing for this application' } });
+    }
+
+    const session = await stripe.financialConnections.sessions.retrieve(sessionId, {
+      expand: ['accounts'],
+    });
+    const accounts = session.accounts?.data || [];
+    const account = accounts[0];
+    if (!account?.id) {
+      return response.status(400).json({
+        error: {
+          error_message: 'No bank account was returned by Stripe Financial Connections.',
+          code: 'no_financial_connections_account',
+          session_id: session.id,
+          account_count: accounts.length,
+        },
+      });
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: row.stripe_customer_id,
+      payment_method_types: ['us_bank_account'],
+      payment_method_data: {
+        type: 'us_bank_account',
+        billing_details: {
+          name: row.name,
+          email: row.email,
+        },
+        us_bank_account: {
+          financial_connections_account: account.id,
+        },
+      },
+      mandate_data: {
+        customer_acceptance: {
+          type: 'online',
+          online: {
+            ip_address: request.ip,
+            user_agent: request.headers['user-agent'] || 'unknown',
+          },
+        },
+      },
+      confirm: true,
+      usage: 'off_session',
+      metadata: {
+        application_id: row.id,
+        fc_session_id: session.id,
+      },
+    }, {
+      idempotencyKey: `fc-native-complete-${row.id}-${session.id}`,
+    });
+
+    const bankPmId = typeof setupIntent.payment_method === 'string'
+      ? setupIntent.payment_method
+      : setupIntent.payment_method?.id;
+    if (!bankPmId) {
+      return response.status(400).json({
+        error: {
+          error_message: 'Stripe collected the bank account but did not create a PaymentMethod.',
+          code: 'no_payment_method_after_fc_session',
+          setup_intent_id: setupIntent.id,
+          setup_intent_status: setupIntent.status,
+          last_setup_error: setupIntent.last_setup_error || null,
+        },
+      });
+    }
+
+    console.log('[stripe/fc/native/complete] saving', {
+      application_id: row.id,
+      session_id: session.id,
+      setup_intent_id: setupIntent.id,
+      setup_intent_status: setupIntent.status,
+      pm: bankPmId,
+      fc_account: account.id,
+    });
+
+    let updated = await db.saveStripeFcLinkedAccount(row.id, account.id, bankPmId);
+    if (account.id && !updated.stripe_fc_subscribed_at) {
+      try {
+        await stripe.financialConnections.accounts.subscribe(account.id, {
+          features: ['transactions'],
+        });
+        updated = await db.markStripeFcSubscribed(row.id) || updated;
+      } catch (e) {
+        console.log('[stripe/fc/native/complete] subscribe failed (non-fatal)', e.message);
+      }
+    }
+
+    await db.addMessage(row.id, 'system', 'Bank account connected via Stripe. A reviewer will check your application and respond here.');
+    addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
+      .catch(err => console.log('[mailchimp review] error:', err.message));
+
+    response.json({
+      status: 'connected',
+      session_id: session.id,
+      setup_intent_id: setupIntent.id,
+      application: db.publicApp(updated),
+    });
+  } catch (err) {
+    console.log('[stripe/fc/native/complete] error', err.message);
+    next(err);
+  }
+});
+
 // Diagnostic-only endpoint. Returns the SetupIntent's current state on
 // Stripe without trying to save anything to our DB. Used by the frontend
 // to display a 'Diagnostic info' panel on the bank-link page so the
@@ -2319,6 +2482,35 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
     if (!row.stripe_fc_session_id) {
       return response.json({ has_session: false });
+    }
+    if (String(row.stripe_fc_session_id).startsWith('fcsess_')) {
+      let session;
+      try {
+        session = await stripe.financialConnections.sessions.retrieve(row.stripe_fc_session_id, {
+          expand: ['accounts'],
+        });
+      } catch (e) {
+        return response.json({ has_session: true, session_type: 'financial_connections_session', session_id: row.stripe_fc_session_id, retrieve_error: e.message });
+      }
+      const accounts = session.accounts?.data || [];
+      return response.json({
+        has_session: true,
+        session_type: 'financial_connections_session',
+        session_id: session.id,
+        account_count: accounts.length,
+        accounts: accounts.map(account => ({
+          id: account.id,
+          status: account.status || null,
+          institution_name: account.institution_name || null,
+          display_name: account.display_name || null,
+          last4: account.last4 || null,
+          permissions: account.permissions || [],
+          supported_payment_method_types: account.supported_payment_method_types || [],
+          subscriptions: account.subscriptions || [],
+        })),
+        saved_pm_in_db: row.stripe_payment_method_id || null,
+        saved_fc_account_in_db: row.stripe_fc_account_id || null,
+      });
     }
     let si;
     try {
