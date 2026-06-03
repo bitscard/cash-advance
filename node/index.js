@@ -676,7 +676,7 @@ app.get('/api/advance/referral/:code', async function (request, response, next) 
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode } = request.body;
+    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances } = request.body;
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
@@ -793,6 +793,8 @@ app.post('/api/advance/applications', async function (request, response, next) {
       dob: dob || null,
       referral_code: newReferralCode,
       referred_by: referredBy,
+      uses_other_advances,
+      other_advances,
     });
     await db.createIncomeSources(row.id, income_sources);
     // Eligibility is state-only: GA and UT are live; all other states are waitlisted regardless of referral code.
