@@ -1020,25 +1020,46 @@ const CustomerApp = () => {
   // already finished gets reflected in our DB without them having to
   // click anything again. Fails silently if there's no session-in-
   // flight (e.g. first visit), so it's safe to always run.
+  // Mobile-rescue polling. Stripe FC sometimes returns the user to our
+  // app before the SetupIntent has fully transitioned to a state with
+  // a PaymentMethod attached — the user sees the Connect Bank screen
+  // again with no apparent error. Poll /complete every 3s for up to
+  // 30s while the bank-link page is showing; the moment Stripe
+  // finalizes the SetupIntent, we catch it and save the PM.
   useEffect(() => {
     if (!application || !token) return;
     if (application.stripe_payment_method_id) return; // already linked
     if (application.stripe_card_pm_id) return; // legacy path
-    fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    })
-      .then(async (r) => {
-        if (r.ok) {
-          const data = await r.json();
+
+    let attempts = 0;
+    const maxAttempts = 10; // 10 * 3s = 30s of polling
+    let stopped = false;
+
+    const tryComplete = async () => {
+      if (stopped) return;
+      attempts += 1;
+      try {
+        const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/complete`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
           if (data.application?.stripe_payment_method_id) {
+            stopped = true;
             setApplication(data.application);
+            return;
           }
         }
-        // Non-OK is fine — most often means no session in flight yet,
-        // user hasn't pressed Connect Bank. Don't surface as an error.
-      })
-      .catch(() => {});
+      } catch (_) { /* ignore — keep polling */ }
+      if (attempts < maxAttempts) {
+        setTimeout(tryComplete, 3000);
+      }
+    };
+
+    // First attempt fires immediately, then every 3s.
+    tryComplete();
+    return () => { stopped = true; };
   }, [application?.id, application?.stripe_payment_method_id, application?.stripe_card_pm_id, token]);
 
   // Membership subscription is bundled into the Card step now — the same

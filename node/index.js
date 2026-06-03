@@ -2286,26 +2286,30 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
       cancellation_reason: setupIntent.cancellation_reason || null,
     });
 
-    // Only treat 'requires_payment_method' (user never finished) as a
-    // hard failure. Everything else with a PM attached is fine to save.
-    const usableStatuses = ['succeeded', 'processing', 'requires_action', 'requires_confirmation'];
-    if (!usableStatuses.includes(setupIntent.status)) {
-      // Clear the stale session id so the next attempt mints a fresh
-      // SetupIntent rather than retrying the dead one.
+    // Terminal-failure status — SetupIntent will never produce a PM
+    // (Stripe explicitly canceled it, usually because the user dismissed
+    // the FC widget before bank auth completed). Clear the session id
+    // so the next Connect Bank click mints a fresh SetupIntent.
+    if (setupIntent.status === 'canceled') {
       try { await db.saveStripeFcSession(row.id, null); } catch (_) {}
       const errMsg = setupIntent.last_setup_error?.message
-        || `Bank link did not complete (status: ${setupIntent.status}). Please try again.`;
+        || `Bank link was cancelled. Please tap Connect bank again.`;
       return response.status(400).json({
-        error: { error_message: errMsg, code: 'setup_intent_failed', setup_intent_status: setupIntent.status, last_error: setupIntent.last_setup_error || null },
+        error: { error_message: errMsg, code: 'setup_intent_canceled', setup_intent_status: setupIntent.status, last_error: setupIntent.last_setup_error || null },
       });
     }
 
+    // No PM attached yet. Could be transient (Stripe still finalizing
+    // attach after the FC widget closed) or terminal (the user actually
+    // cancelled). Don't clear the session — the frontend polls /complete
+    // every 3s for ~30s after landing on the bank-link page. If Stripe
+    // eventually attaches a PM, we'll pick it up on a subsequent poll.
+    // After the polling window expires the user clicks Connect Bank
+    // again, which mints a fresh SetupIntent via /create-session.
     const pm = setupIntent.payment_method;
     if (!pm || !pm.id) {
-      // Same here — the session is dead if no PM ever attached.
-      try { await db.saveStripeFcSession(row.id, null); } catch (_) {}
       return response.status(400).json({
-        error: { error_message: 'Bank link did not produce a payment method. Please tap Connect bank again.', code: 'no_payment_method', setup_intent_status: setupIntent.status },
+        error: { error_message: 'Bank link not finalized yet.', code: 'no_payment_method_yet', setup_intent_status: setupIntent.status },
       });
     }
 
