@@ -8,6 +8,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
+const connectCustom = require('./stripeConnectCustom');
 const util = require('util');
 const { v4: uuidv4 } = require('uuid');
 const express = require('express');
@@ -430,16 +431,27 @@ app.post(
           break;
         }
         case 'account.updated': {
-          // Connect Express account state changed — usually triggered when
-          // the user finishes hosted onboarding, but also fires later if
-          // Stripe restricts the account for compliance reasons.
+          // Connect account state changed. Two consumers:
+          //   - Legacy Connect Express handler (writes string status)
+          //   - Connect Custom handler (writes payouts_enabled + reason)
+          // Both are safe to call; each is a no-op if the account
+          // doesn't belong to its respective flow.
           const accountId = obj?.id;
           if (accountId) {
-            const isReady = obj.charges_enabled && obj.payouts_enabled;
-            const isRestricted = obj.requirements?.disabled_reason;
-            const newStatus = isReady ? 'ready' : (isRestricted ? 'restricted' : 'onboarding');
-            await db.setStripeConnectStatusByAccountId(accountId, newStatus);
-            console.log('[stripe/webhook] connect account updated', { account_id: accountId, status: newStatus });
+            try {
+              const isReady = obj.charges_enabled && obj.payouts_enabled;
+              const isRestricted = obj.requirements?.disabled_reason;
+              const newStatus = isReady ? 'ready' : (isRestricted ? 'restricted' : 'onboarding');
+              await db.setStripeConnectStatusByAccountId(accountId, newStatus);
+            } catch (e) {
+              console.warn('[stripe/webhook] legacy connect status update failed', e.message);
+            }
+            try {
+              await connectCustom.handleAccountUpdated(stripe, db, obj);
+            } catch (e) {
+              console.warn('[stripe/webhook] connect custom account update failed', e.message);
+            }
+            console.log('[stripe/webhook] connect account updated', { account_id: accountId });
           }
           break;
         }
@@ -676,7 +688,7 @@ app.get('/api/advance/referral/:code', async function (request, response, next) 
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances } = request.body;
+    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances, address_line1, address_city, address_postal_code } = request.body;
     if (!password || password.length < 6) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
@@ -796,6 +808,11 @@ app.post('/api/advance/applications', async function (request, response, next) {
       uses_other_advances,
       other_advances,
     });
+    // Save address if provided (required for Connect Custom KYC flow,
+    // optional otherwise — backend tolerates nulls).
+    if (address_line1 && address_city && address_postal_code && state) {
+      await db.saveAddress(row.id, address_line1, address_city, state, address_postal_code);
+    }
     await db.createIncomeSources(row.id, income_sources);
     // Eligibility is state-only: GA and UT are live; all other states are waitlisted regardless of referral code.
     // Eligible users start in 'pending_payment' — they must subscribe to the $3.99/mo
@@ -1362,6 +1379,31 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
       );
     }
 
+    response.json({ application: db.publicApp(updated) });
+  } catch (err) { next(err); }
+});
+
+// Save user's address. Required for the Connect Custom KYC flow.
+// One new input on the signup form (collects line1 / city / state /
+// postal_code). State is also already collected for eligibility so
+// we keep that as the source of truth — this endpoint can update it
+// if the user typed differently.
+app.patch('/api/advance/applications/:id/address', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const { line1, city, state, postal_code } = request.body || {};
+    if (!line1 || !city || !state || !postal_code) {
+      return response.status(400).json({ error: { error_message: 'All address fields are required: line1, city, state, postal_code' } });
+    }
+    if (!/^\d{5}(-\d{4})?$/.test(postal_code)) {
+      return response.status(400).json({ error: { error_message: 'ZIP code must be 5 digits (or ZIP+4).' } });
+    }
+    const updated = await db.saveAddress(request.params.id, line1.trim(), city.trim(), state.trim(), postal_code.trim());
+    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     response.json({ application: db.publicApp(updated) });
   } catch (err) { next(err); }
 });
@@ -2772,6 +2814,43 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
     addToMailchimp(updated.name, updated.email, updated.state, ['application_under_review'])
       .catch(err => console.log('[mailchimp review] error:', err.message));
 
+    // ───── Connect Custom — runs in background after FC completes ─────
+    // Creates a Connect Custom account with programmatic KYC, then
+    // attaches the SAME bank (from FC) as an external_account on that
+    // account. Result: the user can be paid out via Stripe instant
+    // payouts when admin marks them funded — no second bank login needed.
+    //
+    // Wrapped in setImmediate + try/catch so:
+    //   - The /complete response returns immediately
+    //   - Any Connect-side failure can't impact the existing FC flow
+    //   - Errors land in logs + a system message on the application
+    // The FC flow (this endpoint's main job) has ALREADY completed by
+    // the time this runs — Connect is purely an additional capability.
+    setImmediate(async () => {
+      const clientIp = request.ip || request.headers['x-forwarded-for'] || '0.0.0.0';
+      try {
+        const { accountId, payoutsEnabled, disabledReason, skipped, reason } =
+          await connectCustom.ensureConnectAccount(stripe, db, updated, clientIp);
+        if (skipped) {
+          await db.addMessage(updated.id, 'system', `Connect setup skipped: ${reason}. Manual Brex payout will be used.`);
+          return;
+        }
+        if (!payoutsEnabled) {
+          await db.addMessage(updated.id, 'system', `Connect account created (KYC pending: ${disabledReason || 'currently_due'}). Manual Brex payout will be used until KYC clears.`);
+          // Still try to attach the bank — payouts_enabled may flip later
+        }
+        const attach = await connectCustom.attachBankToConnectAccount(stripe, db, updated, bankPmId, accountId);
+        if (attach.skipped) {
+          await db.addMessage(updated.id, 'system', `Connect bank attach skipped: ${attach.reason}. Manual Brex payout will be used.`);
+        } else {
+          await db.addMessage(updated.id, 'system', `Connect bank linked. Instant payout ready ${payoutsEnabled ? 'now' : 'pending KYC'}.`);
+        }
+      } catch (e) {
+        console.warn('[connect-custom] background setup failed', { application_id: updated.id, error: e.message });
+        await db.addMessage(updated.id, 'system', `Connect setup error: ${e.message}. Manual Brex payout will be used.`);
+      }
+    });
+
     response.json({ status: 'connected', application: db.publicApp(updated) });
   } catch (err) {
     console.log('[stripe/fc/complete] error', err.message);
@@ -2919,11 +2998,31 @@ async function transitionToFunded(row) {
   updated = await db.setRepayment(updated.id, repayAmount, dueDate, '') || updated;
   await db.addMessage(updated.id, 'system', `Your advance has been sent. Repayment of $${repayAmount.toFixed(2)} is due on ${dueDate}.`);
 
-  // 2. (Removed) ACH payout via Stripe Connect Express.
-  // Payouts are now done MANUALLY by admin via Brex using the bank
-  // routing number (from FC's us_bank_account.routing_number) +
-  // account number (typed by the user at Step 2). Surfaced in the
-  // admin panel for copy-paste into Brex.
+  // 2. Disbursement.
+  // PREFERRED: Stripe Connect Custom (zero-friction, instant payouts).
+  // Tries automatically when the user has a Connect account in good
+  // KYC standing AND a cloned external_account. If any of those aren't
+  // true, falls back to manual Brex (admin copies routing/account from
+  // the admin panel into Brex).
+  if (updated.payout_methods === 'ACH') {
+    try {
+      const amountCents = Math.round(baseAmount * 100);
+      const deliveryType = updated.delivery_type === 'instant' ? 'instant' : 'standard';
+      const result = await connectCustom.disburseViaConnect(stripe, db, updated, amountCents, deliveryType);
+      if (result.paid) {
+        await db.addMessage(updated.id, 'system', `Advance paid via Stripe (${result.method}). Payout id ${result.payoutId}.`);
+        updated = await db.getApplicationById(updated.id) || updated;
+      } else {
+        // Falls through to manual Brex. Surface the reason so admin
+        // knows whether to expect KYC to clear or whether they need
+        // to handle this user manually.
+        await db.addMessage(updated.id, 'system', `Stripe payout not available (${result.reason}). Use Brex for manual ACH disbursement — routing + account number visible in admin panel.`);
+      }
+    } catch (connectErr) {
+      console.warn('[funded] Connect disbursement error (fall back to Brex)', connectErr.message);
+      await db.addMessage(updated.id, 'system', `Stripe payout errored (${connectErr.message}). Use Brex for manual ACH disbursement.`);
+    }
+  }
 
   // 3. Subscription bootstrap
   if (
