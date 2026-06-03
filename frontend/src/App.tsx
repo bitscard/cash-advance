@@ -177,6 +177,7 @@ const adminTokenStorageKey = "advance_admin_token";
 const oauthLinkTokenStorageKey = "advance_plaid_oauth_link_token";
 const fcClientSecretStorageKey = (applicationId: string) => `advance_fc_client_secret_${applicationId}`;
 const fcSessionIdStorageKey = (applicationId: string) => `advance_fc_session_id_${applicationId}`;
+const fcPendingStartedStorageKey = (applicationId: string) => `advance_fc_pending_started_${applicationId}`;
 
 const statusLabel: Record<Status, string> = {
   intake: "Intake",
@@ -933,6 +934,7 @@ const CustomerApp = () => {
       setApplication(completeData.application);
       localStorage.removeItem(fcClientSecretStorageKey(application.id));
       localStorage.removeItem(fcSessionIdStorageKey(application.id));
+      localStorage.removeItem(fcPendingStartedStorageKey(application.id));
       return !!completeData.application.stripe_payment_method_id;
     }
     return false;
@@ -961,6 +963,7 @@ const CustomerApp = () => {
     setFcBusy(true);
     setFcError(null);
     try {
+      fcReturnResumeStarted.current = false;
       logFcClientEvent("button:start");
       const sessionRes = await fetch(apiUrl(`/api/advance/applications/${application.id}/stripe/fc/native/create-session`), {
         method: "POST",
@@ -971,6 +974,7 @@ const CustomerApp = () => {
       if (!sessionRes.ok) throw new Error(sessionData.error?.error_message || "Could not start bank linking");
       localStorage.setItem(fcClientSecretStorageKey(application.id), sessionData.client_secret);
       if (sessionData.session_id) localStorage.setItem(fcSessionIdStorageKey(application.id), sessionData.session_id);
+      localStorage.setItem(fcPendingStartedStorageKey(application.id), String(Date.now()));
       logFcClientEvent("fc-session:return", {
         session_id: sessionData.session_id || null,
         client_secret_suffix: String(sessionData.client_secret || '').slice(-8),
@@ -1069,10 +1073,10 @@ const CustomerApp = () => {
     fetchPlaidLinkToken();
   }, [application?.id, application?.plaid_connected, token]);
 
-  // Mobile-redirect rescue. Stripe FC can leave the current JS context
-  // during bank OAuth on iOS. When Stripe returns to ?stripe_fc_return=1,
-  // reopen/resume the same Financial Connections Session, then complete
-  // server-side from that session.
+  // Mobile-redirect rescue. Stripe FC can leave or reload the current JS
+  // context during bank OAuth on iOS. When the app comes back with a stashed
+  // unfinished FC Session, resume the same session even if the bank did not
+  // return with our query param.
   useEffect(() => {
     if (!application || !token) return;
     if (application.stripe_payment_method_id) return; // already linked
@@ -1081,15 +1085,30 @@ const CustomerApp = () => {
     const params = new URLSearchParams(window.location.search);
     const isFcReturn = params.has("stripe_fc_return");
     const stashedNativeSessionId = localStorage.getItem(fcSessionIdStorageKey(application.id));
-    if (!isFcReturn) return;
-    if (isFcReturn) {
-      setFcBusy(true);
-      setFcError(null);
-      logFcClientEvent("mobile-return:detected", {
-        has_stashed_client_secret: !!localStorage.getItem(fcClientSecretStorageKey(application.id)),
-        stashed_session_id: stashedNativeSessionId,
-      });
+    const stashedClientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
+    const pendingStartedRaw = localStorage.getItem(fcPendingStartedStorageKey(application.id));
+    const pendingStarted = pendingStartedRaw ? Number(pendingStartedRaw) : 0;
+    const pendingAgeMs = pendingStarted ? Date.now() - pendingStarted : 0;
+    const hasRecentPendingSession = !!stashedClientSecret && stashedClientSecret.startsWith("fcsess_") && (
+      isFcReturn ||
+      !pendingStarted ||
+      (Number.isFinite(pendingAgeMs) && pendingAgeMs >= 0 && pendingAgeMs < 30 * 60 * 1000)
+    );
+    if (!hasRecentPendingSession) return;
+    if (fcReturnResumeStarted.current) return;
+    fcReturnResumeStarted.current = true;
+
+    setFcBusy(true);
+    setFcError(null);
+    if (!pendingStarted) {
+      localStorage.setItem(fcPendingStartedStorageKey(application.id), String(Date.now()));
     }
+    logFcClientEvent("mobile-return:detected", {
+      trigger: isFcReturn ? "stripe_fc_return_param" : "stashed_pending_session",
+      has_stashed_client_secret: !!stashedClientSecret,
+      stashed_session_id: stashedNativeSessionId,
+      pending_age_ms: pendingStarted ? pendingAgeMs : null,
+    });
 
     const cleanFcReturnParams = () => {
       const next = new URL(window.location.href);
@@ -1099,14 +1118,25 @@ const CustomerApp = () => {
     };
 
     let attempts = 0;
-    const maxAttempts = isFcReturn ? 20 : 10;
-    const retryMs = isFcReturn ? 1500 : 3000;
+    const maxAttempts = 8;
+    const retryMs = 2000;
     let stopped = false;
+    let collectAttempted = false;
 
-    const completeNativeFromStashedSession = async () => {
+    const resumeNativeFromStashedSession = async () => {
       const clientSecret = localStorage.getItem(fcClientSecretStorageKey(application.id));
-      const stashedSessionId = localStorage.getItem(fcSessionIdStorageKey(application.id));
+      const stashedSessionId = localStorage.getItem(fcSessionIdStorageKey(application.id)) || "";
       if (!clientSecret || !clientSecret.startsWith("fcsess_")) return false;
+
+      if (stashedSessionId) {
+        logFcClientEvent("mobile-complete-stashed:start", { stashed_session_id: stashedSessionId });
+        const completedFromServer = await completeNativeStripeFcLink(stashedSessionId);
+        logFcClientEvent("mobile-complete-stashed:return", { completed: completedFromServer, stashed_session_id: stashedSessionId });
+        if (completedFromServer) return true;
+      }
+
+      if (collectAttempted) return false;
+      collectAttempted = true;
 
       logFcClientEvent("mobile-resume:start", {
         client_secret_suffix: clientSecret.slice(-8),
@@ -1125,15 +1155,13 @@ const CustomerApp = () => {
       if (stopped) return;
       attempts += 1;
       try {
-        if (!fcReturnResumeStarted.current) {
-          fcReturnResumeStarted.current = true;
-          const resumedCompleted = await completeNativeFromStashedSession();
-          if (resumedCompleted) {
-            stopped = true;
-            cleanFcReturnParams();
-            setFcBusy(false);
-            return;
-          }
+        const resumedCompleted = await resumeNativeFromStashedSession();
+        if (resumedCompleted) {
+          stopped = true;
+          fcReturnResumeStarted.current = false;
+          cleanFcReturnParams();
+          setFcBusy(false);
+          return;
         }
       } catch (e) {
         if (e instanceof Error) {
@@ -1145,6 +1173,7 @@ const CustomerApp = () => {
         setTimeout(tryComplete, retryMs);
       } else {
         cleanFcReturnParams();
+        fcReturnResumeStarted.current = false;
         setFcBusy(false);
         setFcError("We couldn't finish connecting your bank. Please tap Connect bank and try again.");
       }
