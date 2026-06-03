@@ -849,6 +849,7 @@ const STATE_TIMEZONES = {
   Georgia: 'America/New_York',
   Hawaii: 'Pacific/Honolulu',
   Idaho: 'America/Denver',
+  Illinois: 'America/Chicago',
   Iowa: 'America/Chicago',
   Kentucky: 'America/New_York',
   Maine: 'America/New_York',
@@ -2827,6 +2828,14 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
     // The FC flow (this endpoint's main job) has ALREADY completed by
     // the time this runs — Connect is purely an additional capability.
     setImmediate(async () => {
+      // Loud diagnostic — if this message doesn't appear, setImmediate
+      // itself never fired. Helps tell apart "code didn't run" vs
+      // "code ran but ensureConnectAccount returned skipped/error".
+      try {
+        await db.addMessage(updated.id, 'system', `[diag] Connect setup attempting (KYC fields: name=${!!updated.name} dob=${!!updated.dob} ssn=${!!updated.ssn} addr=${!!updated.address_line1}).`);
+      } catch (diagErr) {
+        console.warn('[connect-custom] diag message write failed', diagErr.message);
+      }
       const clientIp = request.ip || request.headers['x-forwarded-for'] || '0.0.0.0';
       try {
         const { accountId, payoutsEnabled, disabledReason, skipped, reason } =
