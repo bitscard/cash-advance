@@ -917,7 +917,14 @@ const CustomerApp = () => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
       const completeData = await completeRes.json();
-      if (!completeRes.ok) throw new Error(completeData.error?.error_message || "Could not finalize bank link");
+      if (!completeRes.ok) {
+        // Log the full diagnostic payload so we can see exactly what
+        // failed in the browser console — Stripe surfaces details like
+        // 'payment_intent_authentication_failure' / 'setup_intent_authentication_failure'
+        // in last_setup_error.code which tell us the real root cause.
+        console.warn('[fc/complete failed]', completeData);
+        throw new Error(completeData.error?.error_message || "Could not finalize bank link");
+      }
 
       if (completeData.application) setApplication(completeData.application);
     } catch (e) {

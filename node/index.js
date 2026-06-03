@@ -2209,21 +2209,25 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
       await db.saveStripeCustomer(row.id, customerId);
     }
 
+    // Minimal FC permissions at SetupIntent time. Asking only for
+    // 'payment_method' (vs the previous 'payment_method, transactions,
+    // balances') reduces what Chase has to negotiate with the chosen
+    // aggregator, which observably tilts Stripe toward the reliable
+    // routing (the Mastercard/Finicity path) over the flaky direct
+    // Chase path that was bouncing users back to the Connect Bank
+    // screen 1-2 attempts out of 3.
+    //
+    // We still get transactions + balance access via a separate
+    // .subscribe() call in /complete after the PM is saved — same
+    // downstream surface for income classification + overdraft checks.
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ['us_bank_account'],
       payment_method_options: {
         us_bank_account: {
-          // FC handles the actual bank-link UI under the hood. We ask
-          // for the permissions we'll need downstream: 'payment_method'
-          // (auto-creates the PM), 'transactions' (income classification
-          // reads), 'balances' (overdraft pre-check).
           financial_connections: {
-            permissions: ['payment_method', 'transactions', 'balances'],
+            permissions: ['payment_method'],
           },
-          // verification_method: 'automatic' = Stripe handles micro-deposits
-          // when FC isn't available for that bank. 'instant' = FC only.
-          // 'automatic' is more permissive and what we want.
           verification_method: 'automatic',
         },
       },
@@ -2268,23 +2272,40 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
     // already handles 'processing' PaymentIntents (which is what an
     // ACH debit on this PM would produce anyway).
     const setupIntent = await stripe.setupIntents.retrieve(row.stripe_fc_session_id, {
-      expand: ['payment_method'],
+      expand: ['payment_method', 'latest_attempt'],
     });
-    console.log('[stripe/fc/complete] setup_intent status', { id: setupIntent.id, status: setupIntent.status, has_pm: !!setupIntent.payment_method });
+    // Verbose log so we can diagnose intermittent mobile failures from
+    // Render logs. last_setup_error is the field Stripe populates with
+    // a structured reason when the FC widget exits without completing.
+    console.log('[stripe/fc/complete] setup_intent', {
+      id: setupIntent.id,
+      status: setupIntent.status,
+      has_pm: !!setupIntent.payment_method,
+      last_setup_error: setupIntent.last_setup_error || null,
+      next_action_type: setupIntent.next_action?.type || null,
+      cancellation_reason: setupIntent.cancellation_reason || null,
+    });
 
     // Only treat 'requires_payment_method' (user never finished) as a
     // hard failure. Everything else with a PM attached is fine to save.
     const usableStatuses = ['succeeded', 'processing', 'requires_action', 'requires_confirmation'];
     if (!usableStatuses.includes(setupIntent.status)) {
+      // Clear the stale session id so the next attempt mints a fresh
+      // SetupIntent rather than retrying the dead one.
+      try { await db.saveStripeFcSession(row.id, null); } catch (_) {}
+      const errMsg = setupIntent.last_setup_error?.message
+        || `Bank link did not complete (status: ${setupIntent.status}). Please try again.`;
       return response.status(400).json({
-        error: { error_message: `Bank link did not complete (status: ${setupIntent.status}). Please try again.` },
+        error: { error_message: errMsg, code: 'setup_intent_failed', setup_intent_status: setupIntent.status, last_error: setupIntent.last_setup_error || null },
       });
     }
 
     const pm = setupIntent.payment_method;
     if (!pm || !pm.id) {
+      // Same here — the session is dead if no PM ever attached.
+      try { await db.saveStripeFcSession(row.id, null); } catch (_) {}
       return response.status(400).json({
-        error: { error_message: 'Bank link did not produce a payment method. Please try again or contact support.' },
+        error: { error_message: 'Bank link did not produce a payment method. Please tap Connect bank again.', code: 'no_payment_method', setup_intent_status: setupIntent.status },
       });
     }
 
@@ -2296,16 +2317,22 @@ app.post('/api/advance/applications/:id/stripe/fc/complete', async function (req
 
     let updated = await db.saveStripeFcLinkedAccount(row.id, fcAccountId, bankPmId);
 
-    // Subscribe to transactions for income classification. Only meaningful
-    // if we have a real FC account id; some banks return verified bank
-    // accounts via micro-deposit instead, which don't expose transactions.
+    // Subscribe to transactions + balance after PM is saved. We dropped
+    // these from the upfront SetupIntent permissions (it was making the
+    // FC widget flakier on mobile / Chase). Stripe lets us subscribe
+    // post-hoc — same downstream capability for income classification
+    // and overdraft pre-check, just deferred a step.
+    //
+    // Both subscriptions are best-effort. If either fails the bank link
+    // still succeeds; downstream code handles missing features (auto-
+    // approval falls back to manual review, overdraft check fails open).
     if (fcAccountId && !updated.stripe_fc_subscribed_at) {
       try {
         await stripe.financialConnections.accounts.subscribe(fcAccountId, {
-          features: ['transactions'],
+          features: ['transactions', 'balance'],
         });
         updated = await db.markStripeFcSubscribed(row.id) || updated;
-        console.log('[stripe/fc/complete] subscribed to transactions', { account_id: fcAccountId });
+        console.log('[stripe/fc/complete] subscribed to transactions+balance', { account_id: fcAccountId });
       } catch (e) {
         console.log('[stripe/fc/complete] subscribe failed (non-fatal)', e.message);
       }
