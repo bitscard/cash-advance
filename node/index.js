@@ -2226,8 +2226,10 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
     // user is bounced back to our app, which (anecdotally) keeps the
     // FC confirmation popup visible long enough for the SetupIntent
     // to fully attach.
-    const origin = (request.body && request.body.origin) || request.headers.origin || request.headers.referer || `http://localhost:3000`;
-    const returnUrl = `${origin.replace(/\/$/, '')}/?fc_complete=1`;
+    // return_url was REMOVED — it was redirecting the user OUT of our
+    // app on mobile when Stripe took a top-level redirect path. Without
+    // it Stripe falls back to its own default routing (back to wherever
+    // the user came from), which is what we want.
     const setupIntent = await stripe.setupIntents.create({
       customer: customerId,
       payment_method_types: ['us_bank_account'],
@@ -2236,7 +2238,6 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
           financial_connections: {
             permissions: ['payment_method', 'transactions', 'balances'],
             prefetch: ['balances'],
-            return_url: returnUrl,
           },
           verification_method: 'automatic',
         },
@@ -2252,6 +2253,52 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
     response.json({ client_secret: setupIntent.client_secret, setup_intent_id: setupIntent.id });
   } catch (err) {
     console.log('[stripe/fc/create-session] error', err.message);
+    next(err);
+  }
+});
+
+// Diagnostic-only endpoint. Returns the SetupIntent's current state on
+// Stripe without trying to save anything to our DB. Used by the frontend
+// to display a 'Diagnostic info' panel on the bank-link page so the
+// user / their engineer can see exactly what Stripe is reporting,
+// without needing access to Render logs or Stripe Dashboard.
+app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (request, response, next) {
+  const payload = requireAuth(request, response);
+  if (!payload) return;
+  if (payload.applicationId !== request.params.id) {
+    return response.status(403).json({ error: { error_message: 'Forbidden' } });
+  }
+  try {
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    if (!row.stripe_fc_session_id) {
+      return response.json({ has_session: false });
+    }
+    let si;
+    try {
+      si = await stripe.setupIntents.retrieve(row.stripe_fc_session_id, {
+        expand: ['payment_method', 'latest_attempt'],
+      });
+    } catch (e) {
+      return response.json({ has_session: true, setup_intent_id: row.stripe_fc_session_id, retrieve_error: e.message });
+    }
+    response.json({
+      has_session: true,
+      setup_intent_id: si.id,
+      status: si.status,
+      has_payment_method: !!si.payment_method,
+      payment_method_type: si.payment_method?.type || null,
+      payment_method_id: si.payment_method?.id || null,
+      has_us_bank_account: !!si.payment_method?.us_bank_account,
+      bank_name: si.payment_method?.us_bank_account?.bank_name || null,
+      last_setup_error: si.last_setup_error || null,
+      cancellation_reason: si.cancellation_reason || null,
+      next_action_type: si.next_action?.type || null,
+      created_at: si.created ? new Date(si.created * 1000).toISOString() : null,
+      saved_pm_in_db: row.stripe_payment_method_id || null,
+      saved_fc_account_in_db: row.stripe_fc_account_id || null,
+    });
+  } catch (err) {
     next(err);
   }
 });
