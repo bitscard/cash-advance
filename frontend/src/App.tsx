@@ -3500,6 +3500,7 @@ const AdminApp = () => {
   const [loginMode, setLoginMode] = useState<"login" | "signup" | "legacy">("login");
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
   const [nameInput, setNameInput] = useState("");
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -3635,6 +3636,7 @@ const AdminApp = () => {
       setAdminJwt(data.token);
       setAdminUser(data.user);
       setPasswordInput("");
+      setConfirmPasswordInput("");
     } catch (e) {
       setLoginError("Could not reach the server. Try again.");
     } finally {
@@ -3660,6 +3662,10 @@ const AdminApp = () => {
       setLoginError("Password must be at least 8 characters.");
       return;
     }
+    if (passwordInput !== confirmPasswordInput) {
+      setLoginError("Passwords do not match.");
+      return;
+    }
     setLoginBusy(true);
     try {
       const res = await fetch(apiUrl("/api/advance/admin-auth/signup"), {
@@ -3677,6 +3683,7 @@ const AdminApp = () => {
       setAdminJwt(data.token);
       setAdminUser(data.user);
       setPasswordInput("");
+      setConfirmPasswordInput("");
     } catch (e) {
       setLoginError("Could not reach the server. Try again.");
     } finally {
@@ -3724,6 +3731,7 @@ const AdminApp = () => {
     setAdminJwt("");
     setAdminUser(null);
     setPasswordInput("");
+    setConfirmPasswordInput("");
     setEmailInput("");
     setNameInput("");
     setTokenInput("");
@@ -3977,6 +3985,15 @@ const AdminApp = () => {
                   autoComplete="new-password"
                   value={passwordInput}
                   onChange={(e) => { setPasswordInput(e.target.value); setLoginError(null); }}
+                />
+              </label>
+              <label>
+                Confirm password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPasswordInput}
+                  onChange={(e) => { setConfirmPasswordInput(e.target.value); setLoginError(null); }}
                 />
               </label>
               {loginError && <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>{loginError}</p>}
