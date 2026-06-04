@@ -80,6 +80,21 @@ pool.query(`
   ALTER TABLE income_sources ALTER COLUMN application_id TYPE TEXT USING application_id::TEXT;
 `).catch(() => {});
 
+// admin_users — multi-user admin login system. Each team member with a
+// @getbits.app email can create their own login. The legacy ADMIN_TOKEN
+// env var still works as a shared-secret fallback (used by the cron job
+// and any team member who has the token but no account yet).
+pool.query(`
+  CREATE TABLE IF NOT EXISTS admin_users (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    email           TEXT        NOT NULL UNIQUE,
+    password_hash   TEXT        NOT NULL,
+    name            TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_login_at   TIMESTAMPTZ
+  );
+`).catch(() => {});
+
 const fmtDate = (v) => {
   if (!v) return null;
   if (typeof v === 'string') return v.slice(0, 10);
@@ -616,6 +631,40 @@ async function getApplicationByConnectAccountId(accountId) {
   return rows[0] || null;
 }
 
+// ───── admin_users helpers ─────
+
+async function createAdminUser(email, passwordHash, name) {
+  const { rows } = await pool.query(
+    `INSERT INTO admin_users (email, password_hash, name)
+     VALUES ($1, $2, $3) RETURNING id, email, name, created_at`,
+    [email.toLowerCase().trim(), passwordHash, name || null],
+  );
+  return rows[0] || null;
+}
+
+async function getAdminUserByEmail(email) {
+  const { rows } = await pool.query(
+    `SELECT * FROM admin_users WHERE email = $1 LIMIT 1`,
+    [email.toLowerCase().trim()],
+  );
+  return rows[0] || null;
+}
+
+async function getAdminUserById(id) {
+  const { rows } = await pool.query(
+    `SELECT id, email, name, created_at, last_login_at FROM admin_users WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  return rows[0] || null;
+}
+
+async function touchAdminLogin(id) {
+  await pool.query(
+    `UPDATE admin_users SET last_login_at = NOW() WHERE id = $1`,
+    [id],
+  );
+}
+
 module.exports = {
   // Export the pool so test teardown can close all connections cleanly.
   pool,
@@ -666,4 +715,9 @@ module.exports = {
   saveConnectTosAcceptance,
   saveConnectDisbursement,
   getApplicationByConnectAccountId,
+  // admin_users
+  createAdminUser,
+  getAdminUserByEmail,
+  getAdminUserById,
+  touchAdminLogin,
 };

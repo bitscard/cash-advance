@@ -179,6 +179,8 @@ const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
 const adminTokenStorageKey = "advance_admin_token";
+const adminJwtStorageKey = "advance_admin_jwt";
+const adminUserStorageKey = "advance_admin_user";
 // Stashed by PlaidConnectButton before Link opens so /oauth-return can pick the
 // same link_token back up and resume the OAuth flow (Plaid rejects a new token
 // for an in-progress OAuth session).
@@ -449,9 +451,15 @@ const AlienMascot = ({ flag = "usa", size = 220 }: { flag?: "usa" | "mexico"; si
 
 // ── App router ────────────────────────────────────────────────────────────────
 
+// Admin URL — non-guessable path. Random alphanumeric suffix so search
+// engines + casual visitors don't find it. Real security comes from
+// the email+password / ADMIN_TOKEN auth on the API — this is just
+// belt-and-suspenders. Change here AND tell your team if you rotate it.
+const ADMIN_PATH = "/bits-ops-7k3xp9q4z2";
+
 const App = () => {
   const path = window.location.pathname;
-  if (path === "/admin") return <AdminApp />;
+  if (path === ADMIN_PATH) return <AdminApp />;
   if (path === "/loan") return <LoanApp />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/privacy") return <PrivacyPage />;
@@ -3467,10 +3475,32 @@ const CustomerApp = () => {
 // ── Admin app ─────────────────────────────────────────────────────────────────
 
 const AdminApp = () => {
+  // Two ways to be authenticated:
+  //   adminToken — legacy shared-secret in x-admin-token header
+  //   adminJwt — per-user JWT in Authorization: Bearer header
+  // Either grants admin access. New team members use email+password
+  // login to get a JWT; the legacy shared token stays for the cron
+  // and for anyone who knows it (e.g. zubeir).
   const [adminToken, setAdminToken] = useState(
     () => sessionStorage.getItem(adminTokenStorageKey) || "",
   );
+  const [adminJwt, setAdminJwt] = useState(
+    () => sessionStorage.getItem(adminJwtStorageKey) || "",
+  );
+  const [adminUser, setAdminUser] = useState<{ id: string; email: string; name: string | null } | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(adminUserStorageKey);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
   const [tokenInput, setTokenInput] = useState(adminToken);
+  // Login form mode: 'login' shows email+password sign-in,
+  // 'signup' shows account creation form, 'legacy' shows the
+  // shared-token input.
+  const [loginMode, setLoginMode] = useState<"login" | "signup" | "legacy">("login");
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [nameInput, setNameInput] = useState("");
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Admin tabs: filter the inbox by lifecycle bucket so reviewers can
@@ -3564,23 +3594,99 @@ const AdminApp = () => {
   const adminHeaders = useMemo<Record<string, string>>(
     () => {
       const headers: Record<string, string> = {};
-      if (adminToken) headers["x-admin-token"] = adminToken;
+      // Prefer per-user JWT when present; fall back to shared token.
+      if (adminJwt) {
+        headers["Authorization"] = `Bearer ${adminJwt}`;
+      } else if (adminToken) {
+        headers["x-admin-token"] = adminToken;
+      }
       return headers;
     },
-    [adminToken],
+    [adminToken, adminJwt],
   );
 
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginBusy, setLoginBusy] = useState(false);
 
-  // Validate the token against the backend before letting the user
-  // 'in'. Hits /admin/applications with the typed token in the header
-  // and only proceeds if backend returns 200. Previously this just
-  // saved the token to sessionStorage unconditionally — that meant the
-  // admin panel UI showed for ANY input (even nonsense), with all API
-  // calls silently failing in the background, which was confusing UX
-  // and looked like a security hole even though the backend was
-  // correctly enforcing.
+  // Sign in with email + password. Backend validates against admin_users
+  // table and returns a JWT. We store the JWT in sessionStorage for the
+  // session and switch to Bearer-auth for all subsequent admin requests.
+  const submitLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoginError(null);
+    if (!emailInput.trim() || !passwordInput) {
+      setLoginError("Email and password are required.");
+      return;
+    }
+    setLoginBusy(true);
+    try {
+      const res = await fetch(apiUrl("/api/advance/admin-auth/login"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim(), password: passwordInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLoginError(data.error?.error_message || "Login failed.");
+        return;
+      }
+      sessionStorage.setItem(adminJwtStorageKey, data.token);
+      sessionStorage.setItem(adminUserStorageKey, JSON.stringify(data.user));
+      setAdminJwt(data.token);
+      setAdminUser(data.user);
+      setPasswordInput("");
+    } catch (e) {
+      setLoginError("Could not reach the server. Try again.");
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  // Create a new admin account. Email must end in @getbits.app
+  // (enforced server-side too). Returns a JWT on success — same shape
+  // as login, so we sign the user in immediately after creating.
+  const submitSignup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoginError(null);
+    if (!emailInput.trim() || !passwordInput || !nameInput.trim()) {
+      setLoginError("Name, email and password are required.");
+      return;
+    }
+    if (!emailInput.toLowerCase().endsWith("@getbits.app")) {
+      setLoginError("Admin signups are restricted to @getbits.app emails.");
+      return;
+    }
+    if (passwordInput.length < 8) {
+      setLoginError("Password must be at least 8 characters.");
+      return;
+    }
+    setLoginBusy(true);
+    try {
+      const res = await fetch(apiUrl("/api/advance/admin-auth/signup"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailInput.trim(), password: passwordInput, name: nameInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLoginError(data.error?.error_message || "Signup failed.");
+        return;
+      }
+      sessionStorage.setItem(adminJwtStorageKey, data.token);
+      sessionStorage.setItem(adminUserStorageKey, JSON.stringify(data.user));
+      setAdminJwt(data.token);
+      setAdminUser(data.user);
+      setPasswordInput("");
+    } catch (e) {
+      setLoginError("Could not reach the server. Try again.");
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  // Legacy: shared ADMIN_TOKEN login. Kept for the cron job and for
+  // team members who already had the token before per-user accounts
+  // were introduced. Validates against the backend before saving.
   const unlockAdmin = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!tokenInput.trim()) {
@@ -3609,6 +3715,22 @@ const AdminApp = () => {
       setLoginBusy(false);
     }
   };
+
+  const logoutAdmin = () => {
+    sessionStorage.removeItem(adminTokenStorageKey);
+    sessionStorage.removeItem(adminJwtStorageKey);
+    sessionStorage.removeItem(adminUserStorageKey);
+    setAdminToken("");
+    setAdminJwt("");
+    setAdminUser(null);
+    setPasswordInput("");
+    setEmailInput("");
+    setNameInput("");
+    setTokenInput("");
+    setLoginMode("login");
+  };
+
+  const isAuthed = Boolean(adminToken || adminJwt);
 
   const loadApplications = useCallback(async () => {
     const response = await fetch(apiUrl("/api/advance/admin/applications"), {
@@ -3787,40 +3909,119 @@ const AdminApp = () => {
 
   return (
     <main className={styles.page}>
-      {!adminToken && (
+      {!isAuthed && (
         <section className={styles.shell}>
           <div className={styles.intro}>
             <p className={styles.kicker}>Admin</p>
             <h1>Review console</h1>
-            <p>Enter the admin token configured on the backend.</p>
+            <p>
+              {loginMode === "login" && "Sign in with your @getbits.app email."}
+              {loginMode === "signup" && "Create an admin account with your @getbits.app email."}
+              {loginMode === "legacy" && "Enter the admin token configured on the backend."}
+            </p>
           </div>
-          <form className={styles.panel} onSubmit={unlockAdmin}>
-            <label>
-              Admin token
-              <input
-                type="password"
-                value={tokenInput}
-                onChange={(event) => {
-                  setTokenInput(event.target.value);
-                  setLoginError(null);
-                }}
-              />
-            </label>
-            {loginError && (
-              <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>
-                {loginError}
+          {loginMode === "login" && (
+            <form className={styles.panel} onSubmit={submitLogin}>
+              <label>
+                Email
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setLoginError(null); }}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwordInput}
+                  onChange={(e) => { setPasswordInput(e.target.value); setLoginError(null); }}
+                />
+              </label>
+              {loginError && <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>{loginError}</p>}
+              <button disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in"}</button>
+              <p style={{ marginTop: "1rem", fontSize: "1.25rem", textAlign: "center" }}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("signup"); setLoginError(null); }} style={{ color: "var(--brand)" }}>Need an account? Sign up</a>
+                <span style={{ color: "var(--muted)", margin: "0 0.8rem" }}>·</span>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("legacy"); setLoginError(null); }} style={{ color: "var(--muted)" }}>Use admin token</a>
               </p>
-            )}
-            <button disabled={loginBusy}>
-              {loginBusy ? "Verifying…" : "Open admin"}
-            </button>
-          </form>
+            </form>
+          )}
+          {loginMode === "signup" && (
+            <form className={styles.panel} onSubmit={submitSignup}>
+              <label>
+                Name
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={nameInput}
+                  onChange={(e) => { setNameInput(e.target.value); setLoginError(null); }}
+                />
+              </label>
+              <label>
+                Email <span style={{ color: "var(--muted)", fontSize: "1.1rem", fontWeight: 400 }}>(@getbits.app only)</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="you@getbits.app"
+                  value={emailInput}
+                  onChange={(e) => { setEmailInput(e.target.value); setLoginError(null); }}
+                />
+              </label>
+              <label>
+                Password <span style={{ color: "var(--muted)", fontSize: "1.1rem", fontWeight: 400 }}>(min 8 chars)</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordInput}
+                  onChange={(e) => { setPasswordInput(e.target.value); setLoginError(null); }}
+                />
+              </label>
+              {loginError && <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>{loginError}</p>}
+              <button disabled={loginBusy}>{loginBusy ? "Creating…" : "Create account"}</button>
+              <p style={{ marginTop: "1rem", fontSize: "1.25rem", textAlign: "center" }}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("login"); setLoginError(null); }} style={{ color: "var(--brand)" }}>Already have an account? Sign in</a>
+              </p>
+            </form>
+          )}
+          {loginMode === "legacy" && (
+            <form className={styles.panel} onSubmit={unlockAdmin}>
+              <label>
+                Admin token
+                <input
+                  type="password"
+                  value={tokenInput}
+                  onChange={(event) => {
+                    setTokenInput(event.target.value);
+                    setLoginError(null);
+                  }}
+                />
+              </label>
+              {loginError && <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>{loginError}</p>}
+              <button disabled={loginBusy}>{loginBusy ? "Verifying…" : "Open admin"}</button>
+              <p style={{ marginTop: "1rem", fontSize: "1.25rem", textAlign: "center" }}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("login"); setLoginError(null); }} style={{ color: "var(--brand)" }}>← Back to email sign in</a>
+              </p>
+            </form>
+          )}
         </section>
       )}
-      {adminToken && (
+      {isAuthed && (
         <section className={styles.adminLayout}>
           <aside className={styles.inbox}>
-            <h1>Reviews</h1>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h1 style={{ margin: 0 }}>Reviews</h1>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", fontSize: "1.1rem" }}>
+                {adminUser ? (
+                  <span style={{ color: "var(--muted)" }}>{adminUser.name || adminUser.email}</span>
+                ) : (
+                  <span style={{ color: "var(--muted)" }}>Legacy token</span>
+                )}
+                <a href="#" onClick={(e) => { e.preventDefault(); logoutAdmin(); }} style={{ color: "var(--brand)", fontSize: "1.1rem" }}>Log out</a>
+              </div>
+            </div>
             {/* Tab bar — filters the inbox by lifecycle bucket. Each tab
                 shows a count so reviewers can see backlog at a glance. */}
             <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>

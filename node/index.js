@@ -642,17 +642,33 @@ app.post('/api/info', function (request, response, next) {
 });
 
 const requireAdmin = (request, response) => {
-  // Fail-CLOSED if ADMIN_TOKEN isn't configured. Earlier this returned
-  // true (open admin) when the env var was missing — a footgun if the
-  // var was ever accidentally cleared. Production must always have
-  // ADMIN_TOKEN set or admin endpoints become unreachable, which is
-  // the safer failure mode.
+  // Two paths to admin access:
+  //   1. Legacy: x-admin-token header matching ADMIN_TOKEN env var.
+  //      Used by the daily cron job (GitHub Actions) and by team
+  //      members who haven't created an admin user account yet.
+  //   2. JWT: Authorization: Bearer <jwt> issued by /admin-auth/login.
+  //      Per-user login system, restricted to @getbits.app emails.
+  // Either path grants access. Fail-CLOSED if NEITHER is configured/
+  // valid — the safer mode when env vars are accidentally cleared.
+  if (ADMIN_TOKEN && request.headers['x-admin-token'] === ADMIN_TOKEN) {
+    return true;
+  }
+  const authHeader = request.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+      if (payload && payload.kind === 'admin' && payload.adminId) {
+        return true;
+      }
+    } catch (_) {
+      // Fall through to 401 below
+    }
+  }
   if (!ADMIN_TOKEN) {
-    response.status(500).json({ error: { error_message: 'ADMIN_TOKEN is not configured on the server.' } });
+    response.status(500).json({ error: { error_message: 'Admin auth is not configured on the server.' } });
     return false;
   }
-  if (request.headers['x-admin-token'] === ADMIN_TOKEN) return true;
-  response.status(401).json({ error: { error_message: 'Admin token is required' } });
+  response.status(401).json({ error: { error_message: 'Admin authentication required' } });
   return false;
 };
 
@@ -669,6 +685,97 @@ const requireAuth = (request, response) => {
     return null;
   }
 };
+
+// ── Admin user auth (multi-user login system) ──────────────────────────
+//
+// Three endpoints:
+//   POST /admin-auth/signup — create account. Email must be @getbits.app.
+//   POST /admin-auth/login  — email + password → returns JWT.
+//   GET  /admin-auth/me     — returns current admin user (requires JWT).
+//
+// JWT payload: { kind: 'admin', adminId, email, exp }
+// Issued tokens expire after 30 days.
+
+const ADMIN_EMAIL_DOMAIN = 'getbits.app';
+
+app.post('/api/advance/admin-auth/signup', async function (request, response, next) {
+  try {
+    const { email, password, name } = request.body || {};
+    if (!email || typeof email !== 'string') {
+      return response.status(400).json({ error: { error_message: 'Email is required.' } });
+    }
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      return response.status(400).json({ error: { error_message: 'Password must be at least 8 characters.' } });
+    }
+    const emailLower = email.toLowerCase().trim();
+    if (!emailLower.endsWith('@' + ADMIN_EMAIL_DOMAIN)) {
+      return response.status(403).json({ error: { error_message: `Admin signups are restricted to @${ADMIN_EMAIL_DOMAIN} emails.` } });
+    }
+    const existing = await db.getAdminUserByEmail(emailLower);
+    if (existing) {
+      return response.status(409).json({ error: { error_message: 'An account with that email already exists. Sign in instead.' } });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await db.createAdminUser(emailLower, passwordHash, name);
+    if (!user) {
+      return response.status(500).json({ error: { error_message: 'Could not create admin account.' } });
+    }
+    const token = jwt.sign(
+      { kind: 'admin', adminId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '30d' },
+    );
+    response.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (err) { next(err); }
+});
+
+app.post('/api/advance/admin-auth/login', async function (request, response, next) {
+  try {
+    const { email, password } = request.body || {};
+    if (!email || !password) {
+      return response.status(400).json({ error: { error_message: 'Email and password are required.' } });
+    }
+    const user = await db.getAdminUserByEmail(email);
+    if (!user) {
+      // Don't leak which step failed (email-not-found vs wrong-password).
+      return response.status(401).json({ error: { error_message: 'Incorrect email or password.' } });
+    }
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return response.status(401).json({ error: { error_message: 'Incorrect email or password.' } });
+    }
+    await db.touchAdminLogin(user.id);
+    const token = jwt.sign(
+      { kind: 'admin', adminId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '30d' },
+    );
+    response.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  } catch (err) { next(err); }
+});
+
+app.get('/api/advance/admin-auth/me', async function (request, response, next) {
+  try {
+    const authHeader = request.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return response.status(401).json({ error: { error_message: 'Not signed in.' } });
+    }
+    let payload;
+    try {
+      payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+    } catch (_) {
+      return response.status(401).json({ error: { error_message: 'Session expired. Sign in again.' } });
+    }
+    if (!payload || payload.kind !== 'admin' || !payload.adminId) {
+      return response.status(401).json({ error: { error_message: 'Not an admin session.' } });
+    }
+    const user = await db.getAdminUserById(payload.adminId);
+    if (!user) {
+      return response.status(401).json({ error: { error_message: 'Admin account no longer exists.' } });
+    }
+    response.json({ user });
+  } catch (err) { next(err); }
+});
 
 // ── Advance application endpoints ─────────────────────────────────────────────
 
