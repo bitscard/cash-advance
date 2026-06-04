@@ -67,6 +67,9 @@ interface Application {
     pay_frequency: string | null;
     state: string | null;
     dob: string | null;
+    address_line1: string | null;
+    address_city: string | null;
+    address_postal_code: string | null;
   };
   requested_amount: number;
   payday: string;
@@ -3996,6 +3999,25 @@ const AdminApp = () => {
                       <dd>{selected.customer.ssn_last4 || "—"}</dd>
                       <dt>State</dt>
                       <dd>{selected.customer.state || "—"}</dd>
+                      <dt>Address</dt>
+                      <dd>
+                        {selected.customer.address_line1 ? (
+                          <>
+                            {selected.customer.address_line1}
+                            {(selected.customer.address_city || selected.customer.address_postal_code) && (
+                              <>
+                                <br />
+                                {selected.customer.address_city ? selected.customer.address_city : ""}
+                                {selected.customer.address_city && selected.customer.state ? ", " : ""}
+                                {selected.customer.state || ""}
+                                {selected.customer.address_postal_code ? ` ${selected.customer.address_postal_code}` : ""}
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <span style={{ color: "var(--muted)" }}>Not on file</span>
+                        )}
+                      </dd>
                       <dt>Bank</dt>
                       <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
                       <dt>Card</dt>
