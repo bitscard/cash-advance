@@ -8,7 +8,7 @@ const ConsentPage = () => (
     <h1 style={{ fontSize: "3.2rem", fontWeight: 800, marginBottom: "0.8rem" }}>Consent to the Use of Electronic Documents and Signatures</h1>
     <p style={{ color: "var(--muted)", fontSize: "1.4rem", marginBottom: "4rem" }}>
       Last Updated: May 25, 2026 · Bits Card, Inc. ·{" "}
-      <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>
+      <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>
     </p>
 
     <h2 style={{ fontSize: "2rem", fontWeight: 700, marginBottom: "1.2rem", color: "var(--ink)" }}>
@@ -33,7 +33,7 @@ const ConsentPage = () => (
     </Section>
 
     <Section title="Withdrawing My Consent to Receive Electronic Disclosures">
-      <p>I may withdraw my consent to receive electronic Disclosures by email at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. My withdrawal of consent will be effective as soon as possible, but no later than 5 business days after you receive my withdrawal of consent. I understand that if I withdraw my consent before you establish a revolving credit account for me, you will treat that as a withdrawal of my application. If I withdraw my consent after you establish a revolving credit account for me, I understand that my account will be closed and I must pay the entire balance and all other amounts due under the revolving credit account agreement in full.</p>
+      <p>I may withdraw my consent to receive electronic Disclosures by email at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>. My withdrawal of consent will be effective as soon as possible, but no later than 5 business days after you receive my withdrawal of consent. I understand that if I withdraw my consent before you establish a revolving credit account for me, you will treat that as a withdrawal of my application. If I withdraw my consent after you establish a revolving credit account for me, I understand that my account will be closed and I must pay the entire balance and all other amounts due under the revolving credit account agreement in full.</p>
     </Section>
 
     <Section title="Hardware and Software Requirements to Receive and Access Disclosures">
@@ -52,7 +52,7 @@ const ConsentPage = () => (
     </Section>
 
     <Section title="Updating My Information">
-      <p>I will keep you informed of any change in my email address by emailing you at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>.</p>
+      <p>I will keep you informed of any change in my email address by emailing you at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>.</p>
     </Section>
 
     <Section title="I hereby:">

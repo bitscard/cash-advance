@@ -1427,7 +1427,7 @@ const CustomerApp = () => {
                 We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
               </p>
               <p className={styles.bldLead} style={{ marginTop: 16 }}>
-                If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>email us</a> and tell us off.
+                If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:advances@getbits.app" className={styles.bldFootLink}>email us</a> and tell us off.
               </p>
               <a href="/story" className={styles.bldLandStoryLink}>
                 Read our story <span aria-hidden="true">→</span>
@@ -1526,7 +1526,7 @@ const CustomerApp = () => {
                 <div>
                   <p className={styles.bldLandFooterColTitle}>Support</p>
                   <ul>
-                    <li><a href="mailto:usa@getbits.app">Contact</a></li>
+                    <li><a href="mailto:advances@getbits.app">Contact</a></li>
                     <li><a href="#">Help center</a></li>
                   </ul>
                 </div>
@@ -1537,7 +1537,7 @@ const CustomerApp = () => {
               <div className={styles.bldLandDisclaimer}>
                 <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--bld-text-muted)" }}>All accounts are subject to ID verification and approval.</p>
                 <p style={{ margin: 0 }}>
-                  advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app" style={{ color: "var(--bld-text-muted)", textDecoration: "underline" }}>usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
+                  advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:advances@getbits.app" style={{ color: "var(--bld-text-muted)", textDecoration: "underline" }}>advances@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
                 </p>
               </div>
             </div>
@@ -1991,7 +1991,7 @@ const CustomerApp = () => {
 
   // ── Waitlist screen (non-eligible state — cannot proceed past here) ─────────
   // Backend sets subscription_status='waitlisted' for non-eligible states without a personal referral.
-  // neworleans (master gate key) grants signup access but does NOT bypass state eligibility.
+  // Master gate codes (neworleans, atlanta) grant signup access but do NOT bypass state eligibility.
   const stateIsIneligible = application.subscription_status === 'waitlisted';
   if (stateIsIneligible) {
     const stateName = application.customer.state || "your state";
@@ -2050,7 +2050,7 @@ const CustomerApp = () => {
           </motion.div>
 
           <p className={styles.bldFootnote}>
-            Questions? <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>usa@getbits.app</a>
+            Questions? <a href="mailto:advances@getbits.app" className={styles.bldFootLink}>advances@getbits.app</a>
           </p>
         </motion.main>
       </div>
@@ -2126,7 +2126,7 @@ const CustomerApp = () => {
           {error && <p className={styles.bldError} style={{ marginTop: 12, textAlign: "center" }}>{error}</p>}
 
           <p className={styles.bldFootnote}>
-            Questions? <a href="mailto:usa@getbits.app" className={styles.bldFootLink}>usa@getbits.app</a>
+            Questions? <a href="mailto:advances@getbits.app" className={styles.bldFootLink}>advances@getbits.app</a>
           </p>
         </motion.main>
       </div>
@@ -5287,7 +5287,7 @@ const StatesFooter = () => (
       {" · "}
       <a href="/consent" style={{ color: "var(--muted)", textDecoration: "underline" }}>Electronic Consent</a>
       {" · "}
-      <a href="mailto:usa@getbits.app" style={{ color: "var(--muted)", textDecoration: "underline" }}>usa@getbits.app</a>
+      <a href="mailto:advances@getbits.app" style={{ color: "var(--muted)", textDecoration: "underline" }}>advances@getbits.app</a>
     </p>
   </div>
 );
