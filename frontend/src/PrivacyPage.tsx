@@ -19,7 +19,7 @@ const PrivacyPage = () => (
     <h1 style={{ fontSize: "3.2rem", fontWeight: 800, marginBottom: "0.8rem" }}>Privacy Policy</h1>
     <p style={{ color: "var(--muted)", fontSize: "1.4rem", marginBottom: "4rem" }}>
       Last Updated: May 25, 2026 · Bits, Inc. ·{" "}
-      <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>
+      <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>
     </p>
 
     {/* GLBA FACTS Notice */}
@@ -139,7 +139,7 @@ const PrivacyPage = () => (
 
     <Section title="Data Retention">
       <p>We retain your personal information for up to <strong>5 years</strong> after account closure, as required by applicable financial services regulations. Bank transaction data accessed via Plaid is used in real time for income verification and is not stored beyond what is necessary to service your account.</p>
-      <p style={{ marginTop: "0.8rem" }}>To request deletion of your data, email us at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. We will honor deletion requests to the extent permitted by law. Note that we may be required to retain certain records for legal or regulatory compliance.</p>
+      <p style={{ marginTop: "0.8rem" }}>To request deletion of your data, email us at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>. We will honor deletion requests to the extent permitted by law. Note that we may be required to retain certain records for legal or regulatory compliance.</p>
     </Section>
 
     <Section title="Your Rights and Choices">
@@ -151,7 +151,7 @@ const PrivacyPage = () => (
         <li>Revoke your bank connection authorization at any time by contacting us</li>
         <li>Close your account at any time</li>
       </ul>
-      <p style={{ marginTop: "1.2rem" }}>To exercise any of these rights, contact us at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. We will respond within 30 days.</p>
+      <p style={{ marginTop: "1.2rem" }}>To exercise any of these rights, contact us at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>. We will respond within 30 days.</p>
     </Section>
 
     <Section title="Where the Advance Service Is Available">
@@ -161,21 +161,21 @@ const PrivacyPage = () => (
     <Section title="State-Specific Privacy Rights">
       <p>Residents of every state we operate in are entitled to all consumer privacy protections available under their state law, including those administered by the regulators listed in <strong>Section O</strong> of our <a href="/terms" style={{ color: "var(--brand)" }}>Terms &amp; Conditions</a>. Specific state frameworks called out below supplement the rights described elsewhere in this Policy.</p>
 
-      <p style={{ marginTop: "1.6rem" }}><strong>California (CCPA / CPRA):</strong> Although California is not currently in our eligible-states list, this Policy applies to any California resident who may interact with our website. Under the California Consumer Privacy Act, as amended by the California Privacy Rights Act, you have the right to know what personal information we collect about you, the right to request deletion (subject to legal retention requirements), the right to correct inaccurate information, the right to limit the use of sensitive personal information, and the right to opt out of the sale or sharing of personal information. We do not sell or share personal information for cross-context behavioral advertising. To submit a CCPA/CPRA request, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "CCPA Request."</p>
+      <p style={{ marginTop: "1.6rem" }}><strong>California (CCPA / CPRA):</strong> Although California is not currently in our eligible-states list, this Policy applies to any California resident who may interact with our website. Under the California Consumer Privacy Act, as amended by the California Privacy Rights Act, you have the right to know what personal information we collect about you, the right to request deletion (subject to legal retention requirements), the right to correct inaccurate information, the right to limit the use of sensitive personal information, and the right to opt out of the sale or sharing of personal information. We do not sell or share personal information for cross-context behavioral advertising. To submit a CCPA/CPRA request, email <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> with the subject "CCPA Request."</p>
 
       <p style={{ marginTop: "1.2rem" }}><strong>Vermont:</strong> In accordance with Vermont law, we will not share information we collect about Vermont residents with companies outside of Bits, Inc., except as permitted by law. We will not share information about your creditworthiness except with your authorization or consent.</p>
 
-      <p style={{ marginTop: "1.2rem" }}><strong>Virginia (VCDPA):</strong> Under the Virginia Consumer Data Protection Act, Virginia residents have the right to access, correct, delete, or obtain a copy of their personal data; to opt out of targeted advertising, sale of personal data, or profiling for decisions with legal effects; and to appeal a refused request. We do not sell personal data and do not engage in targeted advertising. To exercise any of these rights, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "VCDPA Request."</p>
+      <p style={{ marginTop: "1.2rem" }}><strong>Virginia (VCDPA):</strong> Under the Virginia Consumer Data Protection Act, Virginia residents have the right to access, correct, delete, or obtain a copy of their personal data; to opt out of targeted advertising, sale of personal data, or profiling for decisions with legal effects; and to appeal a refused request. We do not sell personal data and do not engage in targeted advertising. To exercise any of these rights, email <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> with the subject "VCDPA Request."</p>
 
-      <p style={{ marginTop: "1.2rem" }}><strong>Colorado (CPA):</strong> Colorado residents have rights under the Colorado Privacy Act substantially similar to Virginia residents above, including access, correction, deletion, portability, and the right to opt out of certain processing. Email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with the subject "CPA Request."</p>
+      <p style={{ marginTop: "1.2rem" }}><strong>Colorado (CPA):</strong> Colorado residents have rights under the Colorado Privacy Act substantially similar to Virginia residents above, including access, correction, deletion, portability, and the right to opt out of certain processing. Email <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> with the subject "CPA Request."</p>
 
-      <p style={{ marginTop: "1.2rem" }}><strong>Other state privacy laws:</strong> Where you reside in a state that has enacted a comprehensive consumer privacy statute (including but not limited to Texas, Oregon, Tennessee, and Montana), you are entitled to the rights afforded under that statute. To exercise rights under any state privacy law, contact <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> and reference the statute by name in your subject line.</p>
+      <p style={{ marginTop: "1.2rem" }}><strong>Other state privacy laws:</strong> Where you reside in a state that has enacted a comprehensive consumer privacy statute (including but not limited to Texas, Oregon, Tennessee, and Montana), you are entitled to the rights afforded under that statute. To exercise rights under any state privacy law, contact <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> and reference the statute by name in your subject line.</p>
 
       <p style={{ marginTop: "1.2rem" }}><strong>GLBA:</strong> As a financial institution under the Gramm-Leach-Bliley Act, we provide the FACTS notice at the top of this Policy. Federal law gives you the right to limit some — but not all — sharing of your nonpublic personal information. We have already elected not to share for most categories.</p>
     </Section>
 
     <Section title="Children's Privacy">
-      <p>The Service is not directed to individuals under the age of 18. We do not knowingly collect personal information from minors. If you believe we have inadvertently collected information from a minor, contact us immediately at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> and we will promptly delete it.</p>
+      <p>The Service is not directed to individuals under the age of 18. We do not knowingly collect personal information from minors. If you believe we have inadvertently collected information from a minor, contact us immediately at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> and we will promptly delete it.</p>
     </Section>
 
     <Section title="Changes to This Policy">
@@ -185,7 +185,7 @@ const PrivacyPage = () => (
     <Section title="Contact Us">
       <p>
         <strong>Bits, Inc.</strong><br />
-        Email: <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a><br />
+        Email: <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a><br />
         Website: <a href="https://www.getbits.app" style={{ color: "var(--brand)" }}>www.getbits.app</a>
       </p>
       <p style={{ marginTop: "0.8rem" }}>For privacy-related requests, please include "Privacy Request" in the subject line. We will acknowledge your request within 5 business days and respond fully within 30 days.</p>

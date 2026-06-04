@@ -155,7 +155,7 @@ You may cancel your membership at any time.
 - After the 7-day period, your membership remains active through the end of the billing cycle and will not renew.
 - Cancellation does not eliminate any outstanding advance settlement obligation.
 
-To cancel, contact us at **usa@getbits.app** with your name, email on file, and a request to cancel. You may also cancel through the in-app settings.
+To cancel, contact us at **advances@getbits.app** with your name, email on file, and a request to cancel. You may also cancel through the in-app settings.
 
 **5. Payment Processing**
 
@@ -163,7 +163,7 @@ Membership fees and instant delivery fees are processed by **Stripe, Inc.**, a t
 
 **6. Fee Errors**
 
-If we charge your payment method in error, contact us at **usa@getbits.app** within 60 days and we will issue a full refund of the erroneous charge within 5 business days.
+If we charge your payment method in error, contact us at **advances@getbits.app** within 60 days and we will issue a full refund of the erroneous charge within 5 business days.
 
 ---
 
@@ -187,7 +187,7 @@ When we detect your pay deposit, we will notify you via in-app notification and/
 
 We will not initiate an ACH settlement debit if doing so would cause your account balance to go negative, based on available balance data from Stripe Financial Connections at the time of settlement. If balance data is unavailable, we may delay the settlement attempt and notify you rather than proceeding blindly.
 
-If an overdraft or NSF fee is incurred as a direct result of our ACH debit, contact us at **usa@getbits.app** and we will reimburse the fee.
+If an overdraft or NSF fee is incurred as a direct result of our ACH debit, contact us at **advances@getbits.app** and we will reimburse the fee.
 
 **5. Settlement Amount**
 
@@ -207,9 +207,9 @@ By connecting your bank account and accepting a cash advance, you authorize Adva
 
 **2. Right to Revoke**
 
-You have the right to revoke this ACH authorization at any time by contacting us at **usa@getbits.app** before the debit is initiated. If you revoke authorization, we will not initiate the debit. Revocation does not eliminate your obligation to settle the advance by other means; however, we will not pursue involuntary collection. See Section I (Non-Recourse Policy).
+You have the right to revoke this ACH authorization at any time by contacting us at **advances@getbits.app** before the debit is initiated. If you revoke authorization, we will not initiate the debit. Revocation does not eliminate your obligation to settle the advance by other means; however, we will not pursue involuntary collection. See Section I (Non-Recourse Policy).
 
-To revoke, contact us in writing at **usa@getbits.app** with your name, account email, and a clear statement that you are revoking ACH authorization. We will confirm revocation within 1 business day.
+To revoke, contact us in writing at **advances@getbits.app** with your name, account email, and a clear statement that you are revoking ACH authorization. We will confirm revocation within 1 business day.
 
 **3. Retry Limit**
 
@@ -281,7 +281,7 @@ A free, fully functional standard delivery option (1–3 business days) is alway
 
 **4. No Tips**
 
-Advance does not accept, solicit, or prompt tips, donations, or optional payments of any kind beyond the instant delivery fee. There are no "support us" prompts, suggested contributions, or optional charges. If you see any such prompt, contact us immediately at **usa@getbits.app** — it is not authorized.
+Advance does not accept, solicit, or prompt tips, donations, or optional payments of any kind beyond the instant delivery fee. There are no "support us" prompts, suggested contributions, or optional charges. If you see any such prompt, contact us immediately at **advances@getbits.app** — it is not authorized.
 
 **5. Cancellation Rights**
 
@@ -335,7 +335,7 @@ The winner is solely responsible for all federal, state, and local taxes on the 
 
 **7. No Purchase Necessary**
 
-No purchase is necessary to enter or win. To enter without an active membership, send a written request with your name, address, and email to **usa@getbits.app** with the subject line "Raffle Entry." Limit one free entry per person per week.
+No purchase is necessary to enter or win. To enter without an active membership, send a written request with your name, address, and email to **advances@getbits.app** with the subject line "Raffle Entry." Limit one free entry per person per week.
 
 **8. Odds**
 
@@ -353,7 +353,7 @@ The raffle is void where prohibited by law. It is your responsibility to determi
 
 ## L. Passwords and Account Security
 
-You are responsible for maintaining the confidentiality of your account password and for all activity that occurs under your account. If you believe your account has been compromised, notify us immediately at **usa@getbits.app**.
+You are responsible for maintaining the confidentiality of your account password and for all activity that occurs under your account. If you believe your account has been compromised, notify us immediately at **advances@getbits.app**.
 
 Advance reserves the right to take any action it deems necessary to protect account security, including terminating your account or requiring re-authentication. Advance is not liable for losses arising from unauthorized access to your account where you failed to safeguard your credentials.
 
@@ -406,7 +406,7 @@ We do **not** sell your data to third parties. We do not use your bank transacti
 
 **3. Data Retention**
 
-We retain your personal and financial data for as long as your account is active and for up to **5 years** after account closure, as required by applicable law (including federal financial record-keeping requirements). You may request deletion of your data subject to legal retention obligations by contacting us at **usa@getbits.app**.
+We retain your personal and financial data for as long as your account is active and for up to **5 years** after account closure, as required by applicable law (including federal financial record-keeping requirements). You may request deletion of your data subject to legal retention obligations by contacting us at **advances@getbits.app**.
 
 **4. GLBA Compliance**
 
@@ -414,7 +414,7 @@ To the extent the Gramm-Leach-Bliley Act (GLBA) applies to our Services, we prov
 
 **5. State Privacy Laws**
 
-Residents of states with comprehensive privacy laws (including California CCPA/CPRA, Colorado, Connecticut, Virginia, and Utah) may have additional rights, including the right to access, correct, delete, or restrict processing of their personal data. To exercise these rights, contact us at **usa@getbits.app**.
+Residents of states with comprehensive privacy laws (including California CCPA/CPRA, Colorado, Connecticut, Virginia, and Utah) may have additional rights, including the right to access, correct, delete, or restrict processing of their personal data. To exercise these rights, contact us at **advances@getbits.app**.
 
 ---
 
@@ -434,7 +434,7 @@ You are granted a limited, personal, non-commercial license to access and use th
 
 **4. Copyright Complaints**
 
-To report a copyright infringement, contact us at **usa@getbits.app** with a description of the allegedly infringed work, identification of the infringing material, your contact information, and a statement of good faith belief under penalty of perjury.
+To report a copyright infringement, contact us at **advances@getbits.app** with a description of the allegedly infringed work, identification of the infringing material, your contact information, and a statement of good faith belief under penalty of perjury.
 
 ---
 
@@ -492,7 +492,7 @@ MLA-covered borrowers are also entitled to: the prohibition on mandatory arbitra
 
 **1. How to Contact Us**
 
-For questions, concerns, or complaints: **usa@getbits.app**
+For questions, concerns, or complaints: **advances@getbits.app**
 
 **2. Response Times**
 
@@ -500,7 +500,7 @@ We will acknowledge all written complaints within **2 business days** and provid
 
 **3. Escalation**
 
-If you are not satisfied with our response, you may escalate by emailing **usa@getbits.app** with the subject line "Escalation Request." Escalated complaints are reviewed by a senior team member within **5 business days**.
+If you are not satisfied with our response, you may escalate by emailing **advances@getbits.app** with the subject line "Escalation Request." Escalated complaints are reviewed by a senior team member within **5 business days**.
 
 **4. Regulatory Complaints**
 
@@ -512,14 +512,14 @@ Nothing in these Terms limits your right to file a complaint with the Consumer F
 
 **1. Unauthorized ACH Debits**
 
-If you believe an ACH debit from your account was unauthorized or in error, you have rights under the Electronic Fund Transfer Act (EFTA) and Regulation E. You may dispute the debit by contacting us at **usa@getbits.app** within **60 days** of the statement date on which the debit appeared. We will:
+If you believe an ACH debit from your account was unauthorized or in error, you have rights under the Electronic Fund Transfer Act (EFTA) and Regulation E. You may dispute the debit by contacting us at **advances@getbits.app** within **60 days** of the statement date on which the debit appeared. We will:
 - Acknowledge your dispute within **5 business days**;
 - Investigate and resolve the dispute within **10 business days** (or **45 business days** for new accounts or point-of-sale transactions);
 - Provisionally credit your account during the investigation if required by Regulation E.
 
 **2. Advance Amount Disputes**
 
-If you believe the amount advanced to your account was incorrect, contact us at **usa@getbits.app** within **30 days**. We will investigate and correct any error within **10 business days**.
+If you believe the amount advanced to your account was incorrect, contact us at **advances@getbits.app** within **30 days**. We will investigate and correct any error within **10 business days**.
 
 **3. Governing Dispute Process**
 
@@ -625,7 +625,7 @@ No waiver of any breach of these Terms shall be construed as a continuing waiver
 ## FF. Contact Us
 
 **Bits, Inc.**
-Email: **usa@getbits.app**
+Email: **advances@getbits.app**
 Website: **www.getbits.app**
 
 For membership cancellations, ACH revocations, complaints, or data requests, please email us with your full name and account email address.

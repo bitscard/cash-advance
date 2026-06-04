@@ -118,7 +118,7 @@ describe("ConsentPage", () => {
 
   test("withdrawal email is clickable mailto link", () => {
     render(<ConsentPage />);
-    const links = screen.getAllByRole("link", { name: /usa@getbits\.app/i });
+    const links = screen.getAllByRole("link", { name: /advances@getbits\.app/i });
     expect(links.length).toBeGreaterThan(0);
     expect(links[0].getAttribute("href")).toMatch(/^mailto:/);
   });

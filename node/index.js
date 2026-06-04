@@ -779,11 +779,15 @@ app.get('/api/advance/admin-auth/me', async function (request, response, next) {
 
 // ── Advance application endpoints ─────────────────────────────────────────────
 
+// Master access codes — grant signup access (skip personal-referrer check)
+// but do NOT bypass state eligibility. Add new launch cities here.
+const MASTER_CODES = new Set(['neworleans', 'atlanta']);
+
 app.get('/api/advance/referral/:code', async function (request, response, next) {
   try {
     const normalized = request.params.code.toLowerCase().replace(/\s+/g, '');
-    // Master invite code — always valid
-    if (normalized === 'neworleans') {
+    // Master invite codes — always valid
+    if (MASTER_CODES.has(normalized)) {
       return response.json({ valid: true, referrer_name: null });
     }
     // Personal codes only activate after the referrer has gotten their first advance
@@ -884,8 +888,8 @@ app.post('/api/advance/applications', async function (request, response, next) {
     let earlyAccess = false;
     if (usedCode) {
       const normalized = usedCode.toLowerCase().replace(/\s+/g, '').trim();
-      if (normalized === 'neworleans') {
-        referredBy = 'neworleans';
+      if (MASTER_CODES.has(normalized)) {
+        referredBy = normalized;
         earlyAccess = true;
       } else {
         const referrer = await db.getApplicationByReferralCode(normalized);
@@ -2240,7 +2244,7 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
           // cash-disbursement recipients. Stripe accepts most codes
           // here; the field is required for the transfers capability.
           mcc: '6051',
-          support_email: 'usa@getbits.app',
+          support_email: 'advances@getbits.app',
           support_url: 'https://getbits.app',
         },
         // Pre-fill what we know to shave time off Stripe's hosted form.

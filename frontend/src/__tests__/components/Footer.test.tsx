@@ -23,7 +23,7 @@ describe("StatesFooter (App.tsx)", () => {
     expect(slice).toMatch(/href="\/terms"/);
     expect(slice).toMatch(/href="\/privacy"/);
     expect(slice).toMatch(/href="\/consent"/);
-    expect(slice).toMatch(/mailto:usa@getbits\.app/);
+    expect(slice).toMatch(/mailto:advances@getbits\.app/);
   });
 
   test("declares it's available in 36 states", () => {

@@ -111,7 +111,7 @@ const StoryPage = () => {
             If we got something wrong,<br /><em>tell us off.</em>
           </h2>
           <p className={styles.bldLead} style={{ maxWidth: 600 }}>
-            We&apos;re Englishmen. We drink tea, say sorry too much, and still call it football. We probably misunderstood some bit of how America works. If we did — <a className={styles.bldFootLink} href="mailto:usa@getbits.app">email us at usa@getbits.app</a> and tell us. We&apos;ll fix it. Or apologize. Probably both.
+            We&apos;re Englishmen. We drink tea, say sorry too much, and still call it football. We probably misunderstood some bit of how America works. If we did — <a className={styles.bldFootLink} href="mailto:advances@getbits.app">email us at advances@getbits.app</a> and tell us. We&apos;ll fix it. Or apologize. Probably both.
           </p>
         </section>
 
@@ -167,7 +167,7 @@ const StoryPage = () => {
             <div>
               <p className={styles.bldLandFooterColTitle}>Support</p>
               <ul>
-                <li><a href="mailto:usa@getbits.app">Contact</a></li>
+                <li><a href="mailto:advances@getbits.app">Contact</a></li>
                 <li><a href="#">Help center</a></li>
               </ul>
             </div>
@@ -178,7 +178,7 @@ const StoryPage = () => {
           <div className={styles.bldLandDisclaimer}>
             <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--bld-text-muted)" }}>All accounts are subject to ID verification and approval.</p>
             <p style={{ margin: 0 }}>
-              advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:usa@getbits.app" style={{ color: "var(--bld-text-muted)", textDecoration: "underline" }}>usa@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
+              advance is an earned wage access product offered by Bits Card Inc. — it is not a loan. Bits USA is powered by Bits Card Inc which has its principal office at 368 9th Avenue, New York, NY 10001. For support, please email us at <a href="mailto:advances@getbits.app" style={{ color: "var(--bld-text-muted)", textDecoration: "underline" }}>advances@getbits.app</a>. Individual borrowers must be a U.S. Citizen, permanent resident, or non-resident U.S. Alien and at least 18 years old. Valid bank account is required.
             </p>
           </div>
         </div>

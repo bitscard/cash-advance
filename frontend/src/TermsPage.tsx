@@ -52,7 +52,7 @@ const TermsPage = () => (
       <a href="/" style={{ color: "var(--brand)", fontWeight: 600, fontSize: "1.4rem", textDecoration: "none" }}>← Back to Advance</a>
     </div>
     <h1 style={{ fontSize: "3.2rem", fontWeight: 800, marginBottom: "0.8rem" }}>Terms and Conditions</h1>
-    <p style={{ color: "var(--muted)", fontSize: "1.4rem", marginBottom: "4rem" }}>Last Updated: May 25, 2026 · Bits, Inc. · <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a></p>
+    <p style={{ color: "var(--muted)", fontSize: "1.4rem", marginBottom: "4rem" }}>Last Updated: May 25, 2026 · Bits, Inc. · <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a></p>
 
     <p style={{ marginBottom: "2.4rem", lineHeight: 1.7 }}>
       PLEASE READ THESE TERMS AND CONDITIONS CAREFULLY BEFORE USING THE ADVANCE SERVICE. Bits, Inc. ("Advance," "we," "our," or "us") provides you access to our website and cash advance services subject to your compliance with these Terms. By registering for or using the Services, you agree to be bound by these Terms.
@@ -65,7 +65,7 @@ const TermsPage = () => (
       <p>Advance provides a <strong>wage access service — not a loan</strong>. We allow eligible users to access a portion of wages they have already earned during the current pay period, based on their verified income and deposit history. No interest is charged. We do not use your credit score and we never pull your credit. We do not report your account or repayment history to any credit bureau.</p>
       <p style={{ marginTop: "1.2rem" }}>Advances are limited to a conservative fraction of wages you have demonstrably earned in the current pay period based on your historical deposit pattern. We do not advance against future expected income. Maximum advance amounts are determined by your account history and are displayed in-app at the time of your request. The default first advance is $25.00; subsequent advances may grow to a maximum of $200.00 on the schedule set forth in your in-app dashboard, subject to on-time repayment.</p>
       <p style={{ marginTop: "1.2rem" }}>You may not hold more than one outstanding advance at a time. You may not roll over or refinance an unpaid advance.</p>
-      <p style={{ marginTop: "1.2rem" }}><strong>Membership:</strong> Use of the Service requires an active <strong>$3.99 / month</strong> membership subscription. The subscription is charged to the same card used for repayment, billed monthly on the anniversary of activation, and may be cancelled at any time from your in-app dashboard or by emailing <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. Cancellation prevents future renewals; we do not pro-rate refunds for the partial month in which you cancel.</p>
+      <p style={{ marginTop: "1.2rem" }}><strong>Membership:</strong> Use of the Service requires an active <strong>$3.99 / month</strong> membership subscription. The subscription is charged to the same card used for repayment, billed monthly on the anniversary of activation, and may be cancelled at any time from your in-app dashboard or by emailing <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>. Cancellation prevents future renewals; we do not pro-rate refunds for the partial month in which you cancel.</p>
     </Section>
 
     <Section title="B. Delivery Options">
@@ -83,7 +83,7 @@ const TermsPage = () => (
 
     <Section title="D. ACH Authorization">
       <p>By connecting your bank and accepting an advance, you authorize Advance to initiate a single ACH debit from your connected account upon detection of your wage deposit.</p>
-      <p style={{ marginTop: "0.8rem" }}><strong>Right to revoke:</strong> You may revoke this authorization at any time before the debit is initiated by emailing <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. Revocation does not eliminate your obligation to settle voluntarily; however, we will not pursue involuntary collection.</p>
+      <p style={{ marginTop: "0.8rem" }}><strong>Right to revoke:</strong> You may revoke this authorization at any time before the debit is initiated by emailing <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>. Revocation does not eliminate your obligation to settle voluntarily; however, we will not pursue involuntary collection.</p>
       <p style={{ marginTop: "0.8rem" }}><strong>Retry limit:</strong> If an ACH debit fails, we may attempt one additional retry. After two failed attempts, all automated debits stop.</p>
       <p style={{ marginTop: "0.8rem" }}><strong>Card fallback:</strong> If ACH fails, we may attempt the backup payment card you provided during onboarding, but only if you affirmatively consented to card-fallback at that time. You may withdraw that consent at any time by emailing us.</p>
     </Section>
@@ -127,7 +127,7 @@ const TermsPage = () => (
       <p>Every eligible user in good standing is automatically entered into a <strong>weekly raffle</strong> for a <strong>$300 cash prize</strong>. No purchase or action is required. One entry per person per week.</p>
       <p style={{ marginTop: "0.8rem" }}><strong>Eligibility:</strong> Active account, no overdue advances, 18+, resident of a state where the raffle is legally permissible. Users with missed or late settlements are frozen from eligibility until their account is back in good standing.</p>
       <p style={{ marginTop: "0.8rem" }}><strong>Prize:</strong> $300 USD paid via PayPal, Cash App, or Zelle. Non-transferable. Winner is responsible for applicable taxes. Bits, Inc. will issue a Form 1099 if required by law.</p>
-      <p style={{ marginTop: "0.8rem" }}><strong>No purchase necessary:</strong> To enter without an account, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> with subject "Raffle Entry." Limit one free entry per person per week.</p>
+      <p style={{ marginTop: "0.8rem" }}><strong>No purchase necessary:</strong> To enter without an account, email <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> with subject "Raffle Entry." Limit one free entry per person per week.</p>
       <p style={{ marginTop: "0.8rem" }}>Void where prohibited. Advance reserves the right to modify or discontinue the raffle at any time with reasonable notice.</p>
     </Section>
 
@@ -137,7 +137,7 @@ const TermsPage = () => (
 
     <Section title="I. Data Practices">
       <p>We collect identity, financial, and usage data to provide the Service. We do not sell your data. Bank transaction data is used solely for income consistency verification, deposit detection, and overdraft protection — not for marketing or sharing with affiliates.</p>
-      <p style={{ marginTop: "0.8rem" }}>We retain data for up to 5 years after account closure as required by law. To request deletion, email <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>. Full details are in our Privacy Policy at <a href="https://www.getbits.app/privacy" style={{ color: "var(--brand)" }}>www.getbits.app/privacy</a>.</p>
+      <p style={{ marginTop: "0.8rem" }}>We retain data for up to 5 years after account closure as required by law. To request deletion, email <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>. Full details are in our Privacy Policy at <a href="https://www.getbits.app/privacy" style={{ color: "var(--brand)" }}>www.getbits.app/privacy</a>.</p>
     </Section>
 
     <Section title="J. Servicemember Protections (MLA)">
@@ -149,7 +149,7 @@ const TermsPage = () => (
     </Section>
 
     <Section title="L. Dispute Resolution and Reg E Rights">
-      <p>If you believe an ACH debit was unauthorized or in error, you have rights under the Electronic Fund Transfer Act and Regulation E. Contact us at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a> within <strong>60 days</strong> of the statement date. We will acknowledge within 5 business days and resolve within 10 business days.</p>
+      <p>If you believe an ACH debit was unauthorized or in error, you have rights under the Electronic Fund Transfer Act and Regulation E. Contact us at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a> within <strong>60 days</strong> of the statement date. We will acknowledge within 5 business days and resolve within 10 business days.</p>
     </Section>
 
     <Section title="M. Limitation of Liability">
@@ -182,7 +182,7 @@ const TermsPage = () => (
             <strong>Residents' protections:</strong> {state} residents are entitled to all consumer protections available under {state} law, including any disclosures, cooling-off periods, fee caps, or licensing requirements applicable to earned-wage access providers. Bits, Inc. operates as an earned-wage access provider — not a lender — and where {state} law specifically regulates earned-wage access, Bits, Inc. complies with those requirements. Where {state} law does not yet specifically address earned-wage access, Bits, Inc. operates in accordance with applicable federal guidance and analogous state consumer-finance protections. Any state-specific disclosures required for residents of {state} will be provided to you in-app at or before the time of each advance and in any pre-advance email confirmation.
           </p>
           <p style={{ marginTop: "0.6rem" }}>
-            <strong>Complaints:</strong> you may file a complaint about Bits, Inc.'s services with the {regulator}, with the federal Consumer Financial Protection Bureau at <a href="https://www.consumerfinance.gov" style={{ color: "var(--brand)" }}>consumerfinance.gov</a>, or with us directly at <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a>.
+            <strong>Complaints:</strong> you may file a complaint about Bits, Inc.'s services with the {regulator}, with the federal Consumer Financial Protection Bureau at <a href="https://www.consumerfinance.gov" style={{ color: "var(--brand)" }}>consumerfinance.gov</a>, or with us directly at <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a>.
           </p>
         </div>
       ))}
@@ -199,7 +199,7 @@ const TermsPage = () => (
     <Section title="R. Contact Us">
       <p>
         <strong>Bits, Inc.</strong><br />
-        Email: <a href="mailto:usa@getbits.app" style={{ color: "var(--brand)" }}>usa@getbits.app</a><br />
+        Email: <a href="mailto:advances@getbits.app" style={{ color: "var(--brand)" }}>advances@getbits.app</a><br />
         Website: <a href="https://www.getbits.app" style={{ color: "var(--brand)" }}>www.getbits.app</a>
       </p>
     </Section>
