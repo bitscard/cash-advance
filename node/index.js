@@ -1591,6 +1591,117 @@ app.get('/api/advance/admin/applications', async function (request, response, ne
   } catch (err) { next(err); }
 });
 
+// Admin-only: download ALL of a user's bank transactions (incoming + outgoing)
+// as a CSV file. The standard bank_snapshot endpoint above intentionally only
+// surfaces income-classified incoming transactions for the in-panel view —
+// this endpoint is for deeper offline review (download → open in Excel /
+// Google Sheets / pivot table).
+//
+// Amount convention in the CSV: NATURAL view. Positive = money INTO the
+// user's account (income, refunds, transfers in). Negative = money OUT
+// (purchases, fees, transfers out). Both our underlying sources (Stripe
+// FC + Plaid) use the opposite-sign convention internally; we flip here
+// so the CSV reads correctly without explanation.
+app.get('/api/advance/admin/applications/:id/transactions.csv', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const application = await db.getApplicationById(request.params.id);
+    if (!application) return response.status(404).json({ error: { error_message: 'Application not found' } });
+    const hasFc = !!application.stripe_fc_account_id;
+    const hasPlaid = !!application.access_token;
+    if (!hasFc && !hasPlaid) {
+      return response.status(400).json({ error: { error_message: 'No bank account connected yet.' } });
+    }
+
+    // Collect raw transactions in a uniform shape regardless of source.
+    // Each tx: { date, name, merchant_name, amount_cents, currency, category, pending }
+    let rawTxs = [];
+
+    if (hasFc) {
+      try {
+        const fcTxs = await fetchFcTransactions(application.stripe_fc_account_id);
+        const { adaptFcTransactions } = require('./fcTransactionAdapter');
+        const plaidShaped = adaptFcTransactions(fcTxs);
+        rawTxs = plaidShaped.map(tx => ({
+          date: tx.date,
+          name: tx.description || tx.name || '',
+          merchant_name: tx.merchant_name || '',
+          // Plaid convention: positive = outflow. Natural: positive = inflow.
+          // Flip sign here.
+          amount_cents: Math.round(-(tx.amount || 0) * 100),
+          currency: tx.iso_currency_code || 'USD',
+          category: Array.isArray(tx.category) ? tx.category.join(' / ') : (tx.personal_finance_category?.primary || ''),
+          pending: !!tx.pending,
+        }));
+      } catch (e) {
+        console.log('[transactions.csv fc] error', e.message);
+      }
+    } else if (hasPlaid) {
+      try {
+        const access_token = application.access_token;
+        let cursor = null, hasMore = true, allAdded = [], iterations = 0;
+        while (hasMore && iterations < 20) {
+          const syncResponse = await plaidClient.transactionsSync({
+            access_token, cursor: cursor || undefined, count: 500,
+          });
+          allAdded = allAdded.concat(syncResponse.data.added || []);
+          cursor = syncResponse.data.next_cursor;
+          hasMore = syncResponse.data.has_more;
+          iterations++;
+        }
+        rawTxs = allAdded.map(tx => ({
+          date: tx.date,
+          name: tx.name || '',
+          merchant_name: tx.merchant_name || '',
+          amount_cents: Math.round(-(tx.amount || 0) * 100),
+          currency: tx.iso_currency_code || 'USD',
+          category: Array.isArray(tx.category) ? tx.category.join(' / ') : (tx.personal_finance_category?.primary || ''),
+          pending: !!tx.pending,
+        }));
+      } catch (e) {
+        console.log('[transactions.csv plaid] error', e.message);
+      }
+    }
+
+    // Sort newest first for the CSV (most useful default ordering).
+    rawTxs.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    // CSV escape: wrap in quotes + double internal quotes.
+    const csvEscape = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+
+    const header = ['Date', 'Description', 'Merchant', 'Amount (USD)', 'Direction', 'Category', 'Pending'];
+    const rows = rawTxs.map(tx => [
+      tx.date || '',
+      tx.name,
+      tx.merchant_name,
+      (tx.amount_cents / 100).toFixed(2),
+      tx.amount_cents > 0 ? 'IN' : (tx.amount_cents < 0 ? 'OUT' : '—'),
+      tx.category,
+      tx.pending ? 'pending' : 'posted',
+    ]);
+
+    const csv = [header, ...rows]
+      .map(r => r.map(csvEscape).join(','))
+      .join('\r\n');
+
+    // Filename: includes the user's name + today's date for at-a-glance
+    // identification when downloads pile up.
+    const today = new Date().toISOString().slice(0, 10);
+    const safeName = (application.name || 'user').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40);
+    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    response.setHeader('Content-Disposition', `attachment; filename="transactions_${safeName}_${today}.csv"`);
+    response.send(csv);
+  } catch (err) {
+    console.log('[transactions.csv] error', err.message);
+    next(err);
+  }
+});
+
 app.get('/api/advance/admin/applications/:id/bank_snapshot', async function (request, response, next) {
   if (!requireAdmin(request, response)) return;
   try {
