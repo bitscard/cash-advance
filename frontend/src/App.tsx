@@ -5011,7 +5011,7 @@ const LoanApp = () => {
             </li>
             <li className={styles.bldFeesRow}>
               <span>Bank</span>
-              {application.plaid_connected ? (
+              {application.bank_linked ? (
                 <span className={styles.bldChip} data-tone="ok">
                   <span aria-hidden="true">✓</span> Connected
                 </span>
@@ -5030,7 +5030,7 @@ const LoanApp = () => {
             <div className={styles.bldNote}>
               <p className={styles.bldNoteTitle}>✓ Repayment collected — thank you!</p>
             </div>
-          ) : application.plaid_connected ? (
+          ) : application.bank_linked ? (
             <>
               {rep && (
                 <ul className={styles.bldFees}>
@@ -5163,7 +5163,7 @@ const LoanApp = () => {
                 <p className={styles.bldNoteBody}>
                   We&apos;ll send funds directly via ACH — no extra info needed.
                 </p>
-                {!application.plaid_connected && (
+                {!application.bank_linked && (
                   <p className={styles.bldNoteBody} style={{ marginTop: 8, color: "var(--bld-danger)" }}>
                     <strong style={{ color: "var(--bld-danger)" }}>You&apos;ll need to connect your bank first.</strong>
                   </p>
