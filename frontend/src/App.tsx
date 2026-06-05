@@ -3763,6 +3763,41 @@ const AdminApp = () => {
     setMessages(data.messages);
   }, []);
 
+  // Download full transactions CSV (incoming + outgoing). Goes via fetch
+  // rather than a plain <a> link because the admin endpoint requires the
+  // x-admin-token / Bearer header which browsers don't send on navigation.
+  const [csvBusy, setCsvBusy] = useState(false);
+  const downloadTransactionsCsv = useCallback(async (id: string, displayName: string) => {
+    setCsvBusy(true);
+    try {
+      const response = await fetch(apiUrl(`/api/advance/admin/applications/${id}/transactions.csv`), {
+        headers: adminHeaders,
+      });
+      if (!response.ok) {
+        const txt = await response.text();
+        throw new Error(txt || `Server returned ${response.status}`);
+      }
+      const blob = await response.blob();
+      // Extract filename from Content-Disposition, fall back to a sensible default
+      const cd = response.headers.get('Content-Disposition') || '';
+      const m = cd.match(/filename="([^"]+)"/);
+      const safeName = (displayName || 'user').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40);
+      const filename = m ? m[1] : `transactions_${safeName}_${new Date().toISOString().slice(0, 10)}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Could not download CSV: ${e instanceof Error ? e.message : 'unknown error'}`);
+    } finally {
+      setCsvBusy(false);
+    }
+  }, [adminHeaders]);
+
   const loadBankSnapshot = useCallback(async (id: string) => {
     setIsSnapshotLoading(true);
     setError(null);
@@ -3810,7 +3845,9 @@ const AdminApp = () => {
   // value when polling caught up.
   useEffect(() => {
     if (!selected) return;
-    if (selected.payout_methods !== 'ACH') return;
+    // Both "ACH" (new flow) and "Bank transfer" (legacy / LoanApp flow)
+    // are bank-based payouts; both need bank details surfaced here.
+    if (selected.payout_methods !== 'ACH' && selected.payout_methods !== 'Bank transfer') return;
     if (!selected.stripe_payment_method_id) return;
     (async () => {
       try {
@@ -4173,7 +4210,7 @@ const AdminApp = () => {
                       </dd>
                       <dt>Payout to</dt>
                       <dd>
-                        {selected.payout_methods === "ACH" ? (
+                        {(selected.payout_methods === "ACH" || selected.payout_methods === "Bank transfer") ? (
                           <>
                             <strong>
                               {selected.delivery_type === "instant"
@@ -4181,26 +4218,34 @@ const AdminApp = () => {
                                 : "Bank (ACH — send via Brex)"}
                             </strong>
                             <div style={{ marginTop: "0.4rem", padding: "0.6rem 0.8rem", background: "var(--brand-tint)", borderRadius: "var(--r-sm)", fontSize: "1.3rem" }}>
-                              {selected.delivery_type === "instant" ? (
-                                // Instant delivery — wire transfer. Highlight wire routing.
-                                <>
-                                  <div><span style={{ color: "var(--muted)" }}>Wire routing:</span> <strong>{pmDetails?.wire_routing_number || (pmDetails ? "Look up manually for this bank" : "Loading…")}</strong></div>
-                                  <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
-                                  <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
-                                  <div><span style={{ color: "var(--muted)" }}>Recipient:</span> {selected.customer.name}</div>
-                                  <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>Wire <strong>$25</strong> ($5 instant fee retained). User chose same-day delivery.</div>
-                                  <div style={{ marginTop: "0.2rem", fontSize: "1.1rem", color: "var(--muted)" }}>ACH routing (for reference): {pmDetails?.routing_number || "—"}</div>
-                                </>
-                              ) : (
-                                // Standard delivery — ACH transfer.
-                                <>
-                                  <div><span style={{ color: "var(--muted)" }}>ACH routing:</span> <strong>{pmDetails?.routing_number || "Loading…"}</strong></div>
-                                  <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{selected.bank_account_number || "—"}</strong></div>
-                                  <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
-                                  <div><span style={{ color: "var(--muted)" }}>Recipient:</span> {selected.customer.name}</div>
-                                  <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>ACH <strong>$25</strong>. User chose 1-2 day delivery.</div>
-                                </>
-                              )}
+                              {/* Account number: prefer user-typed value (ACH flow); fall
+                                  back to •••• last4 from Stripe (Bank transfer flow has
+                                  no typed account number). */}
+                              {(() => {
+                                const acct = selected.bank_account_number
+                                  || (pmDetails?.last4 ? `•••• ${pmDetails.last4} (full # not on file — ask user)` : "—");
+                                if (selected.delivery_type === "instant") {
+                                  return (
+                                    <>
+                                      <div><span style={{ color: "var(--muted)" }}>Wire routing:</span> <strong>{pmDetails?.wire_routing_number || (pmDetails ? "Look up manually for this bank" : "Loading…")}</strong></div>
+                                      <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{acct}</strong></div>
+                                      <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
+                                      <div><span style={{ color: "var(--muted)" }}>Recipient:</span> {selected.customer.name}</div>
+                                      <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>Wire <strong>$25</strong> ($5 instant fee retained). User chose same-day delivery.</div>
+                                      <div style={{ marginTop: "0.2rem", fontSize: "1.1rem", color: "var(--muted)" }}>ACH routing (for reference): {pmDetails?.routing_number || "—"}</div>
+                                    </>
+                                  );
+                                }
+                                return (
+                                  <>
+                                    <div><span style={{ color: "var(--muted)" }}>ACH routing:</span> <strong>{pmDetails?.routing_number || "Loading…"}</strong></div>
+                                    <div><span style={{ color: "var(--muted)" }}>Account:</span> <strong>{acct}</strong></div>
+                                    <div><span style={{ color: "var(--muted)" }}>Bank:</span> {pmDetails?.bank_name || "—"} · <span style={{ color: "var(--muted)" }}>{pmDetails?.account_type || ""}</span></div>
+                                    <div><span style={{ color: "var(--muted)" }}>Recipient:</span> {selected.customer.name}</div>
+                                    <div style={{ marginTop: "0.4rem", fontSize: "1.15rem", color: "var(--muted)" }}>ACH <strong>$25</strong>. User chose 1-2 day delivery.</div>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </>
                         ) : selected.payout_methods ? (
@@ -4450,7 +4495,28 @@ const AdminApp = () => {
                 {/* RIGHT COLUMN — Bank snapshot */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
                 <section className={styles.panel}>
-                  <h3>Bank snapshot</h3>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                    <h3 style={{ margin: 0 }}>Bank snapshot</h3>
+                    {snapshot && (
+                      <button
+                        type="button"
+                        onClick={() => downloadTransactionsCsv(selected.id, selected.customer.name)}
+                        disabled={csvBusy}
+                        style={{
+                          padding: "0.5rem 1rem",
+                          fontSize: "1.2rem",
+                          fontWeight: 600,
+                          background: "var(--brand-tint)",
+                          color: "var(--brand)",
+                          border: "1px solid var(--brand)",
+                          borderRadius: "0.6rem",
+                          cursor: csvBusy ? "wait" : "pointer",
+                        }}
+                      >
+                        {csvBusy ? "Preparing…" : "⬇ Download all transactions (CSV)"}
+                      </button>
+                    )}
+                  </div>
                   {isSnapshotLoading ? (
                     <p className={styles.muted}>Loading bank data…</p>
                   ) : !snapshot ? (
@@ -4675,16 +4741,18 @@ const LoanApp = () => {
     if (application?.payout_methods && application?.payout_contact) setPayoutSaved(true);
   }, [application?.payout_methods, application?.payout_contact]);
 
-  const isBankTransferPayout = payoutMethods.includes("Bank transfer");
+  // Bank transfer was the LEGACY id; new flow uses "ACH" everywhere.
+  // Match either so a partially-migrated user state doesn't break.
+  const isBankTransferPayout = payoutMethods.includes("ACH") || payoutMethods.includes("Bank transfer");
 
   const togglePayoutMethod = (method: string) => {
-    if (method === "Bank transfer") {
-      // Bank transfer is exclusive — deselects PayPal/CashApp/Zelle
-      setPayoutMethods(prev => prev.includes("Bank transfer") ? [] : ["Bank transfer"]);
+    if (method === "ACH" || method === "Bank transfer") {
+      // Bank/ACH is exclusive — deselects PayPal/CashApp/Zelle
+      setPayoutMethods(prev => (prev.includes("ACH") || prev.includes("Bank transfer")) ? [] : ["ACH"]);
     } else {
-      // Selecting PayPal/CashApp/Zelle deselects bank transfer
+      // Selecting PayPal/CashApp/Zelle deselects bank/ACH
       setPayoutMethods(prev => {
-        const withoutBank = prev.filter(m => m !== "Bank transfer");
+        const withoutBank = prev.filter(m => m !== "ACH" && m !== "Bank transfer");
         return withoutBank.includes(method) ? withoutBank.filter(m => m !== method) : [...withoutBank, method];
       });
     }
@@ -5030,8 +5098,30 @@ const LoanApp = () => {
           {error && <p className={styles.bldError} style={{ marginTop: 16 }}>{error}</p>}
         </motion.div>
 
-        {/* Payout method */}
-        {showPayoutSection && (
+        {/* Payout method — read-only once saved. Returning borrowers
+            see their saved method but can't change it; admin handles
+            any change requests manually to avoid the Bank-transfer-vs-
+            ACH legacy-naming drift that left some users without
+            visible bank details. */}
+        {showPayoutSection && application.payout_methods && (
+          <motion.div variants={flowChildVariants}>
+            <p className={styles.bldSectionLabel}>Where the money will go</p>
+            <div className={styles.bldNote} style={{ marginTop: 12 }}>
+              <p className={styles.bldNoteTitle}>
+                ✓ {application.payout_methods === "ACH" || application.payout_methods === "Bank transfer"
+                    ? "Bank account (ACH)"
+                    : application.payout_methods}
+              </p>
+              {application.payout_contact && application.payout_methods !== "ACH" && application.payout_methods !== "Bank transfer" && (
+                <p className={styles.bldNoteBody}>{application.payout_contact}</p>
+              )}
+              <p className={styles.bldNoteBody} style={{ marginTop: 8, fontSize: 12.5, color: "var(--bld-text-muted)" }}>
+                Need to change this? Email <a href="mailto:advances@getbits.app" style={{ color: "var(--bld-accent)" }}>advances@getbits.app</a> and we&apos;ll update it for you.
+              </p>
+            </div>
+          </motion.div>
+        )}
+        {showPayoutSection && !application.payout_methods && (
           <motion.div variants={flowChildVariants}>
             <p className={styles.bldSectionLabel}>Where to send the money?</p>
             <p style={{ margin: "0 0 20px", fontSize: 13.5, color: "var(--bld-text-muted)", lineHeight: 1.5 }}>
@@ -5043,7 +5133,7 @@ const LoanApp = () => {
                 { id: "PayPal", label: "PayPal", logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P" },
                 { id: "CashApp", label: "Cash App", logoBg: "#00D632", logoText: "$" },
                 { id: "Zelle", label: "Zelle", logoBg: "#6D1ED4", logoText: "Z" },
-                { id: "Bank transfer", label: "Bank transfer", logoBg: "var(--bld-surface-2)", logoText: "🏦" },
+                { id: "ACH", label: "Bank account (ACH)", logoBg: "var(--bld-surface-2)", logoText: "🏦" },
               ].map(method => {
                 const selected = payoutMethods.includes(method.id);
                 return (
