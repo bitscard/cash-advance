@@ -781,7 +781,7 @@ app.get('/api/advance/admin-auth/me', async function (request, response, next) {
 
 // Master access codes — grant signup access (skip personal-referrer check)
 // but do NOT bypass state eligibility. Add new launch cities here.
-const MASTER_CODES = new Set(['neworleans', 'atlanta', 'welcome', 'houston']);
+const MASTER_CODES = new Set(['neworleans', 'atlanta', 'welcome', 'houston', 'craigslist']);
 
 app.get('/api/advance/referral/:code', async function (request, response, next) {
   try {
