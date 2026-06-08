@@ -5024,11 +5024,207 @@ const LoanApp = () => {
         >
           $25
         </motion.div>
-        <motion.div variants={flowChildVariants} style={{ marginBottom: 48 }}>
+        <motion.div variants={flowChildVariants} style={{ marginBottom: 32 }}>
           <span className={styles.bldStatusPill} data-tone={statusTone}>
             <span className={styles.bldStatusPillDot} aria-hidden="true" />
             {statusLabel[application.status]}
           </span>
+        </motion.div>
+
+        {/* Status timeline — Wise-style vertical progress tracker.
+            Reads from application state to compute which step the user
+            is on. Shows absolute timestamps where we have them, and a
+            'pending'/'in progress' badge otherwise. */}
+        <motion.div variants={flowChildVariants} style={{ marginBottom: 48 }}>
+          <p className={styles.bldSectionLabel}>Tracking your advance</p>
+          {(() => {
+            const fmtTs = (iso: string | null | undefined) => {
+              if (!iso) return null;
+              try {
+                const d = new Date(iso);
+                return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+              } catch { return null; }
+            };
+            const s = application.status;
+            const isWaitlisted = application.subscription_status === 'waitlisted';
+            const hasBank = application.bank_linked;
+            const isApprovedOrLater = ['approved', 'funded', 'repayment_scheduled', 'repaid'].includes(s);
+            const isFundedOrLater = ['funded', 'repayment_scheduled', 'repaid'].includes(s);
+            const isRepaid = s === 'repaid' || application.repayment?.status === 'paid';
+            const isDenied = s === 'denied' || s === 'expired';
+            const isRepaymentFailed = s === 'repayment_failed' || s === 'written_off' || s === 'subscription_failed';
+
+            type StepState = 'done' | 'current' | 'pending' | 'failed';
+            interface Step {
+              label: string;
+              description: string;
+              state: StepState;
+              timestamp?: string | null;
+              failureNote?: string;
+            }
+
+            const steps: Step[] = [
+              {
+                label: 'Application received',
+                description: 'We have your application.',
+                state: 'done',
+                timestamp: fmtTs(application.created_at),
+              },
+              isWaitlisted ? {
+                label: 'State eligibility',
+                description: 'Your state isn’t live yet — you’re on the waitlist.',
+                state: 'failed',
+                failureNote: 'We’ll email you when we open in your state.',
+              } : {
+                label: 'Bank account verified',
+                description: hasBank ? 'Connected and ready.' : 'Connect your bank to continue.',
+                state: hasBank ? 'done' : (s === 'intake' ? 'current' : 'pending'),
+              },
+              {
+                label: 'Income reviewed',
+                description: hasBank && !isApprovedOrLater && !isDenied
+                  ? 'Checking your accrued earnings (usually 1-2 minutes).'
+                  : isApprovedOrLater
+                    ? 'Your income meets our requirements.'
+                    : 'We’ll check your income after your bank is linked.',
+                state: isApprovedOrLater ? 'done'
+                  : isDenied ? 'failed'
+                  : hasBank ? 'current'
+                  : 'pending',
+                failureNote: isDenied ? 'We weren’t able to approve this advance.' : undefined,
+              },
+              isDenied ? {
+                label: s === 'expired' ? 'Offer expired' : 'Not approved',
+                description: s === 'expired'
+                  ? 'Your approved offer expired before you connected payout.'
+                  : 'Sorry — we couldn’t approve this advance right now.',
+                state: 'failed',
+                failureNote: 'Reply to your last email if you think this is a mistake.',
+              } : {
+                label: 'Application approved',
+                description: isApprovedOrLater ? 'Cleared for funding.' : 'Awaiting approval.',
+                state: isApprovedOrLater ? 'done' : 'pending',
+              },
+              {
+                label: 'Money sent',
+                description: isFundedOrLater
+                  ? (application.delivery_type === 'instant' ? 'Sent same-day (instant).' : 'Sent — 1-2 business days.')
+                  : isApprovedOrLater
+                    ? 'Your advance is on the way.'
+                    : 'We send funds the same day you’re approved.',
+                state: isFundedOrLater ? 'done' : isApprovedOrLater ? 'current' : 'pending',
+              },
+              isRepaymentFailed ? {
+                label: 'Repayment',
+                description: s === 'written_off'
+                  ? 'This advance was written off.'
+                  : 'We couldn’t collect repayment. Please reach out so we can sort it.',
+                state: 'failed',
+              } : {
+                label: 'Repayment',
+                description: isRepaid
+                  ? 'Paid in full — thank you!'
+                  : application.repayment?.due_date
+                    ? `Due ${application.repayment.due_date} from your linked bank.`
+                    : 'Collected from your bank on your next payday.',
+                state: isRepaid ? 'done' : isFundedOrLater ? 'current' : 'pending',
+                timestamp: isRepaid && application.repayment?.due_date ? application.repayment.due_date : undefined,
+              },
+            ];
+
+            const stateColor = (state: StepState) => {
+              switch (state) {
+                case 'done': return '#16a34a';
+                case 'current': return 'var(--bld-accent)';
+                case 'failed': return '#dc2626';
+                case 'pending': return 'var(--bld-border)';
+              }
+            };
+            const stateBg = (state: StepState) => {
+              switch (state) {
+                case 'done': return '#dcfce7';
+                case 'current': return 'rgba(59, 130, 246, 0.10)';
+                case 'failed': return '#fee2e2';
+                case 'pending': return 'transparent';
+              }
+            };
+            const stateIcon = (state: StepState) => {
+              switch (state) {
+                case 'done': return '✓';
+                case 'current': return '●';
+                case 'failed': return '✕';
+                case 'pending': return '○';
+              }
+            };
+
+            return (
+              <div style={{ marginTop: 12 }}>
+                {steps.map((step, i) => {
+                  const isLast = i === steps.length - 1;
+                  const color = stateColor(step.state);
+                  const bg = stateBg(step.state);
+                  return (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '32px 1fr', columnGap: 14, rowGap: 0 }}>
+                      {/* Icon column */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{
+                          width: 28, height: 28, borderRadius: 999,
+                          background: bg,
+                          border: `2px solid ${color}`,
+                          color,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 13, fontWeight: 700,
+                          flexShrink: 0,
+                          marginTop: 2,
+                        }}>
+                          {stateIcon(step.state)}
+                        </div>
+                        {/* Connector */}
+                        {!isLast && (
+                          <div style={{
+                            width: 2,
+                            flex: 1,
+                            minHeight: 28,
+                            background: step.state === 'done' ? '#16a34a' : 'var(--bld-border)',
+                            margin: '4px 0',
+                          }} />
+                        )}
+                      </div>
+                      {/* Content column */}
+                      <div style={{ paddingBottom: isLast ? 0 : 18 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: 14, color: step.state === 'pending' ? 'var(--bld-text-muted)' : 'var(--bld-text)' }}>
+                            {step.label}
+                          </strong>
+                          {step.timestamp ? (
+                            <span style={{ fontSize: 12, color: 'var(--bld-text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+                              {step.timestamp}
+                            </span>
+                          ) : step.state === 'current' ? (
+                            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--bld-accent)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                              In progress
+                            </span>
+                          ) : step.state === 'pending' ? (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--bld-text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                              Pending
+                            </span>
+                          ) : null}
+                        </div>
+                        <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--bld-text-muted)', lineHeight: 1.45 }}>
+                          {step.description}
+                        </p>
+                        {step.failureNote && (
+                          <p style={{ margin: '6px 0 0', fontSize: 12, color: '#991b1b', fontStyle: 'italic' }}>
+                            {step.failureNote}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </motion.div>
 
         {/* Loan details */}
