@@ -3576,6 +3576,9 @@ const AdminApp = () => {
   //              written_off)
   type AdminTab = "intake" | "approved" | "funded";
   const [activeTab, setActiveTab] = useState<AdminTab>("intake");
+  // Filter inbox by referral code. Empty string = no filter (show all).
+  // Recomputed per tab so e.g. switching from intake → funded resets to all.
+  const [referralFilter, setReferralFilter] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
   const [snapshot, setSnapshot] = useState<BankSnapshot | null>(null);
@@ -3601,7 +3604,15 @@ const AdminApp = () => {
     if (TAB_STATUSES.funded.has(status)) return "funded";
     return "intake";
   };
-  const filteredApplications = applications.filter(a => tabFor(a.status) === activeTab);
+  const tabApplications = applications.filter(a => tabFor(a.status) === activeTab);
+  // Distinct referral codes within the current tab. 'organic' represents
+  // users who came through with no code at all (referred_by is null).
+  const referralOptionsInTab = Array.from(
+    new Set(tabApplications.map(a => a.referred_by || 'organic'))
+  ).sort((a, b) => a.localeCompare(b));
+  const filteredApplications = referralFilter
+    ? tabApplications.filter(a => (a.referred_by || 'organic') === referralFilter)
+    : tabApplications;
   const tabCounts: Record<AdminTab, number> = {
     intake: applications.filter(a => tabFor(a.status) === "intake").length,
     approved: applications.filter(a => tabFor(a.status) === "approved").length,
@@ -4126,6 +4137,10 @@ const AdminApp = () => {
                     type="button"
                     onClick={() => {
                       setActiveTab(tab);
+                      // Reset referral filter when switching tabs — the option
+                      // list comes from the new tab's data, so a stale value
+                      // would hide all rows.
+                      setReferralFilter("");
                       // If the currently selected app isn't in this tab, auto-pick the first one that is.
                       const stillVisible = selected && tabFor(selected.status) === tab;
                       if (!stillVisible) {
@@ -4150,9 +4165,38 @@ const AdminApp = () => {
                 );
               })}
             </div>
+            {/* Referral-code filter for the current tab. Lets admin focus
+                on a single cohort (e.g. all 'craigslist' signups in the
+                Intake tab) — useful for tracking conversion per channel. */}
+            {referralOptionsInTab.length > 1 && (
+              <div style={{ marginBottom: "0.8rem" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem", fontSize: "1.15rem", color: "var(--muted)" }}>
+                  Filter by referral code
+                  <select
+                    value={referralFilter}
+                    onChange={(e) => setReferralFilter(e.target.value)}
+                    style={{
+                      padding: "0.45rem 0.7rem",
+                      fontSize: "1.3rem",
+                      border: "1.5px solid var(--border)",
+                      borderRadius: "var(--r-sm)",
+                      background: "var(--white)",
+                      color: "var(--ink)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <option value="">All codes ({tabApplications.length})</option>
+                    {referralOptionsInTab.map(code => {
+                      const count = tabApplications.filter(a => (a.referred_by || 'organic') === code).length;
+                      return <option key={code} value={code}>{code} ({count})</option>;
+                    })}
+                  </select>
+                </label>
+              </div>
+            )}
             {filteredApplications.length === 0 && (
               <p style={{ fontSize: "1.3rem", color: "var(--muted)", padding: "1rem 0", textAlign: "center" }}>
-                No applications in this bucket.
+                {referralFilter ? `No users in "${referralFilter}" in this tab.` : "No applications in this bucket."}
               </p>
             )}
             {filteredApplications.map((application) => {
@@ -4187,8 +4231,30 @@ const AdminApp = () => {
                       {due}
                     </small>
                   )}
-                  <small style={{ color: "var(--muted)", fontSize: "1.2rem", marginTop: "0.2rem" }}>
-                    {new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  <small style={{ color: "var(--muted)", fontSize: "1.2rem", marginTop: "0.2rem", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                    <span>{new Date(application.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    {/* Referral-code chip — clickable to filter inbox to that code. */}
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const code = application.referred_by || 'organic';
+                        setReferralFilter(referralFilter === code ? "" : code);
+                      }}
+                      style={{
+                        padding: "0.1rem 0.5rem",
+                        fontSize: "1rem",
+                        fontWeight: 600,
+                        background: "var(--brand-tint)",
+                        color: "var(--brand)",
+                        border: "1px solid var(--brand)",
+                        borderRadius: "999px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {application.referred_by || 'organic'}
+                    </span>
                   </small>
                 </button>
               );
