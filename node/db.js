@@ -80,6 +80,10 @@ pool.query(`
   ALTER TABLE income_sources ALTER COLUMN application_id TYPE TEXT USING application_id::TEXT;
 `).catch(() => {});
 
+pool.query(`
+  ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS pay_amount_cents INTEGER;
+`).catch(() => {});
+
 // admin_users — multi-user admin login system. Each team member with a
 // @getbits.app email can create their own login. The legacy ADMIN_TOKEN
 // env var still works as a shared-secret fallback (used by the cron job
@@ -176,10 +180,14 @@ const publicApp = (row) => ({
 async function createIncomeSources(application_id, sources) {
   for (const s of sources) {
     await pool.query(
-      'INSERT INTO income_sources (application_id, employer, payday, pay_frequency) VALUES ($1,$2,$3,$4)',
-      // pay_frequency no longer collected at signup; default to null and let
-      // downstream code derive it from bank transactions.
-      [application_id, s.employer, s.payday, s.pay_frequency || null],
+      'INSERT INTO income_sources (application_id, employer, payday, pay_frequency, pay_amount_cents) VALUES ($1,$2,$3,$4,$5)',
+      [
+        application_id,
+        s.employer,
+        s.payday,
+        s.pay_frequency || null,
+        Number.isFinite(s.pay_amount_cents) ? s.pay_amount_cents : null,
+      ],
     );
   }
 }

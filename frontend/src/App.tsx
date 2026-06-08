@@ -480,7 +480,7 @@ const CustomerApp = () => {
     email: "",
     phone: "",
     dob: "",
-    income_sources: [{ employer: "", payday: "", pay_frequency: "", pay_frequency_other: "" }],
+    income_sources: [{ employer: "", payday: "", pay_frequency: "", pay_frequency_other: "", pay_amount: "" }],
     ssn: "",
     state: "",
     password: "",
@@ -513,6 +513,11 @@ const CustomerApp = () => {
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
   const [trustScreenSeen, setTrustScreenSeen] = useState(false);
+  // AI 'pre-approval' overlay shown once between delivery-saved and
+  // bank-link. Phases: 'idle' (not active) → 'analyzing' (loader, ~3s)
+  // → 'approved' (user clicks Connect bank). One-shot per application
+  // per session — persisted in sessionStorage keyed by app id.
+  const [aiOverlay, setAiOverlay] = useState<"idle" | "analyzing" | "approved">("idle");
   const [reapplyBusy, setReapplyBusy] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -601,6 +606,28 @@ const CustomerApp = () => {
       setPayoutSaved(true);
     }
   }, [application?.stripe_payment_method_id, application?.payout_methods, application?.payout_contact]);
+
+  // Trigger AI 'analyzing → pre-approved' overlay once delivery is saved.
+  // Skipped if already shown for this application (sessionStorage flag).
+  // Runs server-trustless — it's a UI flourish + pre-qual narrative; the
+  // real income classification still happens after bank link.
+  useEffect(() => {
+    if (!application?.id || !application.delivery_type) return;
+    if (application.bank_linked || application.stripe_payment_method_id) return;
+    const flagKey = `advance_ai_seen_${application.id}`;
+    if (typeof window !== "undefined" && sessionStorage.getItem(flagKey)) return;
+    if (aiOverlay !== "idle") return;
+    setAiOverlay("analyzing");
+    const t = setTimeout(() => setAiOverlay("approved"), 3000);
+    return () => clearTimeout(t);
+  }, [application?.id, application?.delivery_type, application?.bank_linked, application?.stripe_payment_method_id, aiOverlay]);
+
+  const dismissAiOverlay = () => {
+    if (application?.id && typeof window !== "undefined") {
+      sessionStorage.setItem(`advance_ai_seen_${application.id}`, "1");
+    }
+    setAiOverlay("idle");
+  };
 
 
 
@@ -804,9 +831,14 @@ const CustomerApp = () => {
         ssn: ssn.replace(/-/g, ""),
         // pay_frequency dropped from signup — strip the lingering fields
         // off the form state before sending; backend treats null as fine.
-        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, ...s }) => ({
+        income_sources: rawSources.map(({ pay_frequency_other, pay_frequency, pay_amount, ...s }) => ({
           ...s,
           pay_frequency: pay_frequency === "other" ? pay_frequency_other.trim() : pay_frequency,
+          // Convert dollar string → integer cents. Backend stores as
+          // pay_amount_cents on income_sources.
+          pay_amount_cents: pay_amount && !isNaN(parseFloat(pay_amount))
+            ? Math.round(parseFloat(pay_amount) * 100)
+            : null,
         })),
         requested_amount: 25,
         ...(normalizedGateCode ? { referral_code: normalizedGateCode } : {}),
@@ -842,7 +874,7 @@ const CustomerApp = () => {
   const updateSource = (i: number, field: string, value: string) =>
     setForm(f => { const s = [...f.income_sources]; s[i] = { ...s[i], [field]: value }; return { ...f, income_sources: s }; });
   const addSource = () =>
-    setForm(f => ({ ...f, income_sources: [...f.income_sources, { employer: "", payday: "", pay_frequency: "", pay_frequency_other: "" }] }));
+    setForm(f => ({ ...f, income_sources: [...f.income_sources, { employer: "", payday: "", pay_frequency: "", pay_frequency_other: "", pay_amount: "" }] }));
   const removeSource = (i: number) =>
     setForm(f => ({ ...f, income_sources: f.income_sources.filter((_, idx) => idx !== i) }));
 
@@ -1838,6 +1870,20 @@ const CustomerApp = () => {
                           onChange={e => updateSource(i, "pay_frequency_other", e.target.value)} />
                       </label>
                     )}
+                    <label className={`${styles.bldField} ${styles.bldFieldFull}`}>
+                      <span className={styles.bldLabel}>How much do you make per pay period? <span className={styles.bldHint}>(before taxes)</span></span>
+                      <input
+                        className={styles.bldInput}
+                        required
+                        type="number"
+                        inputMode="decimal"
+                        step="1"
+                        min="1"
+                        placeholder="e.g. 1200"
+                        value={src.pay_amount || ""}
+                        onChange={e => updateSource(i, "pay_amount", e.target.value)}
+                      />
+                    </label>
                   </div>
                 </div>
               ))}
@@ -2852,6 +2898,133 @@ const CustomerApp = () => {
               ← Change payout method
             </button>
           </div>
+        </motion.main>
+      </div>
+    );
+  }
+
+  // Pre-bank AI 'analysis' overlay. Shows between Step 3 (delivery) and
+  // Step 4 (bank). One-shot per application per session — flag set by
+  // dismissAiOverlay() after user clicks Connect bank. Frames the
+  // bank-link step as confirmation rather than gatekeeping, which
+  // reduces drop-off.
+  if (preBankActive && application.delivery_type && !application.bank_linked && aiOverlay !== "idle") {
+    return (
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
+            </a>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
+          </div>
+        </header>
+
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>{aiOverlay === "analyzing" ? "Working" : "3 of 4"}</span>
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state={aiOverlay === "analyzing" ? "current" : "done"} />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
+
+          {aiOverlay === "analyzing" ? (
+            <>
+              <motion.div
+                style={{
+                  margin: "32px auto 24px",
+                  width: 96, height: 96, borderRadius: "50%",
+                  border: "5px solid rgba(0,0,0,0.08)",
+                  borderTopColor: "var(--bld-accent)",
+                }}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                aria-hidden="true"
+              />
+              <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>
+                Hang tight
+              </motion.span>
+              <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+                Analyzing your application <em>with AI</em>…
+              </motion.h1>
+              <motion.p className={styles.bldLead} variants={flowChildVariants}>
+                We&apos;re checking your income, employer history, and risk profile. This usually takes a few seconds.
+              </motion.p>
+              <motion.ul
+                variants={flowChildVariants}
+                style={{
+                  listStyle: "none", padding: 0, margin: "24px 0 0",
+                  display: "flex", flexDirection: "column", gap: 10,
+                  maxWidth: 360,
+                }}
+              >
+                {[
+                  "Verifying identity",
+                  "Reviewing employer & pay schedule",
+                  "Checking income range",
+                  "Running fraud signals",
+                ].map((label, i) => (
+                  <motion.li
+                    key={label}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + i * 0.5 }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 14, color: "var(--bld-text)" }}
+                  >
+                    <span style={{ width: 18, height: 18, borderRadius: "50%", background: "#dcfce7", color: "#15803d", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800 }}>✓</span>
+                    {label}
+                  </motion.li>
+                ))}
+              </motion.ul>
+            </>
+          ) : (
+            <>
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 18 }}
+                style={{
+                  margin: "32px auto 24px",
+                  width: 96, height: 96, borderRadius: "50%",
+                  background: "#dcfce7",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 56, color: "#15803d",
+                }}
+                aria-hidden="true"
+              >
+                ✓
+              </motion.div>
+              <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>
+                Good news
+              </motion.span>
+              <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+                You&apos;re <em>pre-approved</em>!
+              </motion.h1>
+              <motion.p className={styles.bldLead} variants={flowChildVariants}>
+                Your <strong>${application.requested_amount} advance</strong> is conditionally approved. Connect your bank to verify and unlock the funds.
+              </motion.p>
+              <motion.button
+                type="button"
+                className={styles.bldBtn}
+                variants={flowChildVariants}
+                whileTap={{ scale: 0.98 }}
+                onClick={dismissAiOverlay}
+                style={{ marginTop: 32 }}
+              >
+                Connect bank to confirm <span aria-hidden="true">→</span>
+              </motion.button>
+              <motion.p variants={flowChildVariants} style={{ marginTop: 12, fontSize: 12, color: "var(--bld-text-muted)", textAlign: "center" }}>
+                Bank-grade encryption · We never see your password
+              </motion.p>
+            </>
+          )}
         </motion.main>
       </div>
     );

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS income_sources (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS income_sources_application_id_idx ON income_sources(application_id);
+ALTER TABLE income_sources ADD COLUMN IF NOT EXISTS pay_amount_cents INTEGER;
 
 -- Payout preference columns (migration-safe)
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS payout_methods TEXT;
