@@ -3487,10 +3487,26 @@ async function autoApproveIfEligible(applicationId) {
 // before each card retry. If the cancellation fails (e.g. the ACH
 // already settled), we abort the retry — it was a no-op anyway.
 async function cancelPendingChargeIfAny(row) {
-  if (!row.charge_intent_id) return false;
+  // CRITICAL: column is stripe_charge_id (where saveStripeCharge writes
+  // it). Previously this referenced row.charge_intent_id which doesn't
+  // exist on the row — the function always returned false, no prior
+  // PaymentIntent was ever cancelled, and every retry created a NEW
+  // PI on top of the still-processing previous attempt. Result: users
+  // double / triple charged when their original ACH eventually settled
+  // alongside the retries.
+  const priorPiId = row.stripe_charge_id;
+  if (!priorPiId || !priorPiId.startsWith('pi_')) return false;
   try {
-    const pi = await stripe.paymentIntents.retrieve(row.charge_intent_id);
-    if (pi.status === 'processing' || pi.status === 'requires_payment_method' || pi.status === 'requires_action') {
+    const pi = await stripe.paymentIntents.retrieve(priorPiId);
+    if (pi.status === 'processing') {
+      // ACH PaymentIntents in 'processing' CANNOT be cancelled via the
+      // Stripe API — once submitted to NACHA there's no way to recall
+      // the debit. Best we can do is NOT issue another retry while
+      // this one is still in flight. Treat it as 'still in flight'.
+      console.log('[cascade] prior ACH PI still processing — skipping retry to avoid double-charge', { application_id: row.id, pi_id: pi.id });
+      return 'still_processing';
+    }
+    if (pi.status === 'requires_payment_method' || pi.status === 'requires_action') {
       await stripe.paymentIntents.cancel(pi.id);
       console.log('[cascade] cancelled prior pending PI', { application_id: row.id, pi_id: pi.id });
       return true;
@@ -3500,7 +3516,7 @@ async function cancelPendingChargeIfAny(row) {
       return 'already_succeeded';
     }
   } catch (e) {
-    console.log('[cascade] could not retrieve/cancel prior PI', { application_id: row.id, error: e.message });
+    console.log('[cascade] could not retrieve prior PI', { application_id: row.id, error: e.message });
   }
   return false;
 }
@@ -3579,6 +3595,9 @@ async function chargeRepaymentWithCascade(row, amount) {
     if (cancelResult === 'already_succeeded') {
       return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
     }
+    if (cancelResult === 'still_processing') {
+      return { processing: true, message: 'Prior ACH still settling — holding retries until it resolves.' };
+    }
     const cardResult = await tryCardCharge(row, amount, `attempt ${attemptCount + 1} — card retry ${attemptCount}/3`);
     if (cardResult.ok) {
       return { paid: true, pi: cardResult.pi, method: 'card', message: `Card retry ${attemptCount}/3 succeeded.` };
@@ -3594,6 +3613,9 @@ async function chargeRepaymentWithCascade(row, amount) {
     const cancelResult = await cancelPendingChargeIfAny(row);
     if (cancelResult === 'already_succeeded') {
       return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
+    }
+    if (cancelResult === 'still_processing') {
+      return { processing: true, message: 'Prior ACH still settling — holding retries until it resolves.' };
     }
     const overdraft = await checkOverdraft(row, amount);
     if (!overdraft.ok) {
@@ -3773,8 +3795,16 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
       if (!hasAnyPm) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
         const result = await chargeRepaymentWithCascade(row, amount);
-        await db.bumpRepaymentAttemptCount(row.id);
-        const newAttemptCount = (row.repayment_attempt_count || 0) + 1;
+        // Only bump the attempt counter if we ACTUALLY tried to charge.
+        // The cascade may return 'processing' from cancelPendingChargeIfAny
+        // when a previous ACH is still in flight — that's not an attempt,
+        // we just held off. Bumping in that case would chew through the
+        // 5-attempt cap while doing nothing.
+        const justHeldForPriorAch = result.processing && /still settling/.test(result.message || '');
+        if (!justHeldForPriorAch) {
+          await db.bumpRepaymentAttemptCount(row.id);
+        }
+        const newAttemptCount = (row.repayment_attempt_count || 0) + (justHeldForPriorAch ? 0 : 1);
 
         if (result.paid) {
           await db.markRepaymentPaid(row.id);

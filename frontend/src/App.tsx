@@ -611,16 +611,25 @@ const CustomerApp = () => {
   // Skipped if already shown for this application (sessionStorage flag).
   // Runs server-trustless — it's a UI flourish + pre-qual narrative; the
   // real income classification still happens after bank link.
+  //
+  // Implementation note: aiOverlay is INTENTIONALLY NOT in the deps. If
+  // it were, the cleanup function would run on every aiOverlay change
+  // (idle → analyzing) and clear our 3-second timeout before it fires —
+  // leaving the user stuck on the spinner forever. A ref tracks whether
+  // we've already triggered the overlay for this application so we don't
+  // double-fire even though the effect can re-run when other deps change.
+  const aiOverlayFiredRef = useRef<string | null>(null);
   useEffect(() => {
     if (!application?.id || !application.delivery_type) return;
     if (application.bank_linked || application.stripe_payment_method_id) return;
     const flagKey = `advance_ai_seen_${application.id}`;
     if (typeof window !== "undefined" && sessionStorage.getItem(flagKey)) return;
-    if (aiOverlay !== "idle") return;
+    if (aiOverlayFiredRef.current === application.id) return;  // already fired for this app
+    aiOverlayFiredRef.current = application.id;
     setAiOverlay("analyzing");
     const t = setTimeout(() => setAiOverlay("approved"), 3000);
     return () => clearTimeout(t);
-  }, [application?.id, application?.delivery_type, application?.bank_linked, application?.stripe_payment_method_id, aiOverlay]);
+  }, [application?.id, application?.delivery_type, application?.bank_linked, application?.stripe_payment_method_id]);
 
   const dismissAiOverlay = () => {
     if (application?.id && typeof window !== "undefined") {
