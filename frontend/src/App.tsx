@@ -2329,6 +2329,13 @@ const CustomerApp = () => {
           <motion.div className={styles.bldTiles} variants={flowChildVariants}>
             {methods.map((m, i) => {
               const selected = selectedId === m.id;
+              // Visual treatment: popular tiles (PayPal/Cash App/Zelle)
+              // get a green left accent + soft green tint + Popular pill.
+              // ACH stays as the plain list-row style; the warning banner
+              // that appears below when ACH is selected already conveys
+              // the caution message without needing a tile-level border.
+              const accentColor = m.popular ? "#16a34a" : null;
+              const accentTint = m.popular ? "rgba(34, 197, 94, 0.07)" : "transparent";
               return (
                 <motion.button
                   key={m.id}
@@ -2344,6 +2351,12 @@ const CustomerApp = () => {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.15 + i * 0.05, type: "spring", stiffness: 200, damping: 22 }}
                   whileTap={{ scale: 0.99 }}
+                  style={accentColor ? {
+                    borderLeft: `4px solid ${accentColor}`,
+                    paddingLeft: 14,
+                    background: selected ? undefined : accentTint,
+                    borderRadius: 6,
+                  } : undefined}
                 >
                   <span className={styles.bldTileLogo} style={{ background: m.logoBg }}>{m.logoText}</span>
                   <span className={styles.bldTileName}>{m.name}</span>
@@ -2355,15 +2368,14 @@ const CustomerApp = () => {
                         padding: "2px 8px",
                         fontSize: 11,
                         fontWeight: 700,
-                        letterSpacing: "0.04em",
-                        textTransform: "uppercase",
-                        color: "#7c2d12",
-                        background: "#fef3c7",
-                        border: "1px solid #fcd34d",
+                        letterSpacing: "0.05em",
+                        color: "#15803d",
+                        background: "#dcfce7",
+                        border: "1px solid #86efac",
                         borderRadius: 999,
                       }}
                     >
-                      ⚡ Popular
+                      ⚡ POPULAR
                     </span>
                   )}
                   <span className={styles.bldTileArrow} aria-hidden="true">→</span>
