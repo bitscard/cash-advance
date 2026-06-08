@@ -5023,7 +5023,20 @@ const LoanApp = () => {
           variants={flowChildVariants}
           style={{ margin: "0 0 12px", fontSize: 13, fontWeight: 700, letterSpacing: "0.10em", textTransform: "uppercase", color: "var(--bld-text-muted)" }}
         >
-          {statusTone === "positive" && application.status === "funded" ? "Funded for" : "Approved for"}
+          {(() => {
+            // Hero label must match the real status — saying "Approved for $25"
+            // before the application is reviewed is misleading. Show what's
+            // actually true at each stage.
+            const s = application.status;
+            if (s === "repaid") return "Repaid";
+            if (s === "funded" || s === "repayment_scheduled") return "Funded for";
+            if (s === "approved") return "Approved for";
+            if (s === "denied") return "Not approved";
+            if (s === "expired") return "Offer expired";
+            if (s === "repayment_failed" || s === "written_off" || s === "subscription_failed") return "Status";
+            // intake, bank_connected, reviewing — application is pending review
+            return "Applying for";
+          })()}
         </motion.p>
         <motion.div
           className={styles.bldHeroAmount}
