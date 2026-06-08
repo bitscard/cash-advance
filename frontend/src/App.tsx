@@ -3142,8 +3142,7 @@ const CustomerApp = () => {
               You're <em>all set!</em>
             </motion.h1>
             <motion.p className={styles.bldLead} variants={flowChildVariants}>
-              Your <strong>${application.requested_amount} advance</strong> is{" "}
-              {application.delivery_type === "instant" ? "on its way — same-day delivery." : "on its way — arriving in 3–5 business days."}
+              We&apos;re reviewing your <strong>${application.requested_amount} advance</strong> application now. We&apos;ll let you know as soon as we have a decision — usually within minutes.
             </motion.p>
 
             {/* Cost breakdown — reuses bldCost styling from delivery picker */}
@@ -3227,7 +3226,7 @@ const CustomerApp = () => {
               onClick={() => setShowConfirmation(false)}
               style={{ marginTop: "2.4rem" }}
             >
-              Go to my dashboard <span aria-hidden="true">→</span>
+              Track your application <span aria-hidden="true">→</span>
             </motion.button>
           </motion.main>
         </div>
@@ -4745,6 +4744,11 @@ const LoanApp = () => {
   const [payoutSaved, setPayoutSaved] = useState(false);
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
+  // Status-link share button: copies the /loan URL to clipboard so users
+  // can bookmark or send it to themselves to check status later.
+  const [linkCopied, setLinkCopied] = useState(false);
+  // Referral code copy state for the referral card on /loan.
+  const [refCodeCopied, setRefCodeCopied] = useState(false);
 
   const authHeaders = useMemo<Record<string, string>>(
     (): Record<string, string> => (token ? { Authorization: `Bearer ${token}` } : {}),
@@ -5036,7 +5040,33 @@ const LoanApp = () => {
             is on. Shows absolute timestamps where we have them, and a
             'pending'/'in progress' badge otherwise. */}
         <motion.div variants={flowChildVariants} style={{ marginBottom: 48 }}>
-          <p className={styles.bldSectionLabel}>Tracking your advance</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <p className={styles.bldSectionLabel} style={{ margin: 0 }}>Tracking your advance</p>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  const url = window.location.origin + '/loan';
+                  navigator.clipboard.writeText(url);
+                  setLinkCopied(true);
+                  setTimeout(() => setLinkCopied(false), 2000);
+                } catch {/* no-op */}
+              }}
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: '6px 12px',
+                background: linkCopied ? '#dcfce7' : 'var(--bld-surface)',
+                color: linkCopied ? '#15803d' : 'var(--bld-text)',
+                border: `1px solid ${linkCopied ? '#86efac' : 'var(--bld-border)'}`,
+                borderRadius: 999,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {linkCopied ? '✓ Copied' : '🔗 Copy status link'}
+            </button>
+          </div>
           {(() => {
             const fmtTs = (iso: string | null | undefined) => {
               if (!iso) return null;
@@ -5430,6 +5460,62 @@ const LoanApp = () => {
             >
               {payoutBusy ? "Saving…" : <>Submit <span aria-hidden="true">→</span></>}
             </motion.button>
+          </motion.div>
+        )}
+
+        {/* ── Referral card on /loan dashboard ─────────────────────────
+            Same UX pattern as the confirmation-page referral card —
+            kept consistent on purpose. Shows the user's code prominently
+            with a one-tap copy, plus the raffle hook to drive shares. */}
+        {application.referral_code && (
+          <motion.div
+            variants={flowChildVariants}
+            className={styles.bldNote}
+            style={{ marginTop: 32, padding: 24, textAlign: "center" }}
+          >
+            <p style={{
+              fontSize: 11, fontWeight: 700, letterSpacing: "0.14em",
+              textTransform: "uppercase", color: "var(--bld-accent)",
+              margin: "0 0 8px",
+            }}>
+              Share your code
+            </p>
+            <p style={{ fontSize: 14, color: "var(--bld-text)", margin: "0 0 20px", lineHeight: 1.5 }}>
+              Each friend who joins earns you an extra entry in the weekly $300 raffle.
+            </p>
+            <div style={{
+              display: "flex", alignItems: "stretch", gap: 10,
+              maxWidth: 360, margin: "0 auto",
+            }}>
+              <code style={{
+                flex: 1, fontSize: 22, fontWeight: 800,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                letterSpacing: "0.08em", color: "var(--bld-text)",
+                background: "var(--bld-surface)", border: "1px solid var(--bld-border)",
+                borderRadius: 10, padding: "12px 16px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                textTransform: "uppercase",
+              }}>
+                {application.referral_code}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(application.referral_code!);
+                  setRefCodeCopied(true);
+                  setTimeout(() => setRefCodeCopied(false), 2000);
+                }}
+                style={{
+                  fontSize: 13, fontWeight: 600,
+                  background: "#000", color: "#fff",
+                  border: "none", borderRadius: 10,
+                  padding: "0 18px", cursor: "pointer",
+                  minWidth: 92,
+                }}
+              >
+                {refCodeCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
           </motion.div>
         )}
       </motion.main>
