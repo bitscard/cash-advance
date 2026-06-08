@@ -3495,9 +3495,11 @@ const AdminApp = () => {
   });
   const [tokenInput, setTokenInput] = useState(adminToken);
   // Login form mode: 'login' shows email+password sign-in,
-  // 'signup' shows account creation form, 'legacy' shows the
-  // shared-token input.
-  const [loginMode, setLoginMode] = useState<"login" | "signup" | "legacy">("login");
+  // 'signup' shows account creation form. Legacy shared-token bypass
+  // still works via x-admin-token header (used by the cron job and
+  // recovery scenarios) but is NOT exposed as a UI option — surfacing
+  // it would defeat the security-by-obscurity of the random admin URL.
+  const [loginMode, setLoginMode] = useState<"login" | "signup">("login");
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
@@ -3654,14 +3656,13 @@ const AdminApp = () => {
       setLoginError("Name, email and password are required.");
       return;
     }
-    if (!emailInput.toLowerCase().endsWith("@getbits.app")) {
-      setLoginError("Admin signups are restricted to @getbits.app emails.");
-      return;
-    }
     if (passwordInput.length < 8) {
       setLoginError("Password must be at least 8 characters.");
       return;
     }
+    // Backend enforces the email-domain restriction. We don't leak the
+    // rule from the frontend — a random visitor who finds the URL would
+    // otherwise learn what domain to spoof.
     if (passwordInput !== confirmPasswordInput) {
       setLoginError("Passwords do not match.");
       return;
@@ -3960,9 +3961,8 @@ const AdminApp = () => {
             <p className={styles.kicker}>Admin</p>
             <h1>Review console</h1>
             <p>
-              {loginMode === "login" && "Sign in with your @getbits.app email."}
-              {loginMode === "signup" && "Create an admin account with your @getbits.app email."}
-              {loginMode === "legacy" && "Enter the admin token configured on the backend."}
+              {loginMode === "login" && "Sign in."}
+              {loginMode === "signup" && "Create an account."}
             </p>
           </div>
           {loginMode === "login" && (
@@ -3989,8 +3989,6 @@ const AdminApp = () => {
               <button disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in"}</button>
               <p style={{ marginTop: "1rem", fontSize: "1.25rem", textAlign: "center" }}>
                 <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("signup"); setLoginError(null); }} style={{ color: "var(--brand)" }}>Need an account? Sign up</a>
-                <span style={{ color: "var(--muted)", margin: "0 0.8rem" }}>·</span>
-                <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("legacy"); setLoginError(null); }} style={{ color: "var(--muted)" }}>Use admin token</a>
               </p>
             </form>
           )}
@@ -4006,11 +4004,10 @@ const AdminApp = () => {
                 />
               </label>
               <label>
-                Email <span style={{ color: "var(--muted)", fontSize: "1.1rem", fontWeight: 400 }}>(@getbits.app only)</span>
+                Email
                 <input
                   type="email"
                   autoComplete="email"
-                  placeholder="you@getbits.app"
                   value={emailInput}
                   onChange={(e) => { setEmailInput(e.target.value); setLoginError(null); }}
                 />
@@ -4037,26 +4034,6 @@ const AdminApp = () => {
               <button disabled={loginBusy}>{loginBusy ? "Creating…" : "Create account"}</button>
               <p style={{ marginTop: "1rem", fontSize: "1.25rem", textAlign: "center" }}>
                 <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("login"); setLoginError(null); }} style={{ color: "var(--brand)" }}>Already have an account? Sign in</a>
-              </p>
-            </form>
-          )}
-          {loginMode === "legacy" && (
-            <form className={styles.panel} onSubmit={unlockAdmin}>
-              <label>
-                Admin token
-                <input
-                  type="password"
-                  value={tokenInput}
-                  onChange={(event) => {
-                    setTokenInput(event.target.value);
-                    setLoginError(null);
-                  }}
-                />
-              </label>
-              {loginError && <p style={{ color: "#c0392b", fontSize: "1.3rem", margin: "0.8rem 0" }}>{loginError}</p>}
-              <button disabled={loginBusy}>{loginBusy ? "Verifying…" : "Open admin"}</button>
-              <p style={{ marginTop: "1rem", fontSize: "1.25rem", textAlign: "center" }}>
-                <a href="#" onClick={(e) => { e.preventDefault(); setLoginMode("login"); setLoginError(null); }} style={{ color: "var(--brand)" }}>← Back to email sign in</a>
               </p>
             </form>
           )}

@@ -709,7 +709,10 @@ app.post('/api/advance/admin-auth/signup', async function (request, response, ne
     }
     const emailLower = email.toLowerCase().trim();
     if (!emailLower.endsWith('@' + ADMIN_EMAIL_DOMAIN)) {
-      return response.status(403).json({ error: { error_message: `Admin signups are restricted to @${ADMIN_EMAIL_DOMAIN} emails.` } });
+      // Generic error — don't leak the allowed domain via the response
+      // body. A random visitor who stumbled onto the URL shouldn't be
+      // able to learn what email domain to spoof.
+      return response.status(403).json({ error: { error_message: 'Signup is not available for this email address.' } });
     }
     const existing = await db.getAdminUserByEmail(emailLower);
     if (existing) {
