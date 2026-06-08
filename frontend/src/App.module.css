@@ -717,7 +717,9 @@ dd {
   flex-direction: column;
   gap: 1.6rem;
   overflow: auto;
-  min-height: 24rem;
+  /* Was 24rem — too tall for users with few messages (intake state),
+     forced the right column to be much taller than the left. */
+  min-height: 12rem;
   max-height: 52rem;
   padding: 2rem;
   border: 1.5px solid var(--border-lt);
@@ -1056,7 +1058,16 @@ dd {
 .inbox {
   align-self: start;
   padding: 1.4rem;
-  overflow: hidden;
+  /* Cap inbox height to viewport so a long list (70+ intake users) doesn't
+     force the whole page to be that tall and push the detail panel
+     below the fold. Inbox scrolls internally; detail content sets
+     page height. */
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Sticky so it stays in view while reading a long detail panel. */
+  position: sticky;
+  top: 2rem;
 }
 
 .inbox h1 {
