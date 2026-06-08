@@ -3223,7 +3223,12 @@ const CustomerApp = () => {
               className={styles.bldBtn}
               variants={flowChildVariants}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setShowConfirmation(false)}
+              onClick={() => {
+                // Navigate to /loan (LoanApp) — that's where the Wise-style
+                // status timeline lives. JWT in localStorage carries over,
+                // so the user lands already signed-in.
+                window.location.href = "/loan";
+              }}
               style={{ marginTop: "2.4rem" }}
             >
               Track your application <span aria-hidden="true">→</span>
