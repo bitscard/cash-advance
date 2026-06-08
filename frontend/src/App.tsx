@@ -2279,13 +2279,13 @@ const CustomerApp = () => {
   // Step 1 of 4: receive money — single-select PayPal/Cash App/Zelle/ACH
   const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
   if (preBankActive && (!payoutAlreadySaved || wantsToChangePayout)) {
-    const methods: { id: string; name: string; placeholder: string; label: string; logoBg: string; logoText: string }[] = [
+    const methods: { id: string; name: string; placeholder: string; label: string; logoBg: string; logoText: string; popular?: boolean }[] = [
       { id: "PayPal", name: "PayPal", placeholder: "you@email.com", label: "Your PayPal email or phone",
-        logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P" },
+        logoBg: "linear-gradient(135deg, #009cde 0%, #003087 100%)", logoText: "P", popular: true },
       { id: "CashApp", name: "Cash App", placeholder: "$cashtag", label: "Your $cashtag",
-        logoBg: "#00D632", logoText: "$" },
+        logoBg: "#00D632", logoText: "$", popular: true },
       { id: "Zelle", name: "Zelle", placeholder: "you@email.com or phone", label: "Your Zelle email or phone",
-        logoBg: "#6D1ED4", logoText: "Z" },
+        logoBg: "#6D1ED4", logoText: "Z", popular: true },
       { id: "ACH", name: "Bank account (ACH)", placeholder: "", label: "",
         logoBg: "#1a1a1a", logoText: "🏦" },
     ];
@@ -2347,11 +2347,56 @@ const CustomerApp = () => {
                 >
                   <span className={styles.bldTileLogo} style={{ background: m.logoBg }}>{m.logoText}</span>
                   <span className={styles.bldTileName}>{m.name}</span>
+                  {m.popular && (
+                    <span
+                      aria-label="Popular"
+                      style={{
+                        marginLeft: 8,
+                        padding: "2px 8px",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        letterSpacing: "0.04em",
+                        textTransform: "uppercase",
+                        color: "#7c2d12",
+                        background: "#fef3c7",
+                        border: "1px solid #fcd34d",
+                        borderRadius: 999,
+                      }}
+                    >
+                      ⚡ Popular
+                    </span>
+                  )}
                   <span className={styles.bldTileArrow} aria-hidden="true">→</span>
                 </motion.button>
               );
             })}
           </motion.div>
+
+          {/* ACH-selected warning. Banks process ACH only during business
+              hours and reject batches over weekends/holidays. Soft-nudge
+              users toward instant rails (PayPal/Cash App/Zelle). */}
+          {isAch && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+              style={{
+                marginTop: 24,
+                padding: "14px 18px",
+                background: "#fef3c7",
+                border: "1.5px solid #fcd34d",
+                borderRadius: 12,
+                color: "#7c2d12",
+              }}
+            >
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 14, lineHeight: 1.4 }}>
+                ⚠ Heads up — banks are closed after 5 PM and on weekends.
+              </p>
+              <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.5 }}>
+                If you choose <strong>Bank account (ACH)</strong>, your advance can be delayed until the next business day. For the fastest delivery, we recommend <strong>Zelle</strong>, <strong>PayPal</strong>, or <strong>Cash App</strong>.
+              </p>
+            </motion.div>
+          )}
 
           {selectedMethod && !isAch && (
             <motion.div
