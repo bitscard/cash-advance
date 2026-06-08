@@ -98,3 +98,48 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS transfer_id TEXT;
 -- recurring cron doesn't double-send. Reset to NULL whenever a new
 -- repayment is scheduled (next advance cycle).
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS due_date_reminder_sent_at TIMESTAMPTZ;
+
+-- Card-first / ACH-fallback cascade tracking.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_attempt_count INTEGER DEFAULT 0;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_last_attempt_at TIMESTAMPTZ;
+
+-- ACH payout via Brex (manual). Bank account number the user types at
+-- Step 2 — admin uses this + the bank routing from FC for manual wires.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
+
+-- "Do you use other cash advance apps?" disclosure at signup (risk signal).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS uses_other_advances BOOLEAN;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS other_advances TEXT;
+
+-- Address fields (for Stripe Connect Custom KYC + future ACH compliance).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_line1 TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_city TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_state TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS address_postal_code TEXT;
+
+-- Stripe Connect Custom (zero-friction Stripe-native payouts; gated on KYC).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_external_account_id TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_payouts_enabled BOOLEAN DEFAULT FALSE;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_disabled_reason TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_connect_kyc_checked_at TIMESTAMPTZ;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_tos_accepted_at TIMESTAMPTZ;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_tos_accepted_ip TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_payout_id TEXT;
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_transfer_id TEXT;
+
+-- Stripe FC session id (used during the bank-link OAuth flow).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_session_id TEXT;
+
+-- Tracks whether we've subscribed to the FC account's transaction stream
+-- (one-time setup that costs Stripe credits).
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS stripe_fc_subscribed_at TIMESTAMPTZ;
+
+-- admin_users — multi-user admin login system.
+CREATE TABLE IF NOT EXISTS admin_users (
+  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  email           TEXT        NOT NULL UNIQUE,
+  password_hash   TEXT        NOT NULL,
+  name            TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_login_at   TIMESTAMPTZ
+);
