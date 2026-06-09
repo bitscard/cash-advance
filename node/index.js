@@ -2837,19 +2837,23 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
       }
     }
 
-    // Fetch ownership (bank holder name) — costs ~$0.10 per call.
-    // Worth it for fraud detection: comparing the bank holder name
-    // against the signup name catches stolen-identity patterns.
-    // Wrapped in try/catch + setImmediate so a Stripe error or a bank
-    // that doesn't expose ownership can't break the bank-link flow.
+    // Fetch ownership (bank holder name) for fraud detection.
+    // Available because the FC session requested the 'ownership'
+    // permission at link time. NOTE: accounts.subscribe is NOT the
+    // right API here — it only accepts 'transactions'. Use
+    // accounts.refresh + retrieve(expand: owners) instead.
     if (account.id) {
       setImmediate(async () => {
         try {
-          await stripe.financialConnections.accounts.subscribe(account.id, {
-            features: ['ownership'],
-          });
-          // The owners list lives at /accounts/{id}/owners; expand
-          // surfaces it inline. Some banks return empty; that's fine.
+          try {
+            await stripe.financialConnections.accounts.refresh(account.id, {
+              features: ['ownership'],
+            });
+          } catch (refreshErr) {
+            // Some accounts return ownership data on retrieve without
+            // an explicit refresh — continue to the retrieve below.
+            console.log('[stripe/fc/native/complete] ownership refresh failed (continuing)', refreshErr.message);
+          }
           const refreshed = await stripe.financialConnections.accounts.retrieve(account.id, {
             expand: ['owners'],
           });
