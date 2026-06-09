@@ -43,7 +43,17 @@ async function importUsers({ supabase, db, log = console.log }) {
   // the existing id. Returns null on failure.
   const ensureUser = async (email, { passwordHash, admin }) => {
     const key = email.toLowerCase();
-    if (byEmail.has(key)) return byEmail.get(key);
+    if (byEmail.has(key)) {
+      const id = byEmail.get(key);
+      // Already in Supabase (e.g. an email present in both tables, or a re-run):
+      // still backfill the admin claim, otherwise these accounts fail the
+      // app_metadata.role==='admin' check after import.
+      if (admin) {
+        const { error } = await supabase.auth.admin.updateUserById(id, { app_metadata: { role: 'admin' } });
+        if (error) log(`  ! updateUserById (admin backfill) failed for ${email}: ${error.message}`);
+      }
+      return id;
+    }
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password_hash: passwordHash || undefined,

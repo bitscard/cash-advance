@@ -32,7 +32,12 @@ function makeSupabaseMock() {
     data: { users: page === 1 ? users.slice() : [] },
     error: null,
   }));
-  return { auth: { admin: { listUsers, createUser } }, _users: users, createUser, listUsers };
+  const updateUserById = jest.fn(async (id, { app_metadata }) => {
+    const user = users.find((u) => u.id === id);
+    if (user) user.app_metadata = { ...user.app_metadata, ...app_metadata };
+    return { data: { user }, error: null };
+  });
+  return { auth: { admin: { listUsers, createUser, updateUserById } }, _users: users, createUser, listUsers, updateUserById };
 }
 
 describe('importUsers', () => {
@@ -84,5 +89,21 @@ describe('importUsers', () => {
     expect(summary.adminsFlagged).toBeGreaterThanOrEqual(1);
     const call = supabase.createUser.mock.calls.find(c => c[0].email === 'solo@getbits.app');
     expect(call[0].app_metadata).toEqual({ role: 'admin' });
+  });
+
+  test('backfills the admin claim on an existing Supabase user', async () => {
+    // An @getbits.app user already in Supabase but without the admin role (e.g.
+    // a previous partial import). ensureUser early-returns the existing id, so
+    // the role must be backfilled via updateUserById.
+    const supabase = makeSupabaseMock();
+    const existing = { id: uuidv4(), email: 'boss@getbits.app', app_metadata: {} };
+    supabase._users.push(existing);
+    await db.createApplication(makeApplication({ email: 'boss@getbits.app' }));
+
+    await importUsers({ supabase, db, log: () => {} });
+
+    expect(supabase.createUser).not.toHaveBeenCalled();
+    expect(supabase.updateUserById).toHaveBeenCalledWith(existing.id, { app_metadata: { role: 'admin' } });
+    expect(existing.app_metadata).toEqual({ role: 'admin' });
   });
 });
