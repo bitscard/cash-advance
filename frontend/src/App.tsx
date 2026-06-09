@@ -1412,12 +1412,12 @@ const CustomerApp = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ type: "spring", stiffness: 100, damping: 22 }}
               >
-                <p className={styles.bldEyebrow}>AI-powered · No credit check · 0% interest</p>
+                <p className={styles.bldEyebrow}>Early Wage Access · AI-powered · No credit check · 0% interest</p>
                 <h1 className={styles.bldLandHeroH1}>
-                  Cash before<br /><em>your paycheck.</em>
+                  Your wages,<br /><em>before payday.</em>
                 </h1>
                 <p className={styles.bldLandHeroSub}>
-                  Up to <strong>$300</strong> in your account today. Repay on your next payday — 0% interest, no late fees, no credit pull. Just $3.99/month.
+                  Up to <strong>$300</strong> of your earned wages in your account today. Auto-deducted from your next paycheck — 0% interest, no late fees, no credit pull. Just $3.99/month.
                 </p>
                 <div className={styles.bldLandHeroCtaRow}>
                   <motion.button
@@ -1448,7 +1448,7 @@ const CustomerApp = () => {
 
               <div className={styles.bldLandTiers}>
                 {[
-                  { amt: "$25", lbl: "1st advance", featured: false },
+                  { amt: "$25", lbl: "First access", featured: false },
                   { amt: "$50", lbl: "Then $50", featured: false },
                   { amt: "$100", lbl: "Then $100", featured: false },
                   { amt: "$200", lbl: "Then $200", featured: false },
@@ -1477,7 +1477,7 @@ const CustomerApp = () => {
 
             {/* ── 2b. Delivery options ─────────────────────────────────────── */}
             <section className={styles.bldLandSection}>
-              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>The advance way</p>
+              <p className={styles.bldEyebrow} style={{ marginBottom: 12 }}>Your money, your way</p>
               <h2 className={styles.bldLandH2}>
                 Get your cash<br /><em>your way.</em>
               </h2>
@@ -1511,7 +1511,7 @@ const CustomerApp = () => {
                 {[
                   { n: "01", title: "Apply in 2 minutes", sub: "Tell us your name, employer, payday, and last 4 of your SSN. No credit pull, ever." },
                   { n: "02", title: "Connect your bank", sub: "Link with Plaid — read-only, encrypted. We see your income but never your password." },
-                  { n: "03", title: "Get your money", sub: "A real reviewer approves your advance. Money lands in your account the same day." },
+                  { n: "03", title: "Get your money", sub: "A real reviewer approves your Early Wage Access. Money lands in your account the same day." },
                 ].map(s => (
                   <article key={s.n} className={styles.bldLandStep}>
                     <div className={styles.bldLandStepN}>{s.n}</div>
@@ -1533,7 +1533,7 @@ const CustomerApp = () => {
                     Win a trip<br /><em>to Cancún.</em>
                   </h2>
                   <p className={styles.bldLead} style={{ marginBottom: 32 }}>
-                    Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your advances — you&apos;re in.
+                    Every active member is automatically entered in our all-inclusive Cancún getaway. Stay current on your wage access — you&apos;re in.
                   </p>
                   <motion.button type="button" onClick={goSignup} className={styles.bldBtn} style={{ width: "auto", paddingLeft: 32, paddingRight: 32 }} whileTap={{ scale: 0.98 }}>
                     Become a member <span aria-hidden="true">→</span>
@@ -1562,7 +1562,7 @@ const CustomerApp = () => {
                 Built by guys in England.<br /><em>For America.</em>
               </h2>
               <p className={styles.bldLead}>
-                We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: cash before payday, without the loan-shark nonsense.
+                We came from England with an idea. We ran focus groups with Americans to hear how they really live between paychecks — and built what they actually needed: Early Wage Access, without the loan-shark nonsense.
               </p>
               <p className={styles.bldLead} style={{ marginTop: 16 }}>
                 If we got something wrong — and we&apos;re Englishmen who drink tea, say sorry too much, and still call it football — <a href="mailto:advances@getbits.app" className={styles.bldFootLink}>email us</a> and tell us off.
@@ -1586,11 +1586,11 @@ const CustomerApp = () => {
                 </div>
                 <ul className={styles.bldLandFaq}>
                   {[
-                    ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. Advance never reports to credit bureaus."],
+                    ["Will this affect my credit score?", "No. We don't pull your credit, soft or hard. We never report to credit bureaus."],
                     ["What if I can't repay on time?", "We'll text you to reschedule. We never send accounts to collections. We never charge a late fee on the principal."],
-                    ["What states is advance available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
-                    ["How much can I borrow?", "Up to $300 per advance. First-time members typically qualify for $50–$150 based on their pay history."],
-                    ["How does repayment work?", "Automatic — on your next payday, we debit the amount you borrowed. You can also repay early at any time, free."],
+                    ["What states is Early Wage Access available in?", "Currently 36 US states. If we're not in your state yet, you can join the waitlist."],
+                    ["How much can I access?", "Up to $300 per pay cycle. First-time members typically qualify for $50–$150 based on their pay history."],
+                    ["How does repayment work?", "Automatic — on your next payday, we deduct the amount you accessed. You can also repay early at any time, free."],
                     ["Is there a membership fee?", "Yes — $3.99 per month for membership. Instant (same-hour) transfers are $5. No interest, no late fees, no credit pull."],
                   ].map(([q, a]) => (
                     <li key={q} className={styles.bldLandFaqItem}>
