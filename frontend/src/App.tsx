@@ -4997,7 +4997,6 @@ const LoanApp = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [payoffDone, setPayoffDone] = useState(false);
   const [payoutMethods, setPayoutMethods] = useState<string[]>([]);
   const [payoutContact, setPayoutContact] = useState("");
   const [payoutSaved, setPayoutSaved] = useState(false);
@@ -5099,33 +5098,11 @@ const LoanApp = () => {
     }
   };
 
-  const payoff = async () => {
-    if (!application) return;
-    setIsBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(apiUrl(`/api/advance/applications/${application.id}/payoff`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.error_message || "Unable to process payoff");
-      setApplication(data.application);
-      setMessages(data.messages);
-      setPayoffDone(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
   const logout = () => {
     localStorage.removeItem(userTokenStorageKey);
     setToken("");
     setApplication(null);
     setMessages([]);
-    setPayoffDone(false);
   };
 
   if (!token || !application) {
@@ -5219,8 +5196,6 @@ const LoanApp = () => {
   }
 
   const rep = application.repayment;
-  const canPayoff = !!rep && rep.status === "pending" &&
-    (application.status === "repayment_scheduled" || application.status === "funded");
 
   const firstName = (application.customer.name || "").trim().split(/\s+/)[0] || "there";
   const initials = (application.customer.name || "?").trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase() || "?";

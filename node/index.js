@@ -1545,22 +1545,6 @@ app.patch('/api/advance/applications/:id/payout-preference', async function (req
   } catch (err) { next(err); }
 });
 
-app.post('/api/advance/applications/:id/payoff', async function (request, response, next) {
-  const payload = requireAuth(request, response);
-  if (!payload) return;
-  if (payload.applicationId !== request.params.id) {
-    return response.status(403).json({ error: { error_message: 'Forbidden' } });
-  }
-  try {
-    const updated = await db.markRepaymentPaid(request.params.id);
-    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    await db.incrementRepaymentCount(request.params.id);
-    await db.addMessage(request.params.id, 'system', 'Customer has marked repayment as paid. Pending admin confirmation.');
-    const messages = await db.getMessages(request.params.id);
-    response.json({ application: db.publicApp(updated), messages });
-  } catch (err) { next(err); }
-});
-
 // ── Admin endpoints ────────────────────────────────────────────────────────────
 
 app.get('/api/advance/admin/applications', async function (request, response, next) {
@@ -3785,6 +3769,9 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
 
         if (result.paid) {
           await db.markRepaymentPaid(row.id);
+          // Tier progression ($25→$200 on reapply) advances only on a real
+          // collected repayment — same as the admin manual /charge path.
+          await db.incrementRepaymentCount(row.id);
           await db.resetRepaymentAttemptCount(row.id);
           if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
           await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected via ${result.method}.`);
