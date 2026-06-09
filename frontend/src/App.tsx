@@ -25,6 +25,8 @@ import PrivacyPage from "./PrivacyPage";
 import StoryPage from "./StoryPage";
 import ConsentPage from "./ConsentPage";
 import SystemDesignPage from "./SystemDesignPage";
+import SupabaseAuthPanel from "./SupabaseAuthPanel";
+import { useSupabaseAccessToken, signOutSupabase, isSupabaseConfigured } from "./supabase";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -508,6 +510,11 @@ const CustomerApp = () => {
   const [gateBusy, setGateBusy] = useState(false);
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
+  // When a Supabase session exists, use its access token for all API calls.
+  // Mirroring it into `token` means every existing `Bearer ${token}` call and
+  // the /auth/me poll transparently switch to Supabase without further changes.
+  const supabaseToken = useSupabaseAccessToken();
+  useEffect(() => { if (supabaseToken) setToken(supabaseToken); }, [supabaseToken]);
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [deliveryChoice, setDeliveryChoice] = useState<"instant" | "standard" | null>(null);
   const [deliveryBusy, setDeliveryBusy] = useState(false);
@@ -576,6 +583,7 @@ const CustomerApp = () => {
   }, [application?.id, loadApplication, loadMessages]);
 
   const handleLogout = () => {
+    void signOutSupabase();
     localStorage.removeItem(applicationStorageKey);
     localStorage.removeItem(userTokenStorageKey);
     setApplication(null);
@@ -858,7 +866,12 @@ const CustomerApp = () => {
       };
       const response = await fetch(apiUrl("/api/advance/applications"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // When signed in via Supabase, send the bearer so the backend links the
+        // new application to the Supabase user (identity comes from the token).
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(body),
       });
       const data = await response.json();
@@ -1744,6 +1757,12 @@ const CustomerApp = () => {
           <motion.p className={styles.bldLead} variants={flowChildVariants}>
             Takes about 2 minutes — your info is encrypted and never sold. No hard credit check, ever.
           </motion.p>
+
+          {isSupabaseConfigured && !supabaseToken && (
+            <motion.div variants={flowChildVariants} style={{ marginBottom: "1.5rem" }}>
+              <SupabaseAuthPanel heading="Sign in to continue" redirectTo={window.location.origin} />
+            </motion.div>
+          )}
 
           <form onSubmit={handleSignupSubmit}>
             <motion.div variants={flowChildVariants}>
@@ -3734,6 +3753,9 @@ const AdminApp = () => {
   const [adminJwt, setAdminJwt] = useState(
     () => sessionStorage.getItem(adminJwtStorageKey) || "",
   );
+  // A Supabase admin session (app_metadata.role='admin') takes precedence over
+  // the legacy admin JWT / shared token.
+  const supabaseToken = useSupabaseAccessToken();
   const [adminUser, setAdminUser] = useState<{ id: string; email: string; name: string | null } | null>(() => {
     try {
       const raw = sessionStorage.getItem(adminUserStorageKey);
@@ -3855,15 +3877,18 @@ const AdminApp = () => {
   const adminHeaders = useMemo<Record<string, string>>(
     () => {
       const headers: Record<string, string> = {};
-      // Prefer per-user JWT when present; fall back to shared token.
-      if (adminJwt) {
+      // Prefer a Supabase admin session, then the legacy per-user JWT, then the
+      // shared token.
+      if (supabaseToken) {
+        headers["Authorization"] = `Bearer ${supabaseToken}`;
+      } else if (adminJwt) {
         headers["Authorization"] = `Bearer ${adminJwt}`;
       } else if (adminToken) {
         headers["x-admin-token"] = adminToken;
       }
       return headers;
     },
-    [adminToken, adminJwt],
+    [adminToken, adminJwt, supabaseToken],
   );
 
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -3983,6 +4008,7 @@ const AdminApp = () => {
   };
 
   const logoutAdmin = () => {
+    void signOutSupabase();
     sessionStorage.removeItem(adminTokenStorageKey);
     sessionStorage.removeItem(adminJwtStorageKey);
     sessionStorage.removeItem(adminUserStorageKey);
@@ -3997,7 +4023,7 @@ const AdminApp = () => {
     setLoginMode("login");
   };
 
-  const isAuthed = Boolean(adminToken || adminJwt);
+  const isAuthed = Boolean(adminToken || adminJwt || supabaseToken);
 
   const loadApplications = useCallback(async () => {
     const response = await fetch(apiUrl("/api/advance/admin/applications"), {
@@ -4225,7 +4251,12 @@ const AdminApp = () => {
               {loginMode === "signup" && "Create an account."}
             </p>
           </div>
-          {loginMode === "login" && (
+          {isSupabaseConfigured && (
+            <div className={styles.panel}>
+              <SupabaseAuthPanel />
+            </div>
+          )}
+          {!isSupabaseConfigured && loginMode === "login" && (
             <form className={styles.panel} onSubmit={submitLogin}>
               <label>
                 Email
@@ -4252,7 +4283,7 @@ const AdminApp = () => {
               </p>
             </form>
           )}
-          {loginMode === "signup" && (
+          {!isSupabaseConfigured && loginMode === "signup" && (
             <form className={styles.panel} onSubmit={submitSignup}>
               <label>
                 Name
@@ -4992,6 +5023,10 @@ const BankSnapshotView = ({ snapshot }: { snapshot: BankSnapshot }) => {
 
 const LoanApp = () => {
   const [token, setToken] = useState(() => localStorage.getItem(userTokenStorageKey) || "");
+  // Mirror a Supabase session's access token into `token` so every existing
+  // Bearer call + the /auth/me poll use it transparently (see CustomerApp).
+  const supabaseToken = useSupabaseAccessToken();
+  useEffect(() => { if (supabaseToken) setToken(supabaseToken); }, [supabaseToken]);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [application, setApplication] = useState<Application | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -5099,6 +5134,7 @@ const LoanApp = () => {
   };
 
   const logout = () => {
+    void signOutSupabase();
     localStorage.removeItem(userTokenStorageKey);
     setToken("");
     setApplication(null);
@@ -5132,6 +5168,11 @@ const LoanApp = () => {
             Pick up where you left off — track your advance and manage repayment.
           </motion.p>
 
+          {isSupabaseConfigured ? (
+            <motion.div variants={flowChildVariants}>
+              <SupabaseAuthPanel redirectTo={`${window.location.origin}/loan`} />
+            </motion.div>
+          ) : (
           <form onSubmit={login}>
             <motion.label className={styles.bldField} variants={flowChildVariants}>
               <span className={styles.bldLabel}>Email</span>
@@ -5170,6 +5211,7 @@ const LoanApp = () => {
               {isBusy ? "Signing in…" : <>Sign in <span aria-hidden="true">→</span></>}
             </motion.button>
           </form>
+          )}
 
           <p className={styles.bldFootnote}>
             Don&apos;t have an account?{" "}

@@ -5,6 +5,7 @@
   "dependencies": {
     "@stripe/react-stripe-js": "^6.3.0",
     "@stripe/stripe-js": "^9.4.0",
+    "@supabase/supabase-js": "^2.108.0",
     "@tailwindcss/vite": "^4.2.2",
     "framer-motion": "^12.40.0",
     "immer": "^11.1.4",
