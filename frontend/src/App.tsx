@@ -4775,7 +4775,7 @@ const AdminApp = () => {
                         )}
                       </dd>
                       <dt>Bank</dt>
-                      <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
+                      <dd>{selected.bank_linked ? "✓ Connected" : "Waiting"}</dd>
                       {/* Bank holder name (from Stripe FC ownership) vs the
                           signup name — fuzzy match flags potential identity
                           fraud. Only shown when we have ownership data. */}
@@ -4861,7 +4861,7 @@ const AdminApp = () => {
                       </p>
                     )}
                     <div style={{ display: "flex", gap: "0.8rem", alignItems: "center", flexWrap: "wrap" }}>
-                      {(selected.plaid_connected || selected.stripe_card_saved || selected.stripe_payment_method_id) ? (
+                      {(selected.bank_linked || selected.stripe_card_saved || selected.stripe_payment_method_id) ? (
                         <button disabled={isBusy} onClick={chargeCard} style={{ fontSize: "1.3rem", padding: "0.7rem 1.2rem" }}>
                           {isBusy ? "Processing…" : "Collect repayment now"}
                         </button>
