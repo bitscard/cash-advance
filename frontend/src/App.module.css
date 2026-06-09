@@ -1070,6 +1070,60 @@ dd {
   top: 2rem;
 }
 
+/* ── Admin summary stat cards ─────────────────────────────────────────── */
+.adminSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.2rem;
+  margin: 0 0 2rem;
+}
+.adminSummaryCard {
+  padding: 1.2rem 1.6rem;
+  border-radius: var(--r-xl);
+  border: 1.5px solid;
+  box-shadow: var(--sh-sm);
+}
+
+/* ── Mobile admin layout ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .adminSummaryGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.8rem;
+  }
+  .adminSummaryCard { padding: 0.9rem 1.1rem; }
+  .adminSummaryCard p:last-child { font-size: 2rem !important; }
+  /* Inbox stops being sticky on mobile — it'd cover the detail panel below. */
+  .inbox {
+    position: static;
+    max-height: 38rem;
+  }
+  /* Review header + actions wrap so the Approve / Deny / Mark-funded
+     buttons don't squeeze the user's name out of view. */
+  .reviewHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.2rem 1.4rem;
+  }
+  .actions { width: 100%; }
+  .actions button {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 1.2rem;
+    padding: 0.6rem 0.4rem;
+  }
+  /* Two-column DLs in the applicant details collapse to one column. */
+  .review div[style*="gridTemplateColumns: \"1fr 1fr\""],
+  .review div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* Filter dropdown + referral chip in inbox row stack instead of crowding. */
+  .row, .activeRow { padding: 0.9rem 1rem; }
+  /* Chat messages get a tighter padding on mobile so more is on screen. */
+  .messages { padding: 1.2rem; min-height: 16rem; }
+  .composer { grid-template-columns: 1fr auto; gap: 0.6rem; }
+  .composer input { font-size: 1.4rem; }
+}
+
 .inbox h1 {
   font-size: 1.8rem;
   margin: 0 0 1rem;
