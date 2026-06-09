@@ -23,9 +23,15 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is required — set it in the environment. Refusing to start.');
 }
-// Supabase access tokens are HS256-signed with this project secret. Optional
-// during the migration: when unset, the Supabase auth path is simply inert and
-// only legacy app-issued JWTs are accepted.
+// Supabase auth verification config.
+//   SUPABASE_URL — used to fetch the project's public JWKS for ASYMMETRIC
+//     access tokens (RS256/ES256 — the modern Supabase signing keys). This is
+//     all that's needed to verify Supabase logins; no shared secret.
+//   SUPABASE_JWT_SECRET — OPTIONAL, only for legacy HS256-signed projects (and
+//     the test harness). Leave unset when using asymmetric signing keys.
+// When neither is configured the Supabase auth path is simply inert and only
+// legacy app-issued JWTs are accepted.
+const SUPABASE_URL = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.replace(/\/+$/, '') : '';
 const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
 
 // SSNs that bypass both format validation and the dupe check (for testing).
@@ -636,16 +642,59 @@ const requireAdmin = (request, response) => {
   return false;
 };
 
-// Verifies a Supabase access token (HS256). Returns the claims
-// ({ sub, email, app_metadata, ... }) or null. No response side effects.
-const verifySupabaseToken = (token) => {
-  if (!SUPABASE_JWT_SECRET) return null;
+// JWKS cache for asymmetric Supabase access tokens: kid -> public KeyObject.
+// Populated from {SUPABASE_URL}/auth/v1/.well-known/jwks.json. Refreshed at
+// startup and lazily on a kid miss (key rotation).
+const supabaseJwks = new Map();
+let supabaseJwksLoading = null;
+async function loadSupabaseJwks() {
+  if (!SUPABASE_URL) return;
   try {
-    const payload = jwt.verify(token, SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
-    if (payload && payload.aud === 'authenticated' && payload.sub) return payload;
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
+    if (!res.ok) return;
+    const body = await res.json();
+    if (!body || !Array.isArray(body.keys)) return;
+    supabaseJwks.clear();
+    for (const jwk of body.keys) {
+      if (!jwk.kid) continue;
+      try { supabaseJwks.set(jwk.kid, crypto.createPublicKey({ key: jwk, format: 'jwk' })); } catch (_) { /* skip bad key */ }
+    }
   } catch (_) {
-    // not a Supabase token
+    // network/parse issue — keep whatever is cached
   }
+}
+// Best-effort warm at startup; verification refreshes on a kid miss.
+loadSupabaseJwks();
+
+// Verifies a Supabase access token and returns its claims
+// ({ sub, email, app_metadata, ... }) or null. No response side effects.
+// Asymmetric tokens (RS256/ES256) verify against the project JWKS — no secret.
+// HS256 tokens verify against SUPABASE_JWT_SECRET when set (legacy + tests).
+const verifySupabaseToken = (token) => {
+  let decoded;
+  try { decoded = jwt.decode(token, { complete: true }); } catch (_) { return null; }
+  if (!decoded || !decoded.header) return null;
+  const { alg, kid } = decoded.header;
+  let payload;
+  try {
+    if (alg === 'HS256') {
+      if (!SUPABASE_JWT_SECRET) return null;
+      payload = jwt.verify(token, SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
+    } else {
+      const key = kid && supabaseJwks.get(kid);
+      if (!key) {
+        // Unknown key id — refresh JWKS for next time, reject this token now.
+        if (SUPABASE_URL && !supabaseJwksLoading) {
+          supabaseJwksLoading = loadSupabaseJwks().finally(() => { supabaseJwksLoading = null; });
+        }
+        return null;
+      }
+      payload = jwt.verify(token, key, { algorithms: ['RS256', 'ES256'] });
+    }
+  } catch (_) {
+    return null;
+  }
+  if (payload && payload.aud === 'authenticated' && payload.sub) return payload;
   return null;
 };
 
@@ -3936,4 +3985,6 @@ module.exports = {
   // Eligibility data
   ELIGIBLE_STATES,
   STATE_TIMEZONES,
+  // Supabase JWKS loader — exported so tests can warm the cache deterministically
+  loadSupabaseJwks,
 };
