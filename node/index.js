@@ -3707,78 +3707,39 @@ async function tryAchCharge(row, amount, attemptLabel) {
   }
 }
 
-// Returns { paid, processing, failed, pi, method, message } describing
-// the result. Caller is responsible for updating DB state.
-async function chargeRepaymentWithCascade(row, amount) {
-  const attemptCount = row.repayment_attempt_count || 0;
+// Single-attempt charge. NO retry logic. If card is on file we try card
+// first; if card fails (or there's no card) we try ACH as a same-attempt
+// fallback. Either succeeds, returns processing, or fails — no further
+// attempts, no cascade, no day-2 / day-3 retries.
+//
+// Caller is responsible for marking the application as repayment_failed
+// when this returns { failed: true }.
+//
+// Retry logic was removed per product direction — failed payments stay
+// failed. Admin can still click 'Collect repayment now' to fire another
+// single attempt manually if they choose, but the cron never auto-retries.
+async function chargeRepaymentOnce(row, amount) {
   const hasCard = !!row.stripe_card_pm_id;
 
-  // ── Attempt 1 (Day 0): card-then-ACH waterfall ──────────────────
-  if (attemptCount === 0) {
-    // Try card first IF we have one. Skip-card users go straight to ACH.
-    if (hasCard) {
-      const cardResult = await tryCardCharge(row, amount, 'attempt 1 — card');
-      if (cardResult.ok) {
-        return { paid: true, pi: cardResult.pi, method: 'card', message: `Card charged successfully.` };
-      }
-    }
-    // No card OR card failed — try ACH same-day (no balance check).
-    const achResult = await tryAchCharge(row, amount, hasCard ? 'attempt 1 — ACH fallback (card failed)' : 'attempt 1 — ACH (no card on file)');
-    if (achResult.ok && achResult.status === 'succeeded') {
-      return { paid: true, pi: achResult.pi, method: 'ach', message: hasCard ? `Card failed; ACH succeeded.` : `ACH succeeded.` };
-    }
-    if (achResult.ok && achResult.status === 'processing') {
-      return { processing: true, pi: achResult.pi, method: 'ach', message: hasCard ? `Card failed; ACH same-day initiated.` : `ACH same-day initiated.` };
-    }
-    return { failed: true, reason: hasCard ? `Card and ACH both failed.` : `ACH failed: ${achResult.reason}` };
-  }
-
-  // ── Attempts 2-4 (Days 1-3): card-only retries, ONLY if card exists ──
-  // Skip-card users branch straight to balance-check ACH on attempts 1+.
-  if (hasCard && attemptCount >= 1 && attemptCount <= 3) {
-    const cancelResult = await cancelPendingChargeIfAny(row);
-    if (cancelResult === 'already_succeeded') {
-      return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
-    }
-    if (cancelResult === 'still_processing') {
-      return { processing: true, message: 'Prior ACH still settling — holding retries until it resolves.' };
-    }
-    const cardResult = await tryCardCharge(row, amount, `attempt ${attemptCount + 1} — card retry ${attemptCount}/3`);
+  if (hasCard) {
+    const cardResult = await tryCardCharge(row, amount, 'charge attempt — card');
     if (cardResult.ok) {
-      return { paid: true, pi: cardResult.pi, method: 'card', message: `Card retry ${attemptCount}/3 succeeded.` };
+      return { paid: true, pi: cardResult.pi, method: 'card', message: 'Card charged successfully.' };
     }
-    return { failed: true, reason: `Card retry ${attemptCount}/3 failed: ${cardResult.reason}`, error: cardResult.error };
+    // Fall through to ACH as a within-this-same-attempt fallback.
   }
 
-  // ── Attempt 5 (Day 4) for card users OR ALL retry attempts for
-  //    skip-card users: balance check + ACH same-day ──────────────
-  // For card users: this is the final stage after 3 failed card retries.
-  // For skip-card users: this is every retry attempt from attempt 1 on.
-  if ((hasCard && attemptCount === 4) || (!hasCard && attemptCount >= 1 && attemptCount <= 4)) {
-    const cancelResult = await cancelPendingChargeIfAny(row);
-    if (cancelResult === 'already_succeeded') {
-      return { paid: true, message: 'Prior ACH actually settled — marking as paid.' };
-    }
-    if (cancelResult === 'still_processing') {
-      return { processing: true, message: 'Prior ACH still settling — holding retries until it resolves.' };
-    }
-    const overdraft = await checkOverdraft(row, amount);
-    if (!overdraft.ok) {
-      return { failed: true, reason: `ACH retry skipped — ${overdraft.reason}` };
-    }
-    const labelStage = hasCard ? 'final ACH with balance check' : `ACH retry ${attemptCount}/4 with balance check`;
-    const achResult = await tryAchCharge(row, amount, `attempt ${attemptCount + 1} — ${labelStage}`);
-    if (achResult.ok && achResult.status === 'succeeded') {
-      return { paid: true, pi: achResult.pi, method: 'ach', message: `ACH (balance-checked) succeeded.` };
-    }
-    if (achResult.ok && achResult.status === 'processing') {
-      return { processing: true, pi: achResult.pi, method: 'ach', message: `ACH (balance-checked) initiated.` };
-    }
-    return { failed: true, reason: `ACH attempt failed: ${achResult.reason}`, error: achResult.error };
+  const achResult = await tryAchCharge(
+    row, amount,
+    hasCard ? 'charge attempt — ACH fallback (card failed)' : 'charge attempt — ACH (no card on file)'
+  );
+  if (achResult.ok && achResult.status === 'succeeded') {
+    return { paid: true, pi: achResult.pi, method: 'ach', message: hasCard ? 'Card failed; ACH succeeded.' : 'ACH succeeded.' };
   }
-
-  // attempt >= 5 means we've exhausted the cascade.
-  return { failed: true, reason: `All 5 collection attempts exhausted.`, terminal: true };
+  if (achResult.ok && achResult.status === 'processing') {
+    return { processing: true, pi: achResult.pi, method: 'ach', message: hasCard ? 'Card failed; ACH initiated (pending settlement).' : 'ACH initiated (pending settlement).' };
+  }
+  return { failed: true, reason: hasCard ? 'Card and ACH both failed.' : `ACH failed: ${achResult.reason}` };
 }
 
 // Force the user's membership subscription to bill RIGHT NOW.
@@ -3828,14 +3789,13 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     }
 
     const amount = computeChargeAmountCents(row);
-    console.log('[charge] computed amount', { application_id: row.id, amount_cents: amount, attempt_count: row.repayment_attempt_count });
+    console.log('[charge] computed amount', { application_id: row.id, amount_cents: amount });
 
-    // Run the card→ACH cascade. Each call to the cascade represents ONE
-    // cron-tick / admin-button click; the attempt counter is bumped
-    // after the call resolves.
-    const result = await chargeRepaymentWithCascade(row, amount);
+    // Single-attempt charge — no retry cascade. Admin can click again
+    // manually if they want another shot, but each click is just one
+    // attempt. Failure marks the application as repayment_failed.
+    const result = await chargeRepaymentOnce(row, amount);
     await db.bumpRepaymentAttemptCount(row.id);
-    const newAttemptCount = (row.repayment_attempt_count || 0) + 1;
 
     if (result.paid) {
       await db.markRepaymentPaid(row.id);
@@ -3849,19 +3809,17 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     }
     if (result.processing) {
       if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
-      await db.addMessage(row.id, 'system', `${result.message} (attempt ${newAttemptCount}/5)`);
+      await db.addMessage(row.id, 'system', `${result.message} ACH typically settles in 3-5 business days.`);
       await forceBillSubscriptionNow(row);
       const updated = await db.getApplicationById(request.params.id);
       return response.json({ application: db.publicApp(updated), status: 'processing' });
     }
-    // result.failed
-    if (result.terminal || newAttemptCount >= 5) {
-      await db.updateApplicationStatus(row.id, 'repayment_failed');
-      await db.addMessage(row.id, 'system', `Payment failed after ${newAttemptCount} attempts. ${result.reason}. Account locked from new advances.`);
-      return response.status(402).json({ error: { error_message: result.reason }, attempt: newAttemptCount, terminal: true });
-    }
-    await db.addMessage(row.id, 'system', `Payment attempt ${newAttemptCount}/5 failed. ${result.reason}. We'll retry tomorrow.`);
-    return response.status(402).json({ error: { error_message: result.reason }, attempt: newAttemptCount });
+    // result.failed → mark as repayment_failed immediately. No automatic
+    // retries. Admin can investigate, talk to the user, and click charge
+    // again manually if appropriate.
+    await db.updateApplicationStatus(row.id, 'repayment_failed');
+    await db.addMessage(row.id, 'system', `Payment failed: ${result.reason}. Retries are disabled — admin must intervene to try again.`);
+    return response.status(402).json({ error: { error_message: result.reason } });
   } catch (err) {
     next(err);
   }
@@ -3939,17 +3897,11 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
       const hasAnyPm = !!(row.stripe_card_pm_id || row.stripe_payment_method_id);
       if (!hasAnyPm) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
       try {
-        const result = await chargeRepaymentWithCascade(row, amount);
-        // Only bump the attempt counter if we ACTUALLY tried to charge.
-        // The cascade may return 'processing' from cancelPendingChargeIfAny
-        // when a previous ACH is still in flight — that's not an attempt,
-        // we just held off. Bumping in that case would chew through the
-        // 5-attempt cap while doing nothing.
-        const justHeldForPriorAch = result.processing && /still settling/.test(result.message || '');
-        if (!justHeldForPriorAch) {
-          await db.bumpRepaymentAttemptCount(row.id);
-        }
-        const newAttemptCount = (row.repayment_attempt_count || 0) + (justHeldForPriorAch ? 0 : 1);
+        // Single attempt — NO retry logic. If it fails, mark as
+        // repayment_failed and move on. Admin can manually re-charge
+        // via /admin/applications/:id/charge if they choose to.
+        const result = await chargeRepaymentOnce(row, amount);
+        await db.bumpRepaymentAttemptCount(row.id);
 
         if (result.paid) {
           await db.markRepaymentPaid(row.id);
@@ -3963,18 +3915,14 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
           results.push({ id: row.id, name: row.name, status: 'paid', method: result.method });
         } else if (result.processing) {
           if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
-          await db.addMessage(row.id, 'system', `${result.message} (attempt ${newAttemptCount}/5)`);
+          await db.addMessage(row.id, 'system', `${result.message} ACH typically settles in 3-5 business days.`);
           await forceBillSubscriptionNow(row);
           results.push({ id: row.id, name: row.name, status: 'processing', method: result.method });
         } else {
-          // failed
-          if (result.terminal || newAttemptCount >= 5) {
-            await db.updateApplicationStatus(row.id, 'repayment_failed');
-            await db.addMessage(row.id, 'system', `Payment failed after ${newAttemptCount} attempts. ${result.reason}. Account locked.`);
-          } else {
-            await db.addMessage(row.id, 'system', `Attempt ${newAttemptCount}/5 failed: ${result.reason}. Retrying tomorrow.`);
-          }
-          results.push({ id: row.id, name: row.name, status: 'failed', reason: result.reason, attempt: newAttemptCount });
+          // failed → mark immediately. No retry tomorrow.
+          await db.updateApplicationStatus(row.id, 'repayment_failed');
+          await db.addMessage(row.id, 'system', `Payment failed: ${result.reason}. Retries are disabled — admin must intervene.`);
+          results.push({ id: row.id, name: row.name, status: 'failed', reason: result.reason });
         }
       } catch (err) {
         const msg = err.message || 'Unknown error';
