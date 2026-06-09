@@ -831,7 +831,7 @@ const CustomerApp = () => {
       setError("Please select which other cash advance apps you use (or choose 'No' above).");
       return;
     }
-    if (form.password !== form.confirmPassword) {
+    if (!isSupabaseConfigured && form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
@@ -2028,19 +2028,25 @@ const CustomerApp = () => {
                     }}
                   />
                 </label>
-                <label className={styles.bldField}>
-                  <span className={styles.bldLabel}>Password</span>
-                  <input className={styles.bldInput} required type="password" minLength={6} placeholder="Min. 6 characters"
-                    autoComplete="new-password"
-                    value={form.password}
-                    onChange={(event) => setForm({ ...form, password: event.target.value })} />
-                </label>
-                <label className={styles.bldField}>
-                  <span className={styles.bldLabel}>Confirm</span>
-                  <input className={styles.bldInput} required type="password" autoComplete="new-password"
-                    value={form.confirmPassword}
-                    onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
-                </label>
+                {/* With Supabase, the user is already authenticated (email or
+                    Google) before reaching this form — no password to collect. */}
+                {!isSupabaseConfigured && (
+                  <>
+                    <label className={styles.bldField}>
+                      <span className={styles.bldLabel}>Password</span>
+                      <input className={styles.bldInput} required type="password" minLength={6} placeholder="Min. 6 characters"
+                        autoComplete="new-password"
+                        value={form.password}
+                        onChange={(event) => setForm({ ...form, password: event.target.value })} />
+                    </label>
+                    <label className={styles.bldField}>
+                      <span className={styles.bldLabel}>Confirm</span>
+                      <input className={styles.bldInput} required type="password" autoComplete="new-password"
+                        value={form.confirmPassword}
+                        onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
+                    </label>
+                  </>
+                )}
               </div>
             </motion.div>
 
