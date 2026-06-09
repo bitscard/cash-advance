@@ -3,9 +3,14 @@
 // session up reactively (useSupabaseAccessToken) and switches its API calls to
 // the Supabase bearer. Renders nothing when Supabase isn't configured, so the
 // legacy login/signup screens are unaffected until the project is wired up.
+//
+// Styled with the app's bld* design system so it matches the legacy login form
+// (the bld* button/input rules are scoped under .bldPage, which is the ancestor
+// on the /loan and signup screens where this renders).
 
 import React, { useState } from "react";
 import { supabase, isSupabaseConfigured } from "./supabase";
+import styles from "./App.module.css";
 
 type Props = {
   // Where Google OAuth returns to after the redirect round-trip.
@@ -56,60 +61,84 @@ const SupabaseAuthPanel: React.FC<Props> = ({ redirectTo, heading }) => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-      {heading && <h2 style={{ margin: 0 }}>{heading}</h2>}
+    <div>
+      {heading && <p className={styles.bldSectionLabel}>{heading}</p>}
 
+      {/* Google — same pill shape as the primary button, white treatment. */}
       <button
         type="button"
         onClick={withGoogle}
+        className={styles.bldBtn}
         style={{
-          padding: "0.7rem 1rem",
-          fontSize: "1.3rem",
-          fontWeight: 600,
-          border: "1.5px solid var(--border)",
-          borderRadius: "var(--r-sm)",
-          background: "var(--white)",
-          color: "var(--ink)",
-          cursor: "pointer",
+          background: "#fff",
+          color: "#111",
+          textTransform: "none",
+          letterSpacing: "-0.005em",
         }}
       >
         Continue with Google
       </button>
 
-      <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "1.1rem" }}>or</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          margin: "18px 0",
+          color: "var(--bld-muted, rgba(255,255,255,0.5))",
+          fontSize: 13,
+        }}
+      >
+        <span style={{ flex: 1, height: 1, background: "currentColor", opacity: 0.25 }} />
+        or
+        <span style={{ flex: 1, height: 1, background: "currentColor", opacity: 0.25 }} />
+      </div>
 
-      <form onSubmit={withEmail} style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-        <input
-          type="email"
-          required
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-        />
-        <input
-          type="password"
-          required
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-        />
-        <button type="submit" disabled={busy}>
-          {busy ? "…" : mode === "signup" ? "Create account" : "Sign in"}
+      <form onSubmit={withEmail}>
+        <label className={styles.bldField}>
+          <span className={styles.bldLabel}>Email</span>
+          <input
+            required
+            type="email"
+            autoComplete="email"
+            value={email}
+            placeholder="you@example.com"
+            onChange={(e) => setEmail(e.target.value)}
+            className={styles.bldInput}
+          />
+        </label>
+        <label className={styles.bldField}>
+          <span className={styles.bldLabel}>Password</span>
+          <input
+            required
+            type="password"
+            autoComplete={mode === "signup" ? "new-password" : "current-password"}
+            value={password}
+            placeholder="Your password"
+            onChange={(e) => setPassword(e.target.value)}
+            className={styles.bldInput}
+          />
+        </label>
+
+        {error && <p className={styles.bldError}>{error}</p>}
+        {notice && <p className={styles.bldFootnote}>{notice}</p>}
+
+        <button type="submit" disabled={busy} className={styles.bldBtn} style={{ marginTop: 16 }}>
+          {busy ? "…" : mode === "signup" ? <>Create account <span aria-hidden="true">→</span></> : <>Sign in <span aria-hidden="true">→</span></>}
         </button>
       </form>
 
-      <button
-        type="button"
-        onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setNotice(null); }}
-        style={{ background: "none", border: "none", color: "var(--brand)", cursor: "pointer", fontSize: "1.1rem" }}
-      >
-        {mode === "signup" ? "Have an account? Sign in" : "New here? Create an account"}
-      </button>
-
-      {error && <p style={{ color: "var(--danger, #c00)", fontSize: "1.1rem", margin: 0 }}>{error}</p>}
-      {notice && <p style={{ color: "var(--muted)", fontSize: "1.1rem", margin: 0 }}>{notice}</p>}
+      <p className={styles.bldFootnote}>
+        {mode === "signup" ? "Have an account? " : "New here? "}
+        <button
+          type="button"
+          className={styles.bldFootLink}
+          style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit" }}
+          onClick={() => { setMode(mode === "signup" ? "signin" : "signup"); setError(null); setNotice(null); }}
+        >
+          {mode === "signup" ? "Sign in" : "Create an account"}
+        </button>
+      </p>
     </div>
   );
 };

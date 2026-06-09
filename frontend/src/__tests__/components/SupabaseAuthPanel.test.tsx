@@ -1,6 +1,6 @@
 // Phase 6 — the Supabase auth surface. The real ./supabase module is mocked
 // so no network/env is needed: we assert the panel wires its buttons to the
-// Supabase client and stays inert when Supabase isn't configured.
+// Supabase client.
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -28,8 +28,7 @@ beforeEach(() => {
 describe("SupabaseAuthPanel", () => {
   test("renders Google + email/password and triggers OAuth", () => {
     render(<SupabaseAuthPanel redirectTo="https://app.test/loan" />);
-    const google = screen.getByText("Continue with Google");
-    fireEvent.click(google);
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
     expect(signInWithOAuth).toHaveBeenCalledWith({
       provider: "google",
       options: { redirectTo: "https://app.test/loan" },
@@ -38,9 +37,9 @@ describe("SupabaseAuthPanel", () => {
 
   test("submits email/password sign-in", async () => {
     render(<SupabaseAuthPanel />);
-    fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "a@b.com" } });
-    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "pw123456" } });
-    fireEvent.click(screen.getByText("Sign in"));
+    fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByPlaceholderText("Your password"), { target: { value: "pw123456" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
     await waitFor(() =>
       expect(signInWithPassword).toHaveBeenCalledWith({ email: "a@b.com", password: "pw123456" }),
     );
@@ -48,10 +47,12 @@ describe("SupabaseAuthPanel", () => {
 
   test("switches to sign-up mode and calls signUp", async () => {
     render(<SupabaseAuthPanel />);
-    fireEvent.click(screen.getByText("New here? Create an account"));
-    fireEvent.change(screen.getByPlaceholderText("Email"), { target: { value: "c@d.com" } });
-    fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "pw123456" } });
-    fireEvent.click(screen.getByText("Create account"));
+    // In sign-in mode the toggle reads "Create an account".
+    fireEvent.click(screen.getByRole("button", { name: "Create an account" }));
+    fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "c@d.com" } });
+    fireEvent.change(screen.getByPlaceholderText("Your password"), { target: { value: "pw123456" } });
+    // Now the submit button reads "Create account →".
+    fireEvent.click(screen.getByRole("button", { name: /create account/i }));
     await waitFor(() =>
       expect(signUp).toHaveBeenCalledWith({ email: "c@d.com", password: "pw123456" }),
     );
