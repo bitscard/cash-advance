@@ -11,7 +11,10 @@ CREATE TABLE IF NOT EXISTS applications (
   status          TEXT        NOT NULL DEFAULT 'intake',
   access_token    TEXT,
   item_id         TEXT,
-  password_hash   TEXT        NOT NULL,
+  -- Nullable: Supabase-created accounts have no local password.
+  password_hash   TEXT,
+  -- Supabase Auth user id (auth.users.id / access-token 'sub') that owns this row.
+  supabase_user_id UUID UNIQUE,
   repayment_amount     DECIMAL(10,2),
   repayment_due_date   DATE,
   repayment_note       TEXT,

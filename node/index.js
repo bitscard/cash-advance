@@ -10,10 +10,8 @@ const jwt = require('jsonwebtoken');
 const db = require('./db');
 const connectCustom = require('./stripeConnectCustom');
 const util = require('util');
-const { v4: uuidv4 } = require('uuid');
 const express = require('express');
 const bodyParser = require('body-parser');
-const moment = require('moment');
 const cors = require('cors');
 
 const APP_PORT = process.env.APP_PORT || 8000;
@@ -21,7 +19,20 @@ const PLAID_CLIENT_ID = process.env.PLAID_CLIENT_ID;
 const PLAID_SECRET = process.env.PLAID_SECRET;
 const PLAID_ENV = process.env.PLAID_ENV || 'sandbox';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required — set it in the environment. Refusing to start.');
+}
+// Supabase auth verification config.
+//   SUPABASE_URL — used to fetch the project's public JWKS for ASYMMETRIC
+//     access tokens (RS256/ES256 — the modern Supabase signing keys). This is
+//     all that's needed to verify Supabase logins; no shared secret.
+//   SUPABASE_JWT_SECRET — OPTIONAL, only for legacy HS256-signed projects (and
+//     the test harness). Leave unset when using asymmetric signing keys.
+// When neither is configured the Supabase auth path is simply inert and only
+// legacy app-issued JWTs are accepted.
+const SUPABASE_URL = process.env.SUPABASE_URL ? process.env.SUPABASE_URL.replace(/\/+$/, '') : '';
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
 
 // SSNs that bypass both format validation and the dupe check (for testing).
 // Add your own SSN here: TEST_SSNS=123456789,987654321 in .env (dashes optional).
@@ -47,8 +58,6 @@ function isPlausibleSSN(ssn) {
   return true;
 }
 
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 function generateReferralSlug(name) {
   return (name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
 }
@@ -62,53 +71,6 @@ async function makeUniqueReferralCode(name) {
   }
   return `${base}${Math.random().toString(36).slice(2, 6)}`;
 }
-
-// PLAID_PRODUCTS is a comma-separated list of products to use when initializing
-// Link. Note that this list must contain 'assets' in order for the app to be
-// able to create and retrieve asset reports.
-const PLAID_PRODUCTS = (process.env.PLAID_PRODUCTS || Products.Transactions).split(
-  ',',
-);
-
-// PLAID_COUNTRY_CODES is a comma-separated list of countries for which users
-// will be able to select institutions from.
-const PLAID_COUNTRY_CODES = (process.env.PLAID_COUNTRY_CODES || 'US').split(
-  ',',
-);
-
-// Parameters used for the OAuth redirect Link flow.
-//
-// Set PLAID_REDIRECT_URI to 'http://localhost:3000'
-// The OAuth redirect flow requires an endpoint on the developer's website
-// that the bank website should redirect to. You will need to configure
-// this redirect URI for your client ID through the Plaid developer dashboard
-// at https://dashboard.plaid.com/team/api.
-const PLAID_REDIRECT_URI = process.env.PLAID_REDIRECT_URI || '';
-
-// Parameter used for OAuth in Android. This should be the package name of your app,
-// e.g. com.plaid.linksample
-const PLAID_ANDROID_PACKAGE_NAME = process.env.PLAID_ANDROID_PACKAGE_NAME || '';
-
-// Parameter used for Signal ruleset key
-const SIGNAL_RULESET_KEY = process.env.SIGNAL_RULESET_KEY || '';
-
-// We store the access_token in memory - in production, store it in a secure
-// persistent data store
-let ACCESS_TOKEN = null;
-let USER_TOKEN = null;
-let USER_ID = null;
-let PUBLIC_TOKEN = null;
-let ITEM_ID = null;
-let ACCOUNT_ID = null;
-// The payment_id is only relevant for the UK/EU Payment Initiation product.
-// We store the payment_id in memory - in production, store it in a secure
-// persistent data store along with the Payment metadata, such as userId .
-let PAYMENT_ID = null;
-// The transfer_id and authorization_id are only relevant for Transfer ACH product.
-// We store the transfer_id in memory - in production, store it in a secure
-// persistent data store
-let AUTHORIZATION_ID = null;
-let TRANSFER_ID = null;
 
 // Initialize the Plaid client
 // Find your API keys in the Dashboard (https://dashboard.plaid.com/account/keys)
@@ -633,37 +595,45 @@ app.post('/api/waitlist', async function (request, response, next) {
   } catch (err) { next(err); }
 });
 
-app.post('/api/info', function (request, response, next) {
-  response.json({
-    item_id: ITEM_ID,
-    access_token: ACCESS_TOKEN,
-    products: PLAID_PRODUCTS,
-  });
-});
-
-const requireAdmin = (request, response) => {
-  // Two paths to admin access:
-  //   1. Legacy: x-admin-token header matching ADMIN_TOKEN env var.
-  //      Used by the daily cron job (GitHub Actions) and by team
-  //      members who haven't created an admin user account yet.
-  //   2. JWT: Authorization: Bearer <jwt> issued by /admin-auth/login.
-  //      Per-user login system, restricted to @getbits.app emails.
-  // Either path grants access. Fail-CLOSED if NEITHER is configured/
-  // valid — the safer mode when env vars are accidentally cleared.
+// Predicate (no response side effects) — true if the request carries valid
+// admin credentials via either path:
+//   1. Legacy: x-admin-token header matching ADMIN_TOKEN env var.
+//      Used by the daily cron job (GitHub Actions) and by team members who
+//      haven't created an admin user account yet.
+//   2. JWT: Authorization: Bearer <jwt> issued by /admin-auth/login.
+//      Per-user login system, restricted to @getbits.app emails.
+const isAdminRequest = (request) => {
   if (ADMIN_TOKEN && request.headers['x-admin-token'] === ADMIN_TOKEN) {
     return true;
   }
   const authHeader = request.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    // Supabase admin: a non-user-editable app_metadata.role='admin' claim,
+    // double-gated to the @getbits.app domain.
+    const supa = verifySupabaseToken(token);
+    if (supa && supa.app_metadata && supa.app_metadata.role === 'admin'
+        && typeof supa.email === 'string'
+        && supa.email.toLowerCase().endsWith('@' + ADMIN_EMAIL_DOMAIN)) {
+      return true;
+    }
+    // Legacy admin JWT (transition).
     try {
-      const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+      const payload = jwt.verify(token, JWT_SECRET);
       if (payload && payload.kind === 'admin' && payload.adminId) {
         return true;
       }
     } catch (_) {
-      // Fall through to 401 below
+      // not a valid admin token
     }
   }
+  return false;
+};
+
+const requireAdmin = (request, response) => {
+  // Either admin path grants access. Fail-CLOSED if NEITHER is configured/
+  // valid — the safer mode when env vars are accidentally cleared.
+  if (isAdminRequest(request)) return true;
   if (!ADMIN_TOKEN) {
     response.status(500).json({ error: { error_message: 'Admin auth is not configured on the server.' } });
     return false;
@@ -672,18 +642,111 @@ const requireAdmin = (request, response) => {
   return false;
 };
 
-const requireAuth = (request, response) => {
+// JWKS cache for asymmetric Supabase access tokens: kid -> public KeyObject.
+// Populated from {SUPABASE_URL}/auth/v1/.well-known/jwks.json. Refreshed at
+// startup and lazily on a kid miss (key rotation).
+const supabaseJwks = new Map();
+let supabaseJwksLoading = null;
+async function loadSupabaseJwks() {
+  if (!SUPABASE_URL) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/.well-known/jwks.json`);
+    if (!res.ok) return;
+    const body = await res.json();
+    if (!body || !Array.isArray(body.keys)) return;
+    supabaseJwks.clear();
+    for (const jwk of body.keys) {
+      if (!jwk.kid) continue;
+      try { supabaseJwks.set(jwk.kid, crypto.createPublicKey({ key: jwk, format: 'jwk' })); } catch (_) { /* skip bad key */ }
+    }
+  } catch (_) {
+    // network/parse issue — keep whatever is cached
+  }
+}
+// Best-effort warm at startup; verification refreshes on a kid miss.
+loadSupabaseJwks();
+
+// Verifies a Supabase access token and returns its claims
+// ({ sub, email, app_metadata, ... }) or null. No response side effects.
+// Asymmetric tokens (RS256/ES256) verify against the project JWKS — no secret.
+// HS256 tokens verify against SUPABASE_JWT_SECRET when set (legacy + tests).
+const verifySupabaseToken = (token) => {
+  let decoded;
+  try { decoded = jwt.decode(token, { complete: true }); } catch (_) { return null; }
+  if (!decoded || !decoded.header) return null;
+  const { alg, kid } = decoded.header;
+  let payload;
+  try {
+    if (alg === 'HS256') {
+      if (!SUPABASE_JWT_SECRET) return null;
+      payload = jwt.verify(token, SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
+    } else {
+      const key = kid && supabaseJwks.get(kid);
+      if (!key) {
+        // Unknown key id — refresh JWKS for next time, reject this token now.
+        if (SUPABASE_URL && !supabaseJwksLoading) {
+          supabaseJwksLoading = loadSupabaseJwks().finally(() => { supabaseJwksLoading = null; });
+        }
+        return null;
+      }
+      payload = jwt.verify(token, key, { algorithms: ['RS256', 'ES256'] });
+    }
+  } catch (_) {
+    return null;
+  }
+  if (payload && payload.aud === 'authenticated' && payload.sub) return payload;
+  return null;
+};
+
+// Authenticates a customer request via EITHER a Supabase access token (new)
+// OR a legacy app-issued JWT (transition). Always resolves to a payload that
+// carries `.applicationId` so existing ownership checks are unchanged:
+//   - Supabase: looked up by supabase_user_id, falling back to the token email
+//     and lazily backfilling the link. applicationId is null if the Supabase
+//     user has no application yet (ownership checks then 403, never 500).
+//   - Legacy: the verified { applicationId } payload.
+// Returns null after sending a 401 on failure. ASYNC — callers must await.
+const requireAuth = async (request, response) => {
   const header = request.headers['authorization'];
   if (!header || !header.startsWith('Bearer ')) {
     response.status(401).json({ error: { error_message: 'Authentication required' } });
     return null;
   }
+  const token = header.slice(7);
+
+  const supa = verifySupabaseToken(token);
+  if (supa) {
+    let app = await db.getApplicationBySupabaseUserId(supa.sub);
+    if (!app && supa.email) {
+      app = await db.getApplicationByEmail(supa.email);
+      if (app && !app.supabase_user_id) {
+        await db.linkSupabaseUser(app.id, supa.sub);
+      }
+    }
+    return { applicationId: app ? app.id : null, supabaseUserId: supa.sub, email: supa.email };
+  }
+
   try {
-    return jwt.verify(header.slice(7), JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET);
   } catch {
     response.status(401).json({ error: { error_message: 'Invalid or expired token' } });
     return null;
   }
+};
+
+// Grants access if the caller is an admin OR the customer who owns the given
+// application. Sends the appropriate 401/403 and returns false on failure.
+// Used by the customer-facing application/messages reads, which the admin
+// panel also consumes via the same routes.
+const requireOwnerOrAdmin = async (request, response, applicationId) => {
+  if (isAdminRequest(request)) return true;
+  const payload = await requireAuth(request, response);
+  if (!payload) return false;
+  if (payload.applicationId !== applicationId) {
+    response.status(403).json({ error: { error_message: 'Forbidden' } });
+    return false;
+  }
+  return true;
 };
 
 // ── Admin user auth (multi-user login system) ──────────────────────────
@@ -802,8 +865,14 @@ app.get('/api/advance/referral/:code', async function (request, response, next) 
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances, address_line1, address_city, address_postal_code } = request.body;
-    if (!password || password.length < 6) {
+    const { name, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances, address_line1, address_city, address_postal_code } = request.body;
+    // Auth mode: a Supabase session (new) carries identity in the access token;
+    // legacy signups send an email + password in the body. The token email is
+    // authoritative when present — never trust body.email for a Supabase user.
+    const authHeader = request.headers['authorization'];
+    const supaUser = authHeader && authHeader.startsWith('Bearer ') ? verifySupabaseToken(authHeader.slice(7)) : null;
+    const email = supaUser ? supaUser.email : request.body.email;
+    if (!supaUser && (!password || password.length < 6)) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
     // Phone: must be a valid US number per NANP rules. Defense-in-depth
@@ -886,6 +955,14 @@ app.post('/api/advance/applications', async function (request, response, next) {
       }
     }
 
+    // One application per Supabase user.
+    if (supaUser) {
+      const existingSupa = await db.getApplicationBySupabaseUserId(supaUser.sub);
+      if (existingSupa) {
+        return response.status(409).json({ error: { error_message: 'An application already exists for this account.' } });
+      }
+    }
+
     // Validate referral code if provided
     let referredBy = null;
     let earlyAccess = false;
@@ -905,7 +982,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
 
     // Store primary source fields on applications row for backwards compat
     const primary = income_sources[0];
-    const password_hash = await bcrypt.hash(password, 10);
+    const password_hash = supaUser ? null : await bcrypt.hash(password, 10);
     const newReferralCode = await makeUniqueReferralCode(name || '');
     const row = await db.createApplication({
       name: name || '', email: email || '', phone: phone || '',
@@ -921,6 +998,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
       referred_by: referredBy,
       uses_other_advances,
       other_advances,
+      supabase_user_id: supaUser ? supaUser.sub : null,
     });
     // Save address if provided (required for Connect Custom KYC flow,
     // optional otherwise — backend tolerates nulls).
@@ -939,9 +1017,14 @@ app.post('/api/advance/applications', async function (request, response, next) {
     // Mailchimp can still target them separately if you set up a waitlist drip.
     addToMailchimp(name, email, state, eligibleOnSignup ? ['welcome'] : ['welcome', 'waitlist'])
       .catch(err => console.log('[mailchimp welcome] error:', err.message));
-    const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
     const updatedRow = await db.getApplicationById(row.id);
-    response.json({ application: db.publicApp(updatedRow), token });
+    if (supaUser) {
+      // Client already holds the Supabase session; no legacy token to mint.
+      response.json({ application: db.publicApp(updatedRow) });
+    } else {
+      const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
+      response.json({ application: db.publicApp(updatedRow), token });
+    }
   } catch (err) {
     if (err.code === '23505') {
       return response.status(409).json({ error: { error_message: 'An application with this email already exists. Please log in.' } });
@@ -1013,6 +1096,7 @@ function getOfferExpiresAt(date, state) {
 }
 
 app.get('/api/advance/applications/:id', async function (request, response, next) {
+  if (!(await requireOwnerOrAdmin(request, response, request.params.id))) return;
   try {
     let row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -1026,6 +1110,7 @@ app.get('/api/advance/applications/:id', async function (request, response, next
 });
 
 app.get('/api/advance/applications/:id/messages', async function (request, response, next) {
+  if (!(await requireOwnerOrAdmin(request, response, request.params.id))) return;
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -1035,12 +1120,22 @@ app.get('/api/advance/applications/:id/messages', async function (request, respo
 });
 
 app.post('/api/advance/applications/:id/messages', async function (request, response, next) {
+  const sender = request.body.sender === 'admin' ? 'admin' : 'customer';
+  // Admin messages require admin auth; customer messages require the caller to
+  // own the application they're posting to.
+  if (sender === 'admin') {
+    if (!requireAdmin(request, response)) return;
+  } else {
+    const payload = await requireAuth(request, response);
+    if (!payload) return;
+    if (payload.applicationId !== request.params.id) {
+      return response.status(403).json({ error: { error_message: 'Forbidden' } });
+    }
+  }
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
     const text = String(request.body.text || '').trim();
-    const sender = request.body.sender === 'admin' ? 'admin' : 'customer';
-    if (sender === 'admin' && !requireAdmin(request, response)) return;
     if (!text) return response.status(400).json({ error: { error_message: 'Message text is required' } });
     const message = await db.addMessage(row.id, sender, text);
     response.json({ message });
@@ -1050,7 +1145,7 @@ app.post('/api/advance/applications/:id/messages', async function (request, resp
 // ── Plaid — bank verification ─────────────────────────────────────────────────
 
 app.post('/api/advance/applications/:id/plaid/link-token', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1091,7 +1186,7 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
 // Legacy iframe-based flow — exchange public_token directly. Kept for any
 // in-flight applications that still use the standard Link integration.
 app.post('/api/advance/applications/:id/plaid/exchange-token', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1122,7 +1217,7 @@ app.post('/api/advance/applications/:id/plaid/exchange-token', async function (r
 // linkTokenGet, find the public_token, exchange it for an access_token, and
 // save it to the application.
 app.post('/api/advance/applications/:id/plaid/check-completion', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1180,7 +1275,7 @@ app.post('/api/advance/auth/login', async function (request, response, next) {
 });
 
 app.get('/api/advance/auth/me', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   try {
     const row = await db.getApplicationById(payload.applicationId);
@@ -1203,7 +1298,7 @@ const ELIGIBLE_STATES = new Set([
 ]);
 
 app.post('/api/advance/applications/:id/subscription/activate', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1355,7 +1450,7 @@ async function getMembershipProductId() {
   }
 }
 app.post('/api/advance/applications/:id/subscription/checkout-session', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1410,7 +1505,7 @@ app.post('/api/advance/applications/:id/subscription/checkout-session', async fu
 // subscription is active and flips subscription_status to 'active' so the
 // pre-bank onboarding flow can advance past the membership step.
 app.post('/api/advance/applications/:id/subscription/sync', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1444,7 +1539,7 @@ app.post('/api/advance/applications/:id/subscription/sync', async function (requ
 });
 
 app.post('/api/advance/applications/:id/delivery', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1505,7 +1600,7 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
 // we keep that as the source of truth — this endpoint can update it
 // if the user typed differently.
 app.patch('/api/advance/applications/:id/address', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1525,7 +1620,7 @@ app.patch('/api/advance/applications/:id/address', async function (request, resp
 });
 
 app.patch('/api/advance/applications/:id/payout-preference', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1565,22 +1660,6 @@ app.patch('/api/advance/applications/:id/payout-preference', async function (req
     );
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
     response.json({ application: db.publicApp(updated) });
-  } catch (err) { next(err); }
-});
-
-app.post('/api/advance/applications/:id/payoff', async function (request, response, next) {
-  const payload = requireAuth(request, response);
-  if (!payload) return;
-  if (payload.applicationId !== request.params.id) {
-    return response.status(403).json({ error: { error_message: 'Forbidden' } });
-  }
-  try {
-    const updated = await db.markRepaymentPaid(request.params.id);
-    if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
-    await db.incrementRepaymentCount(request.params.id);
-    await db.addMessage(request.params.id, 'system', 'Customer has marked repayment as paid. Pending admin confirmation.');
-    const messages = await db.getMessages(request.params.id);
-    response.json({ application: db.publicApp(updated), messages });
   } catch (err) { next(err); }
 });
 
@@ -2135,7 +2214,7 @@ app.get('/api/advance/admin/applications/:id/referrals', async function (request
 const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 
 app.post('/api/advance/applications/:id/reapply', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2203,7 +2282,7 @@ app.post('/api/advance/admin/applications/:id/repayment', async function (reques
 // ── Stripe card endpoints ──────────────────────────────────────────────────────
 
 app.post('/api/advance/applications/:id/stripe/setup-intent', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2234,7 +2313,7 @@ app.post('/api/advance/applications/:id/stripe/setup-intent', async function (re
 });
 
 app.post('/api/advance/applications/:id/stripe/save-payment-method', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2317,7 +2396,7 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
 // admin marks the application funded and the user picked ACH as payout.
 
 app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2417,7 +2496,7 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
 });
 
 app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2485,7 +2564,7 @@ app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async fu
 //       there when status='succeeded'), saves it as the chargeable PM
 //       AND extracts the underlying FC account id for transaction reads
 app.post('/api/advance/applications/:id/stripe/fc/create-session', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2575,7 +2654,7 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2623,7 +2702,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/native/complete', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2819,7 +2898,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
 // user / their engineer can see exactly what Stripe is reporting,
 // without needing access to Render logs or Stripe Dashboard.
 app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2961,7 +3040,7 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/client-event', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2987,7 +3066,7 @@ app.post('/api/advance/applications/:id/stripe/fc/client-event', async function 
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/complete', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -3808,6 +3887,9 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
 
         if (result.paid) {
           await db.markRepaymentPaid(row.id);
+          // Tier progression ($25→$200 on reapply) advances only on a real
+          // collected repayment — same as the admin manual /charge path.
+          await db.incrementRepaymentCount(row.id);
           await db.resetRepaymentAttemptCount(row.id);
           if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
           await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected via ${result.method}.`);
@@ -3839,531 +3921,6 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
   } catch (err) { next(err); }
 });
 
-
-
-// Create a link token with configs which we can then use to initialize Plaid Link client-side.
-// See https://plaid.com/docs/#create-link-token
-app.post('/api/create_link_token', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const configs = {
-        user: {
-          // This should correspond to a unique id for the current user.
-          client_user_id: 'user-id',
-        },
-        client_name: 'Plaid Quickstart',
-        products: PLAID_PRODUCTS,
-        country_codes: PLAID_COUNTRY_CODES,
-        language: 'en',
-      };
-
-      if (PLAID_REDIRECT_URI !== '') {
-        configs.redirect_uri = PLAID_REDIRECT_URI;
-      }
-
-      if (PLAID_ANDROID_PACKAGE_NAME !== '') {
-        configs.android_package_name = PLAID_ANDROID_PACKAGE_NAME;
-      }
-      if (PLAID_PRODUCTS.includes(Products.Statements)) {
-        const statementConfig = {
-          end_date: moment().format('YYYY-MM-DD'),
-          start_date: moment().subtract(30, 'days').format('YYYY-MM-DD'),
-        }
-        configs.statements = statementConfig;
-      }
-
-      if (PLAID_PRODUCTS.some(product => product.startsWith("cra_"))) {
-        // Use user_token if available, otherwise use user_id
-        if (USER_TOKEN) {
-          configs.user_token = USER_TOKEN;
-          // Keep user object when using user_token
-        } else if (USER_ID) {
-          configs.user_id = USER_ID;
-          // Remove user object when using user_id
-          delete configs.user;
-        }
-        configs.cra_options = {
-          days_requested: 60
-        };
-        configs.consumer_report_permissible_purpose = 'ACCOUNT_REVIEW_CREDIT';
-      }
-      const createTokenResponse = await client.linkTokenCreate(configs);
-      prettyPrintResponse(createTokenResponse);
-      response.json(createTokenResponse.data);
-    })
-    .catch(next);
-});
-
-// Create a user token which can be used for Plaid Check, Income, or Multi-Item link flows
-// https://plaid.com/docs/api/users/#usercreate
-app.post('/api/create_user_token', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-
-      const userRequest = {
-        // Typically this will be a user ID number from your application.
-        client_user_id: 'user_' + uuidv4()
-      }
-
-      if (PLAID_PRODUCTS.some(product => product.startsWith("cra_"))) {
-        // Default to sending identity object
-        userRequest.identity = {
-          name: {
-            given_name: 'Harry',
-            family_name: 'Potter'
-          },
-          date_of_birth: '1980-07-31',
-          phone_numbers: [{
-            data: '+16174567890',
-            primary: true
-          }],
-          emails: [{
-            data: 'harrypotter@example.com',
-            primary: true
-          }],
-          addresses: [{
-            street_1: '4 Privet Drive',
-            city: 'New York',
-            region: 'NY',
-            postal_code: '11111',
-            country: 'US',
-            primary: true
-          }]
-        }
-      }
-
-      try {
-        const user = await client.userCreate(userRequest);
-
-        if (user.data.user_token) {
-          USER_TOKEN = user.data.user_token;
-        }
-        if (user.data.user_id) {
-          USER_ID = user.data.user_id;
-        }
-
-        response.json(user.data);
-      } catch (error) {
-        if (error.response && error.response.data &&
-            error.response.data.error_code === 'INVALID_FIELD' &&
-            PLAID_PRODUCTS.some(product => product.startsWith("cra_"))) {
-
-          // Retry with consumer_report_user_identity
-          delete userRequest.identity;
-          userRequest.consumer_report_user_identity = {
-            date_of_birth: '1980-07-31',
-            first_name: 'Harry',
-            last_name: 'Potter',
-            phone_numbers: ['+16174567890'],
-            emails: ['harrypotter@example.com'],
-            primary_address: {
-              city: 'New York',
-              region: 'NY',
-              street: '4 Privet Drive',
-              postal_code: '11111',
-              country: 'US'
-            }
-          }
-
-          const retryUser = await client.userCreate(userRequest);
-
-          if (retryUser.data.user_token) {
-            USER_TOKEN = retryUser.data.user_token;
-          }
-          if (retryUser.data.user_id) {
-            USER_ID = retryUser.data.user_id;
-          }
-
-          response.json(retryUser.data);
-        } else {
-          throw error;
-        }
-      }
-    }).catch(next);
-});
-
-
-// Create a link token with configs which we can then use to initialize Plaid Link client-side
-// for a 'payment-initiation' flow.
-// See:
-// - https://plaid.com/docs/payment-initiation/
-// - https://plaid.com/docs/#payment-initiation-create-link-token-request
-app.post(
-  '/api/create_link_token_for_payment',
-  function (request, response, next) {
-    Promise.resolve()
-      .then(async function () {
-        const createRecipientResponse =
-          await client.paymentInitiationRecipientCreate({
-            name: 'Harry Potter',
-            iban: 'GB33BUKB20201555555555',
-            address: {
-              street: ['4 Privet Drive'],
-              city: 'Little Whinging',
-              postal_code: '11111',
-              country: 'GB',
-            },
-          });
-        const recipientId = createRecipientResponse.data.recipient_id;
-        prettyPrintResponse(createRecipientResponse);
-
-        const createPaymentResponse =
-          await client.paymentInitiationPaymentCreate({
-            recipient_id: recipientId,
-            reference: 'paymentRef',
-            amount: {
-              value: 1.23,
-              currency: 'GBP',
-            },
-          });
-        prettyPrintResponse(createPaymentResponse);
-        const paymentId = createPaymentResponse.data.payment_id;
-
-        // We store the payment_id in memory for demo purposes - in production, store it in a secure
-        // persistent data store along with the Payment metadata, such as userId.
-        PAYMENT_ID = paymentId;
-
-        const configs = {
-          client_name: 'Plaid Quickstart',
-          user: {
-            // This should correspond to a unique id for the current user.
-            // Typically, this will be a user ID number from your application.
-            // Personally identifiable information, such as an email address or phone number, should not be used here.
-            client_user_id: uuidv4(),
-          },
-          // Institutions from all listed countries will be shown.
-          country_codes: PLAID_COUNTRY_CODES,
-          language: 'en',
-          // The 'payment_initiation' product has to be the only element in the 'products' list.
-          products: [Products.PaymentInitiation],
-          payment_initiation: {
-            payment_id: paymentId,
-          },
-        };
-        if (PLAID_REDIRECT_URI !== '') {
-          configs.redirect_uri = PLAID_REDIRECT_URI;
-        }
-        const createTokenResponse = await client.linkTokenCreate(configs);
-        prettyPrintResponse(createTokenResponse);
-        response.json(createTokenResponse.data);
-      })
-      .catch(next);
-  },
-);
-
-// Exchange token flow - exchange a Link public_token for
-// an API access_token
-// https://plaid.com/docs/#exchange-token-flow
-app.post('/api/set_access_token', function (request, response, next) {
-  PUBLIC_TOKEN = request.body.public_token;
-  Promise.resolve()
-    .then(async function () {
-      const tokenResponse = await client.itemPublicTokenExchange({
-        public_token: PUBLIC_TOKEN,
-      });
-      prettyPrintResponse(tokenResponse);
-      ACCESS_TOKEN = tokenResponse.data.access_token;
-      ITEM_ID = tokenResponse.data.item_id;
-      response.json({
-        // the 'access_token' is a private token, DO NOT pass this token to the frontend in your production environment
-        access_token: ACCESS_TOKEN,
-        item_id: ITEM_ID,
-        error: null,
-      });
-    })
-    .catch(next);
-});
-
-// Retrieve ACH or ETF Auth data for an Item's accounts
-// https://plaid.com/docs/#auth
-app.get('/api/auth', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const authResponse = await client.authGet({
-        access_token: ACCESS_TOKEN,
-      });
-      prettyPrintResponse(authResponse);
-      response.json(authResponse.data);
-    })
-    .catch(next);
-});
-
-// Retrieve Transactions for an Item
-// https://plaid.com/docs/#transactions
-app.get('/api/transactions', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      // Set cursor to empty to receive all historical updates
-      let cursor = null;
-
-      // New transaction updates since "cursor"
-      let added = [];
-      let modified = [];
-      // Removed transaction ids
-      let removed = [];
-      let hasMore = true;
-      // Iterate through each page of new transaction updates for item
-      while (hasMore) {
-        const request = {
-          access_token: ACCESS_TOKEN,
-          cursor: cursor,
-        };
-        const response = await client.transactionsSync(request)
-        const data = response.data;
-
-        // If no transactions are available yet, wait and poll the endpoint.
-        // Normally, we would listen for a webhook, but the Quickstart doesn't
-        // support webhooks. For a webhook example, see
-        // https://github.com/plaid/tutorial-resources or
-        // https://github.com/plaid/pattern
-        cursor = data.next_cursor;
-        if (cursor === "") {
-          await sleep(2000);
-          continue;
-        }
-
-        // Add this page of results
-        added = added.concat(data.added);
-        modified = modified.concat(data.modified);
-        removed = removed.concat(data.removed);
-        hasMore = data.has_more;
-
-        prettyPrintResponse(response);
-      }
-
-      const compareTxnsByDateAscending = (a, b) => (a.date > b.date) - (a.date < b.date);
-      // Return the 8 most recent transactions
-      const recently_added = [...added].sort(compareTxnsByDateAscending).slice(-8);
-      response.json({ latest_transactions: recently_added });
-    })
-    .catch(next);
-});
-
-// Retrieve Investment Transactions for an Item
-// https://plaid.com/docs/#investments
-app.get('/api/investments_transactions', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const startDate = moment().subtract(30, 'days').format('YYYY-MM-DD');
-      const endDate = moment().format('YYYY-MM-DD');
-      const configs = {
-        access_token: ACCESS_TOKEN,
-        start_date: startDate,
-        end_date: endDate,
-      };
-      const investmentTransactionsResponse =
-        await client.investmentsTransactionsGet(configs);
-      prettyPrintResponse(investmentTransactionsResponse);
-      response.json({
-        error: null,
-        investments_transactions: investmentTransactionsResponse.data,
-      });
-    })
-    .catch(next);
-});
-
-// Retrieve Identity for an Item
-// https://plaid.com/docs/#identity
-app.get('/api/identity', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const identityResponse = await client.identityGet({
-        access_token: ACCESS_TOKEN,
-      });
-      prettyPrintResponse(identityResponse);
-      response.json({ identity: identityResponse.data.accounts });
-    })
-    .catch(next);
-});
-
-// Retrieve real-time Balances for each of an Item's accounts
-// https://plaid.com/docs/#balance
-app.get('/api/balance', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const balanceResponse = await client.accountsBalanceGet({
-        access_token: ACCESS_TOKEN,
-      });
-      prettyPrintResponse(balanceResponse);
-      response.json({ accounts: balanceResponse.data.accounts });
-    })
-    .catch(next);
-});
-
-// Retrieve Holdings for an Item
-// https://plaid.com/docs/#investments
-app.get('/api/holdings', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const holdingsResponse = await client.investmentsHoldingsGet({
-        access_token: ACCESS_TOKEN,
-      });
-      prettyPrintResponse(holdingsResponse);
-      response.json({ error: null, holdings: holdingsResponse.data });
-    })
-    .catch(next);
-});
-
-// Retrieve Liabilities for an Item
-// https://plaid.com/docs/#liabilities
-app.get('/api/liabilities', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const liabilitiesResponse = await client.liabilitiesGet({
-        access_token: ACCESS_TOKEN,
-      });
-      prettyPrintResponse(liabilitiesResponse);
-      response.json({ error: null, liabilities: liabilitiesResponse.data });
-    })
-    .catch(next);
-});
-
-// Retrieve information about an Item
-// https://plaid.com/docs/#retrieve-item
-app.get('/api/item', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      // Pull the Item - this includes information about available products,
-      // billed products, webhook information, and more.
-      const itemResponse = await client.itemGet({
-        access_token: ACCESS_TOKEN,
-      });
-      // Also pull information about the institution
-      const configs = {
-        institution_id: itemResponse.data.item.institution_id,
-        country_codes: PLAID_COUNTRY_CODES,
-      };
-      const instResponse = await client.institutionsGetById(configs);
-      prettyPrintResponse(itemResponse);
-      response.json({
-        item: itemResponse.data.item,
-        institution: instResponse.data.institution,
-      });
-    })
-    .catch(next);
-});
-
-// Retrieve an Item's accounts
-// https://plaid.com/docs/#accounts
-app.get('/api/accounts', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const accountsResponse = await client.accountsGet({
-        access_token: ACCESS_TOKEN,
-      });
-      prettyPrintResponse(accountsResponse);
-      response.json(accountsResponse.data);
-    })
-    .catch(next);
-});
-
-// Create and then retrieve an Asset Report for one or more Items. Note that an
-// Asset Report can contain up to 100 items, but for simplicity we're only
-// including one Item here.
-// https://plaid.com/docs/#assets
-app.get('/api/assets', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      // You can specify up to two years of transaction history for an Asset
-      // Report.
-      const daysRequested = 10;
-
-      // The `options` object allows you to specify a webhook for Asset Report
-      // generation, as well as information that you want included in the Asset
-      // Report. All fields are optional.
-      const options = {
-        client_report_id: 'Custom Report ID #123',
-        // webhook: 'https://your-domain.tld/plaid-webhook',
-        user: {
-          client_user_id: 'Custom User ID #456',
-          first_name: 'Alice',
-          middle_name: 'Bobcat',
-          last_name: 'Cranberry',
-          ssn: '123-45-6789',
-          phone_number: '555-123-4567',
-          email: 'alice@example.com',
-        },
-      };
-      const configs = {
-        access_tokens: [ACCESS_TOKEN],
-        days_requested: daysRequested,
-        options,
-      };
-      const assetReportCreateResponse = await client.assetReportCreate(configs);
-      prettyPrintResponse(assetReportCreateResponse);
-      const assetReportToken =
-        assetReportCreateResponse.data.asset_report_token;
-      const getResponse = await getAssetReportWithRetries(
-        client,
-        assetReportToken,
-      );
-      const pdfRequest = {
-        asset_report_token: assetReportToken,
-      };
-
-      const pdfResponse = await client.assetReportPdfGet(pdfRequest, {
-        responseType: 'arraybuffer',
-      });
-      prettyPrintResponse(getResponse);
-      prettyPrintResponse(pdfResponse);
-      response.json({
-        json: getResponse.data.report,
-        pdf: pdfResponse.data.toString('base64'),
-      });
-    })
-    .catch(next);
-});
-
-app.get('/api/statements', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const statementsListResponse = await client.statementsList({ access_token: ACCESS_TOKEN });
-      prettyPrintResponse(statementsListResponse);
-      const pdfRequest = {
-        access_token: ACCESS_TOKEN,
-        statement_id: statementsListResponse.data.accounts[0].statements[0].statement_id
-      };
-
-      const statementsDownloadResponse = await client.statementsDownload(pdfRequest, {
-        responseType: 'arraybuffer',
-      });
-      prettyPrintResponse(statementsDownloadResponse);
-      response.json({
-        json: statementsListResponse.data,
-        pdf: statementsDownloadResponse.data.toString('base64'),
-      });
-    })
-    .catch(next);
-});
-
-// This functionality is only relevant for the UK/EU Payment Initiation product.
-// Retrieve Payment for a specified Payment ID
-app.get('/api/payment', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const paymentGetResponse = await client.paymentInitiationPaymentGet({
-        payment_id: PAYMENT_ID,
-      });
-      prettyPrintResponse(paymentGetResponse);
-      response.json({ error: null, payment: paymentGetResponse.data });
-    })
-    .catch(next);
-});
-
-// This endpoint is still supported but is no longer recommended
-// For Income best practices, see https://github.com/plaid/income-sample instead
-app.get('/api/income/verification/paystubs', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const paystubsGetResponse = await client.incomeVerificationPaystubsGet({
-        access_token: ACCESS_TOKEN
-      });
-      prettyPrintResponse(paystubsGetResponse);
-      response.json({ error: null, paystubs: paystubsGetResponse.data })
-    })
-    .catch(next);
-})
-
 // Only bind the port when run directly (`node index.js`). When the file is
 // `require`d (Jest + supertest), we skip the listen so multiple test files
 // don't fight over the same port — supertest hits the in-memory app instead.
@@ -4378,275 +3935,12 @@ const prettyPrintResponse = (response) => {
   console.log(util.inspect(response.data, { colors: true, depth: 4 }));
 };
 
-// This is a helper function to poll for the completion of an Asset Report and
-// then send it in the response to the client. Alternatively, you can provide a
-// webhook in the `options` object in your `/asset_report/create` request to be
-// notified when the Asset Report is finished being generated.
-
-const getAssetReportWithRetries = (
-  plaidClient,
-  asset_report_token,
-  ms = 1000,
-  retriesLeft = 20,
-) => {
-  const request = {
-    asset_report_token,
-  };
-
-  return pollWithRetries(
-    async () => {
-      return await plaidClient.assetReportGet(request);
-    }
-  );
-}
-
 const formatError = (error) => {
   return {
     error: { ...error.data, status_code: error.status },
   };
 };
 
-app.get('/api/transfer_authorize', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const accountsResponse = await client.accountsGet({
-        access_token: ACCESS_TOKEN,
-      });
-      ACCOUNT_ID = accountsResponse.data.accounts[0].account_id;
-
-      const transferAuthorizationCreateResponse = await client.transferAuthorizationCreate({
-        access_token: ACCESS_TOKEN,
-        account_id: ACCOUNT_ID,
-        type: 'debit',
-        network: 'ach',
-        amount: '1.00',
-        ach_class: 'ppd',
-        user: {
-          legal_name: 'FirstName LastName',
-          email_address: 'foobar@email.com',
-          address: {
-            street: '123 Main St.',
-            city: 'San Francisco',
-            region: 'CA',
-            postal_code: '94053',
-            country: 'US',
-          },
-        },
-      });
-      prettyPrintResponse(transferAuthorizationCreateResponse);
-      AUTHORIZATION_ID = transferAuthorizationCreateResponse.data.authorization.id;
-      response.json(transferAuthorizationCreateResponse.data);
-    })
-    .catch(next);
-});
-
-
-app.get('/api/transfer_create', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const transferCreateResponse = await client.transferCreate({
-        access_token: ACCESS_TOKEN,
-        account_id: ACCOUNT_ID,
-        authorization_id: AUTHORIZATION_ID,
-        description: 'Debit',
-      });
-      prettyPrintResponse(transferCreateResponse);
-      TRANSFER_ID = transferCreateResponse.data.transfer.id
-      response.json({
-        error: null,
-        transfer: transferCreateResponse.data.transfer,
-      });
-    })
-    .catch(next);
-});
-
-app.get('/api/signal_evaluate', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      const accountsResponse = await client.accountsGet({
-        access_token: ACCESS_TOKEN,
-      });
-      ACCOUNT_ID = accountsResponse.data.accounts[0].account_id;
-
-      // Generate unique transaction ID using timestamp and random component
-      const clientTransactionId = `txn-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
-
-      const signalEvaluateRequest = {
-        access_token: ACCESS_TOKEN,
-        account_id: ACCOUNT_ID,
-        client_transaction_id: clientTransactionId,
-        amount: 100.00,
-      };
-
-      if (SIGNAL_RULESET_KEY) {
-        signalEvaluateRequest.ruleset_key = SIGNAL_RULESET_KEY;
-      }
-
-      const signalEvaluateResponse = await client.signalEvaluate(signalEvaluateRequest);
-      prettyPrintResponse(signalEvaluateResponse);
-      response.json(signalEvaluateResponse.data);
-    })
-    .catch(next);
-});
-
-// Retrieve CRA Base Report and PDF
-// Base report: https://plaid.com/docs/check/api/#cracheck_reportbase_reportget
-// PDF: https://plaid.com/docs/check/api/#cracheck_reportpdfget
-app.get('/api/cra/get_base_report', function (request, response, next) {
-  Promise.resolve()
-    .then(async function () {
-      // Use user_token if available, otherwise use user_id
-      const userIdentifier = USER_TOKEN || USER_ID;
-      const identifierKey = USER_TOKEN ? 'user_token' : 'user_id';
-
-      const getResponse = await getCraBaseReportWithRetries(client, userIdentifier, identifierKey);
-      prettyPrintResponse(getResponse);
-
-      const pdfRequest = {};
-      pdfRequest[identifierKey] = userIdentifier;
-
-      const pdfResponse = await client.craCheckReportPdfGet(pdfRequest, {
-        responseType: 'arraybuffer'
-      });
-
-      response.json({
-        report: getResponse.data.report,
-        pdf: pdfResponse.data.toString('base64'),
-      });
-    })
-    .catch(next);
-});
-
-const getCraBaseReportWithRetries = (
-  plaidClient,
-  userIdentifier,
-  identifierKey = 'user_token'
-) => {
-  const requestBody = {};
-  requestBody[identifierKey] = userIdentifier;
-
-  return pollWithRetries(
-    async () => {
-      return await plaidClient.craCheckReportBaseReportGet(requestBody)
-    }
-  );
-};
-
-// Retrieve CRA Income Insights and PDF with Insights
-// Income insights: https://plaid.com/docs/check/api/#cracheck_reportincome_insightsget
-// PDF w/ income insights: https://plaid.com/docs/check/api/#cracheck_reportpdfget
-app.get('/api/cra/get_income_insights', async (req, res, next) => {
-  Promise.resolve()
-    .then(async function () {
-      // Use user_token if available, otherwise use user_id
-      const userIdentifier = USER_TOKEN || USER_ID;
-      const identifierKey = USER_TOKEN ? 'user_token' : 'user_id';
-
-      const getResponse = await getCheckInsightsWithRetries(client, userIdentifier, identifierKey)
-      prettyPrintResponse(getResponse);
-
-      const pdfRequest = {};
-      pdfRequest[identifierKey] = userIdentifier;
-      pdfRequest.add_ons = ['cra_income_insights'];
-
-      const pdfResponse = await client.craCheckReportPdfGet(pdfRequest, {
-        responseType: 'arraybuffer'
-      });
-
-      res.json({
-        report: getResponse.data.report,
-        pdf: pdfResponse.data.toString('base64'),
-      });
-    })
-    .catch(next);
-});
-
-
-const getCheckInsightsWithRetries = (
-  plaidClient,
-  userIdentifier,
-  identifierKey
-) => pollWithRetries(
-  async () => {
-    const request = {};
-    request[identifierKey] = userIdentifier;
-    return await plaidClient.craCheckReportIncomeInsightsGet(request);
-  }
-);
-
-// Retrieve CRA Partner Insights
-// https://plaid.com/docs/check/api/#cracheck_reportpartner_insightsget
-app.get('/api/cra/get_partner_insights', async (req, res, next) => {
-  Promise.resolve()
-    .then(async function () {
-      // Use user_token if available, otherwise use user_id
-      const userIdentifier = USER_TOKEN || USER_ID;
-      const identifierKey = USER_TOKEN ? 'user_token' : 'user_id';
-
-      const response = await getCheckParnterInsightsWithRetries(client, userIdentifier, identifierKey);
-      prettyPrintResponse(response);
-
-      res.json(response.data);
-    })
-    .catch(next);
-});
-
-
-const getCheckParnterInsightsWithRetries = (
-  plaidClient,
-  userIdentifier,
-  identifierKey = 'user_token'
-) => {
-  const requestBody = {};
-  requestBody[identifierKey] = userIdentifier;
-
-  return pollWithRetries(
-    async () => {
-      return await plaidClient.craCheckReportPartnerInsightsGet(requestBody);
-    }
-  );
-};
-
-// Since this quickstart does not support webhooks, this function can be used to poll
-// an API that would otherwise be triggered by a webhook.
-// For a webhook example, see
-// https://github.com/plaid/tutorial-resources or
-// https://github.com/plaid/pattern
-const pollWithRetries = (
-  requestCallback,
-  ms = 1000,
-  retriesLeft = 20,
-) =>
-  new Promise((resolve, reject) => {
-    requestCallback()
-      .then(resolve)
-      .catch((error) => {
-        const errorCode = error?.response?.data?.error_code;
-        const statusCode = error?.response?.status;
-        const isRetryable = errorCode === 'PRODUCT_NOT_READY' || (statusCode >= 500 && statusCode < 600);
-        if (!isRetryable) {
-          reject(error);
-          return;
-        }
-        if (retriesLeft === 1) {
-          reject('Ran out of retries while polling');
-          return;
-        }
-        setTimeout(() => {
-          pollWithRetries(
-            requestCallback,
-            ms,
-            retriesLeft - 1,
-          ).then(resolve).catch(reject);
-        }, ms);
-      });
-  });
-
-app.post('/api/link_exit_error', function (request, response, next) {
-  console.log('[Link Exit Error (frontend)]');
-  console.log(util.inspect(request.body, { colors: true, depth: 4 }));
-  response.json({ status: 'logged' });
-});
 
 app.use('/api', function (request, response, next) {
   response.status(404).json({ error: { error_message: `Route not found: ${request.method} ${request.originalUrl}` } });
@@ -4691,4 +3985,6 @@ module.exports = {
   // Eligibility data
   ELIGIBLE_STATES,
   STATE_TIMEZONES,
+  // Supabase JWKS loader — exported so tests can warm the cache deterministically
+  loadSupabaseJwks,
 };

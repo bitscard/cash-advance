@@ -23,6 +23,9 @@ process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy'
 process.env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || 'sk-ant-dummy';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-do-not-use-in-prod';
 process.env.ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'test-admin-token';
+// Supabase access-token verification secret (HS256). Distinct from JWT_SECRET
+// so the dual-auth path is exercised honestly. Tests forge tokens with this.
+process.env.SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || 'test-supabase-jwt-secret';
 // Empty Mailchimp creds make addToMailchimp() short-circuit silently — safe.
 process.env.MAILCHIMP_API_KEY = process.env.MAILCHIMP_API_KEY || '';
 process.env.MAILCHIMP_LIST_ID = process.env.MAILCHIMP_LIST_ID || '';
