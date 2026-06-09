@@ -5050,6 +5050,11 @@ const LoanApp = () => {
 
   const loadMe = useCallback(async (hdrs: Record<string, string>) => {
     const res = await fetch(apiUrl("/api/advance/auth/me"), { headers: hdrs });
+    // 404 = authenticated but no application yet (e.g. a fresh Supabase sign-in
+    // on this returning-borrower screen). Keep the session and send them to the
+    // application flow instead of logging them out.
+    if (res.status === 404) { window.location.href = "/"; return; }
+    // 401 (or other auth failure) = bad/expired token → clear it.
     if (!res.ok) { setToken(""); localStorage.removeItem(userTokenStorageKey); return; }
     const data = await res.json();
     setApplication(data.application);
