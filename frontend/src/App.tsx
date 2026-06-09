@@ -3872,7 +3872,7 @@ const AdminApp = () => {
   //   funded   → money out the door (funded / repayment_scheduled /
   //              repaid / repayment_failed / subscription_failed /
   //              written_off)
-  type AdminTab = "intake" | "approved" | "funded";
+  type AdminTab = "intake" | "approved" | "denied" | "funded";
   const [activeTab, setActiveTab] = useState<AdminTab>("intake");
   // Filter inbox by referral code. Empty string = no filter (show all).
   // Recomputed per tab so e.g. switching from intake → funded resets to all.
@@ -3894,11 +3894,13 @@ const AdminApp = () => {
   // 'intake' as a safe default (e.g. unknown future status values).
   const TAB_STATUSES: Record<AdminTab, Set<string>> = {
     intake: new Set(["intake", "bank_connected", "reviewing"]),
-    approved: new Set(["approved", "expired", "denied"]),
+    approved: new Set(["approved"]),
+    denied: new Set(["denied", "expired"]),
     funded: new Set(["funded", "repayment_scheduled", "repaid", "repayment_failed", "subscription_failed", "written_off"]),
   };
   const tabFor = (status: string): AdminTab => {
     if (TAB_STATUSES.approved.has(status)) return "approved";
+    if (TAB_STATUSES.denied.has(status)) return "denied";
     if (TAB_STATUSES.funded.has(status)) return "funded";
     return "intake";
   };
@@ -3914,6 +3916,7 @@ const AdminApp = () => {
   const tabCounts: Record<AdminTab, number> = {
     intake: applications.filter(a => tabFor(a.status) === "intake").length,
     approved: applications.filter(a => tabFor(a.status) === "approved").length,
+    denied: applications.filter(a => tabFor(a.status) === "denied").length,
     funded: applications.filter(a => tabFor(a.status) === "funded").length,
   };
 
@@ -4431,6 +4434,57 @@ const AdminApp = () => {
         </section>
       )}
       {isAuthed && (
+        <>
+          {/* Summary stats — six high-level numbers admin glances at first.
+              On mobile these stack into a single column; on desktop they
+              flow as a responsive grid of mini-cards above the inbox. */}
+          {(() => {
+            // Pre-compute the numbers from applications + repayment state.
+            const total = applications.length;
+            const totalApproved = applications.filter(a =>
+              ["approved", "funded", "repayment_scheduled", "repaid"].includes(a.status)
+            ).length;
+            const totalFunded = applications.filter(a =>
+              ["funded", "repayment_scheduled", "repaid"].includes(a.status)
+            ).length;
+            const totalRepaid = applications.filter(a => a.status === "repaid").length;
+            const totalDenied = applications.filter(a =>
+              ["denied", "expired"].includes(a.status)
+            ).length;
+            // Due today / overdue = funded users with a pending repayment due ≤ today.
+            const today = new Date().toISOString().slice(0, 10);
+            const dueOrOverdue = applications.filter(a =>
+              a.repayment?.status === "pending" &&
+              a.repayment?.due_date &&
+              a.repayment.due_date <= today
+            ).length;
+            const cards: { label: string; value: number; color: string; bg: string }[] = [
+              { label: "Total applied",     value: total,         color: "#1e40af", bg: "#dbeafe" },
+              { label: "Total approved",    value: totalApproved, color: "#15803d", bg: "#dcfce7" },
+              { label: "Total funded",      value: totalFunded,   color: "#7c2d12", bg: "#fef3c7" },
+              { label: "Total repaid",      value: totalRepaid,   color: "#166534", bg: "#bbf7d0" },
+              { label: "Total denied",      value: totalDenied,   color: "#991b1b", bg: "#fee2e2" },
+              { label: "Due today/overdue", value: dueOrOverdue,  color: "#9a3412", bg: "#fed7aa" },
+            ];
+            return (
+              <div className={styles.adminSummaryGrid}>
+                {cards.map(c => (
+                  <div
+                    key={c.label}
+                    className={styles.adminSummaryCard}
+                    style={{ background: c.bg, borderColor: c.color }}
+                  >
+                    <p style={{ margin: 0, fontSize: "1.15rem", fontWeight: 600, color: c.color, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                      {c.label}
+                    </p>
+                    <p style={{ margin: "0.4rem 0 0", fontSize: "2.4rem", fontWeight: 800, color: c.color, fontVariantNumeric: "tabular-nums" }}>
+                      {c.value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         <section className={styles.adminLayout}>
           <aside className={styles.inbox}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -4447,9 +4501,9 @@ const AdminApp = () => {
             {/* Tab bar — filters the inbox by lifecycle bucket. Each tab
                 shows a count so reviewers can see backlog at a glance. */}
             <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-              {(["intake", "approved", "funded"] as AdminTab[]).map(tab => {
+              {(["intake", "approved", "denied", "funded"] as AdminTab[]).map(tab => {
                 const active = tab === activeTab;
-                const labels: Record<AdminTab, string> = { intake: "Intake", approved: "Approved", funded: "Funded" };
+                const labels: Record<AdminTab, string> = { intake: "Intake", approved: "Approved", denied: "Denied", funded: "Funded" };
                 return (
                   <button
                     key={tab}
@@ -4969,6 +5023,7 @@ const AdminApp = () => {
             <section className={styles.empty}>No applications yet.</section>
           )}
         </section>
+        </>
       )}
     </main>
   );
