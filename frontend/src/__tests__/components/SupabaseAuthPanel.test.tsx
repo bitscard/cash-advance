@@ -6,15 +6,16 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 // vi.mock is hoisted above imports, so the mock fns must be hoisted too.
-const { signInWithOAuth, signInWithPassword, signUp } = vi.hoisted(() => ({
+const { signInWithOAuth, signInWithPassword, signUp, resetPasswordForEmail } = vi.hoisted(() => ({
   signInWithOAuth: vi.fn(),
   signInWithPassword: vi.fn(),
   signUp: vi.fn(),
+  resetPasswordForEmail: vi.fn(),
 }));
 
 vi.mock("../../supabase", () => ({
   isSupabaseConfigured: true,
-  supabase: { auth: { signInWithOAuth, signInWithPassword, signUp } },
+  supabase: { auth: { signInWithOAuth, signInWithPassword, signUp, resetPasswordForEmail } },
 }));
 
 import SupabaseAuthPanel from "../../SupabaseAuthPanel";
@@ -22,7 +23,8 @@ import SupabaseAuthPanel from "../../SupabaseAuthPanel";
 beforeEach(() => {
   signInWithOAuth.mockReset().mockResolvedValue({ error: null });
   signInWithPassword.mockReset().mockResolvedValue({ error: null });
-  signUp.mockReset().mockResolvedValue({ error: null });
+  signUp.mockReset().mockResolvedValue({ error: null, data: { session: null } });
+  resetPasswordForEmail.mockReset().mockResolvedValue({ error: null });
 });
 
 describe("SupabaseAuthPanel", () => {
@@ -56,5 +58,16 @@ describe("SupabaseAuthPanel", () => {
     await waitFor(() =>
       expect(signUp).toHaveBeenCalledWith({ email: "c@d.com", password: "pw123456" }),
     );
+  });
+
+  test("forgot-password sends a reset link", async () => {
+    render(<SupabaseAuthPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "r@e.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /send reset link/i }));
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalled());
+    expect(resetPasswordForEmail.mock.calls[0][0]).toBe("r@e.com");
+    // Shows the "check your email" confirmation afterward.
+    expect(await screen.findByText(/Reset your password/i)).toBeTruthy();
   });
 });

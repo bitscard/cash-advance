@@ -26,7 +26,7 @@ import StoryPage from "./StoryPage";
 import ConsentPage from "./ConsentPage";
 import SystemDesignPage from "./SystemDesignPage";
 import SupabaseAuthPanel from "./SupabaseAuthPanel";
-import { useSupabaseAccessToken, signOutSupabase, isSupabaseConfigured } from "./supabase";
+import { supabase, useSupabaseAccessToken, signOutSupabase, isSupabaseConfigured } from "./supabase";
 
 const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
@@ -459,9 +459,65 @@ const AlienMascot = ({ flag = "usa", size = 220 }: { flag?: "usa" | "mexico"; si
 // belt-and-suspenders. Change here AND tell your team if you rotate it.
 const ADMIN_PATH = "/bits-ops-7k3xp9q4z2";
 
+// Landing target for the password-reset email link. Supabase establishes a
+// short-lived recovery session in the URL on load; this screen lets the user
+// set a new password (supabase.auth.updateUser), then sends them to /loan.
+const ResetPassword = () => {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase) return;
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    if (password !== confirm) { setError("Passwords do not match"); return; }
+    setBusy(true);
+    setError(null);
+    const { error: updErr } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (updErr) { setError(updErr.message); return; }
+    setDone(true);
+    setTimeout(() => { window.location.href = "/loan"; }, 1500);
+  };
+
+  return (
+    <div className={styles.bldPage}>
+      <main className={styles.bldMain}>
+        <h1 className={styles.bldH1}>Set a new <em>password.</em></h1>
+        {!isSupabaseConfigured ? (
+          <p className={styles.bldLead}>Password reset isn&apos;t available.</p>
+        ) : done ? (
+          <p className={styles.bldLead}>Password updated. Redirecting…</p>
+        ) : (
+          <form onSubmit={submit}>
+            <label className={styles.bldField}>
+              <span className={styles.bldLabel}>New password</span>
+              <input className={styles.bldInput} required type="password" minLength={6} autoComplete="new-password"
+                placeholder="Min. 6 characters" value={password} onChange={(e) => setPassword(e.target.value)} />
+            </label>
+            <label className={styles.bldField}>
+              <span className={styles.bldLabel}>Confirm</span>
+              <input className={styles.bldInput} required type="password" autoComplete="new-password"
+                value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+            </label>
+            {error && <p className={styles.bldError}>{error}</p>}
+            <button type="submit" disabled={busy} className={styles.bldBtn} style={{ marginTop: 16 }}>
+              {busy ? "…" : <>Update password <span aria-hidden="true">→</span></>}
+            </button>
+          </form>
+        )}
+      </main>
+    </div>
+  );
+};
+
 const App = () => {
   const path = window.location.pathname;
   if (path === ADMIN_PATH) return <AdminApp />;
+  if (path === "/reset-password") return <ResetPassword />;
   if (path === "/loan") return <LoanApp />;
   if (path === "/terms") return <TermsPage />;
   if (path === "/privacy") return <PrivacyPage />;
@@ -1767,7 +1823,7 @@ const CustomerApp = () => {
               and never needs a password. */}
           {isSupabaseConfigured && !supabaseToken ? (
             <motion.div variants={flowChildVariants} style={{ marginBottom: "1.5rem" }}>
-              <SupabaseAuthPanel heading="Sign in to continue" redirectTo={window.location.origin} />
+              <SupabaseAuthPanel heading="Create your account" defaultMode="signup" redirectTo={`${window.location.origin}/?apply=1`} />
             </motion.div>
           ) : (
           <form onSubmit={handleSignupSubmit}>
