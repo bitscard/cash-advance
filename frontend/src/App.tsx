@@ -1762,12 +1762,14 @@ const CustomerApp = () => {
             Takes about 2 minutes — your info is encrypted and never sold. No hard credit check, ever.
           </motion.p>
 
-          {isSupabaseConfigured && !supabaseToken && (
+          {/* Auth-first: when Supabase is on, you must sign in before the
+              application form is shown — so the submit always carries a token
+              and never needs a password. */}
+          {isSupabaseConfigured && !supabaseToken ? (
             <motion.div variants={flowChildVariants} style={{ marginBottom: "1.5rem" }}>
               <SupabaseAuthPanel heading="Sign in to continue" redirectTo={window.location.origin} />
             </motion.div>
-          )}
-
+          ) : (
           <form onSubmit={handleSignupSubmit}>
             <motion.div variants={flowChildVariants}>
               <p className={styles.bldSectionLabel}>Personal information</p>
@@ -2071,6 +2073,7 @@ const CustomerApp = () => {
               {isBusy ? "Creating account…" : <>Continue <span aria-hidden="true">→</span></>}
             </motion.button>
           </form>
+          )}
         </motion.main>
       </div>
     );
