@@ -602,8 +602,18 @@ const isAdminRequest = (request) => {
   }
   const authHeader = request.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    // Supabase admin: a non-user-editable app_metadata.role='admin' claim,
+    // double-gated to the @getbits.app domain.
+    const supa = verifySupabaseToken(token);
+    if (supa && supa.app_metadata && supa.app_metadata.role === 'admin'
+        && typeof supa.email === 'string'
+        && supa.email.toLowerCase().endsWith('@' + ADMIN_EMAIL_DOMAIN)) {
+      return true;
+    }
+    // Legacy admin JWT (transition).
     try {
-      const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
+      const payload = jwt.verify(token, JWT_SECRET);
       if (payload && payload.kind === 'admin' && payload.adminId) {
         return true;
       }
