@@ -111,6 +111,10 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_last_attempt_at TIME
 -- Step 2 — admin uses this + the bank routing from FC for manual wires.
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
 
+-- Bank holder name pulled from Stripe FC's ownership feature. Used for
+-- fraud detection — compared with customer.name in the admin panel.
+ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_holder_name TEXT;
+
 -- "Do you use other cash advance apps?" disclosure at signup (risk signal).
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS uses_other_advances BOOLEAN;
 ALTER TABLE applications ADD COLUMN IF NOT EXISTS other_advances TEXT;
