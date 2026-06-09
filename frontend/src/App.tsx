@@ -503,7 +503,11 @@ const CustomerApp = () => {
   });
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"landing" | "referral" | "signup">("landing");
+  // ?apply=1 deep-links straight to the gate-code step (e.g. when a signed-in
+  // Supabase user with no application yet is routed here from /loan).
+  const [view, setView] = useState<"landing" | "referral" | "signup">(
+    () => (new URLSearchParams(window.location.search).get("apply") ? "referral" : "landing"),
+  );
   const [gateCode, setGateCode] = useState("");
   const [gateValid, setGateValid] = useState<boolean | null>(null);
   const [gateReferrerName, setGateReferrerName] = useState<string | null>(null);
@@ -5053,7 +5057,7 @@ const LoanApp = () => {
     // 404 = authenticated but no application yet (e.g. a fresh Supabase sign-in
     // on this returning-borrower screen). Keep the session and send them to the
     // application flow instead of logging them out.
-    if (res.status === 404) { window.location.href = "/"; return; }
+    if (res.status === 404) { window.location.href = "/?apply=1"; return; }
     // 401 (or other auth failure) = bad/expired token → clear it.
     if (!res.ok) { setToken(""); localStorage.removeItem(userTokenStorageKey); return; }
     const data = await res.json();
