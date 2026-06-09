@@ -100,7 +100,7 @@ quickstart/
 └── README.md
 ```
 
-The Plaid quickstart leaves stub clients under `go/`, `python/`, `java/`, `ruby/` — these are unused.
+The Plaid quickstart's stub clients under `go/`, `python/`, `java/`, `ruby/` were unused and have been removed; `node/` is the only backend.
 
 ---
 

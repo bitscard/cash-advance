@@ -35,11 +35,6 @@ For legacy (non-CRA) Income, see the [Income sample app](https://github.com/plai
   - [Pre-requisites](#pre-requisites)
   - [1. Running the backend](#1-running-the-backend)
     - [Node](#node)
-    - [Python](#python)
-    - [Ruby](#ruby)
-    - [Go](#go)
-    - [Java](#java)
-    - [.NET](#net) (community support only)
   - [2. Running the frontend](#2-running-the-frontend)
 - [Test credentials](#test-credentials)
 - [Troubleshooting](#troubleshooting)
@@ -88,9 +83,7 @@ the dashboard: [https://dashboard.plaid.com/developers/keys](https://dashboard.p
 
 ### Pre-requisites
 
-- The language you intend to use is installed on your machine and available at your command line.
-  This repo should generally work with active LTS versions of each language such as node >= 18,
-  python >= 3.8, ruby >= 2.6, etc.
+- Node installed on your machine and available at your command line (active LTS, node >= 18).
 - Your environment variables populated in `.env`
 - [npm](https://www.npmjs.com/get-npm)
 - If using Windows, a command line utility capable of running basic Unix shell commands
@@ -106,64 +99,6 @@ $ cd ./node
 $ npm install
 $ ./start.sh
 ```
-
-##### Python
-
-**:warning: As `python2` has reached its end of life, only `python3` is supported.**
-
-```bash
-cd ./python
-
-# If you use virtualenv
-# virtualenv venv
-# source venv/bin/activate
-
-pip3 install -r requirements.txt
-./start.sh
-```
-
-If you get this error message:
-
-```txt
-ssl.SSLError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:749)
-```
-
-You may need to run the following command in your terminal for your particular version of python in order to install SSL certificates:
-
-```bash
-# examples:
-open /Applications/Python\ 3.9/Install\ Certificates.command
-# or
-open /Applications/Python\ 3.6/Install\ Certificates.command
-```
-
-##### Ruby
-
-```bash
-cd ./ruby
-bundle
-./start.sh
-```
-
-##### Go
-
-```bash
-cd ./go
-go build
-./start.sh
-```
-
-##### Java
-
-```bash
-cd ./java
-mvn clean package
-./start.sh
-```
-
-##### .NET
-
-A community-supported implementation of the Plaid Quickstart using the [Going.Plaid](https://github.com/viceroypenguin/Going.Plaid) client library can be found at [PlaidQuickstartBlazor](https://github.com/jcoliz/PlaidQuickstartBlazor). Note that Plaid does not provide first-party support for .NET client libraries and that this Quickstart and client library are not created, reviewed, or supported by Plaid. 
 
 #### 2. Running the frontend
 
@@ -263,9 +198,5 @@ may still get an invalid certificate warning on your browser. If so, click on "a
 [libraries]: https://plaid.com/docs/api/libraries
 [payment-initiation]: https://plaid.com/docs/payment-initiation/
 [node-example]: /node
-[ruby-example]: /ruby
-[python-example]: /python
-[java-example]: /java
-[go-example]: /go
 [dashboard-api-section]: https://dashboard.plaid.com/developers/api
 [contact-sales]: https://plaid.com/contact
