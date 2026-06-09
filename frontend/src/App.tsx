@@ -4353,7 +4353,7 @@ const AdminApp = () => {
           </div>
           {isSupabaseConfigured && (
             <div className={styles.panel}>
-              <SupabaseAuthPanel />
+              <SupabaseAuthPanel redirectTo={`${window.location.origin}${ADMIN_PATH}`} />
             </div>
           )}
           {!isSupabaseConfigured && loginMode === "login" && (
