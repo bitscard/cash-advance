@@ -678,6 +678,11 @@ async function getAdminUserByEmail(email) {
   return rows[0] || null;
 }
 
+async function getAllAdminUsers() {
+  const { rows } = await pool.query('SELECT * FROM admin_users ORDER BY created_at ASC');
+  return rows;
+}
+
 async function getAdminUserById(id) {
   const { rows } = await pool.query(
     `SELECT id, email, name, created_at, last_login_at FROM admin_users WHERE id = $1 LIMIT 1`,
@@ -748,6 +753,7 @@ module.exports = {
   // admin_users
   createAdminUser,
   getAdminUserByEmail,
+  getAllAdminUsers,
   getAdminUserById,
   touchAdminLogin,
 };

@@ -29,7 +29,7 @@ async function truncateAll() {
   // Order matters because of FK from messages.application_id. Use CASCADE
   // to handle any other future child tables.
   await getPool().query(`
-    TRUNCATE TABLE messages, income_sources, applications RESTART IDENTITY CASCADE
+    TRUNCATE TABLE messages, income_sources, applications, admin_users RESTART IDENTITY CASCADE
   `).catch(async (err) => {
     // income_sources may not exist on a fresh schema; fall back to a per-
     // table truncate that gracefully skips missing tables.
