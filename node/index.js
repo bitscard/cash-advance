@@ -2838,35 +2838,67 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
     }
 
     // Fetch ownership (bank holder name) for fraud detection.
-    // Available because the FC session requested the 'ownership'
-    // permission at link time. NOTE: accounts.subscribe is NOT the
-    // right API here — it only accepts 'transactions'. Use
-    // accounts.refresh + retrieve(expand: owners) instead.
+    //
+    // Correct Stripe API per docs.stripe.com/financial-connections/ownership:
+    //   retrieve(id, { expand: ['ownership'] })   ← SINGULAR 'ownership', not 'owners'
+    //   → account.ownership.owners.data[].name
+    //   → check account.ownership_refresh.status === 'succeeded' before using
+    //
+    // Earlier code used expand: ['owners'] (plural, not a real field) which
+    // silently returned no data — that's why no holder names were appearing.
+    //
+    // ownership_refresh.status can be 'pending' immediately after FC session
+    // completes — Stripe finishes fetching async. We poll up to ~12 seconds
+    // for it to flip to 'succeeded' before giving up.
     if (account.id) {
       setImmediate(async () => {
+        const log = (msg, extra) => console.log(`[bank-holder] ${msg}`, { application_id: row.id, fc: account.id, ...(extra || {}) });
         try {
+          // Step 1: explicit refresh to make sure Stripe starts fetching
+          // ownership for accounts where it wasn't auto-fetched.
           try {
             await stripe.financialConnections.accounts.refresh(account.id, {
               features: ['ownership'],
             });
+            log('refresh requested');
           } catch (refreshErr) {
-            // Some accounts return ownership data on retrieve without
-            // an explicit refresh — continue to the retrieve below.
-            console.log('[stripe/fc/native/complete] ownership refresh failed (continuing)', refreshErr.message);
+            log('refresh failed (continuing)', { error: refreshErr.message });
           }
-          const refreshed = await stripe.financialConnections.accounts.retrieve(account.id, {
-            expand: ['owners'],
-          });
-          const owners = (refreshed.owners && refreshed.owners.data) || [];
+
+          // Step 2: poll the account until ownership_refresh.status flips
+          // to 'succeeded' (or 'failed'). Polls every 2 seconds for up to 12 seconds.
+          let owners = [];
+          let finalStatus = null;
+          for (let i = 0; i < 6; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const acct = await stripe.financialConnections.accounts.retrieve(account.id, {
+              expand: ['ownership'],
+            });
+            const refreshStatus = acct.ownership_refresh && acct.ownership_refresh.status;
+            const ownership = acct.ownership;
+            log(`poll ${i + 1}/6`, { refresh_status: refreshStatus, has_ownership: !!ownership });
+            if (refreshStatus === 'succeeded' && ownership && ownership.owners && ownership.owners.data) {
+              owners = ownership.owners.data;
+              finalStatus = 'succeeded';
+              break;
+            }
+            if (refreshStatus === 'failed') {
+              finalStatus = 'failed';
+              break;
+            }
+          }
+
+          // Step 3: save the first owner's name (banks may return multiple
+          // joint-account holders; we use the primary one).
           const ownerName = owners[0] && owners[0].name ? owners[0].name : null;
           if (ownerName) {
             await db.saveBankHolderName(row.id, ownerName);
-            console.log('[stripe/fc/native/complete] saved bank holder', { application_id: row.id, name: ownerName });
+            log('SAVED', { name: ownerName, owners_count: owners.length });
           } else {
-            console.log('[stripe/fc/native/complete] no owners data exposed by bank', { application_id: row.id });
+            log('no holder name returned', { final_status: finalStatus, owners_count: owners.length });
           }
         } catch (e) {
-          console.log('[stripe/fc/native/complete] ownership fetch failed (non-fatal)', e.message);
+          log('UNEXPECTED ERROR', { error: e.message });
         }
       });
     }
