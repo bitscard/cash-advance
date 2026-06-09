@@ -19,7 +19,10 @@ const PLAID_CLIENT_ID = process.env.PLAID_CLIENT_ID;
 const PLAID_SECRET = process.env.PLAID_SECRET;
 const PLAID_ENV = process.env.PLAID_ENV || 'sandbox';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_change_in_production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET is required — set it in the environment. Refusing to start.');
+}
 
 // SSNs that bypass both format validation and the dupe check (for testing).
 // Add your own SSN here: TEST_SSNS=123456789,987654321 in .env (dashes optional).
@@ -582,15 +585,14 @@ app.post('/api/waitlist', async function (request, response, next) {
   } catch (err) { next(err); }
 });
 
-const requireAdmin = (request, response) => {
-  // Two paths to admin access:
-  //   1. Legacy: x-admin-token header matching ADMIN_TOKEN env var.
-  //      Used by the daily cron job (GitHub Actions) and by team
-  //      members who haven't created an admin user account yet.
-  //   2. JWT: Authorization: Bearer <jwt> issued by /admin-auth/login.
-  //      Per-user login system, restricted to @getbits.app emails.
-  // Either path grants access. Fail-CLOSED if NEITHER is configured/
-  // valid — the safer mode when env vars are accidentally cleared.
+// Predicate (no response side effects) — true if the request carries valid
+// admin credentials via either path:
+//   1. Legacy: x-admin-token header matching ADMIN_TOKEN env var.
+//      Used by the daily cron job (GitHub Actions) and by team members who
+//      haven't created an admin user account yet.
+//   2. JWT: Authorization: Bearer <jwt> issued by /admin-auth/login.
+//      Per-user login system, restricted to @getbits.app emails.
+const isAdminRequest = (request) => {
   if (ADMIN_TOKEN && request.headers['x-admin-token'] === ADMIN_TOKEN) {
     return true;
   }
@@ -602,9 +604,16 @@ const requireAdmin = (request, response) => {
         return true;
       }
     } catch (_) {
-      // Fall through to 401 below
+      // not a valid admin token
     }
   }
+  return false;
+};
+
+const requireAdmin = (request, response) => {
+  // Either admin path grants access. Fail-CLOSED if NEITHER is configured/
+  // valid — the safer mode when env vars are accidentally cleared.
+  if (isAdminRequest(request)) return true;
   if (!ADMIN_TOKEN) {
     response.status(500).json({ error: { error_message: 'Admin auth is not configured on the server.' } });
     return false;
@@ -625,6 +634,21 @@ const requireAuth = (request, response) => {
     response.status(401).json({ error: { error_message: 'Invalid or expired token' } });
     return null;
   }
+};
+
+// Grants access if the caller is an admin OR the customer who owns the given
+// application. Sends the appropriate 401/403 and returns false on failure.
+// Used by the customer-facing application/messages reads, which the admin
+// panel also consumes via the same routes.
+const requireOwnerOrAdmin = (request, response, applicationId) => {
+  if (isAdminRequest(request)) return true;
+  const payload = requireAuth(request, response);
+  if (!payload) return false;
+  if (payload.applicationId !== applicationId) {
+    response.status(403).json({ error: { error_message: 'Forbidden' } });
+    return false;
+  }
+  return true;
 };
 
 // ── Admin user auth (multi-user login system) ──────────────────────────
@@ -954,6 +978,7 @@ function getOfferExpiresAt(date, state) {
 }
 
 app.get('/api/advance/applications/:id', async function (request, response, next) {
+  if (!requireOwnerOrAdmin(request, response, request.params.id)) return;
   try {
     let row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -967,6 +992,7 @@ app.get('/api/advance/applications/:id', async function (request, response, next
 });
 
 app.get('/api/advance/applications/:id/messages', async function (request, response, next) {
+  if (!requireOwnerOrAdmin(request, response, request.params.id)) return;
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -976,12 +1002,22 @@ app.get('/api/advance/applications/:id/messages', async function (request, respo
 });
 
 app.post('/api/advance/applications/:id/messages', async function (request, response, next) {
+  const sender = request.body.sender === 'admin' ? 'admin' : 'customer';
+  // Admin messages require admin auth; customer messages require the caller to
+  // own the application they're posting to.
+  if (sender === 'admin') {
+    if (!requireAdmin(request, response)) return;
+  } else {
+    const payload = requireAuth(request, response);
+    if (!payload) return;
+    if (payload.applicationId !== request.params.id) {
+      return response.status(403).json({ error: { error_message: 'Forbidden' } });
+    }
+  }
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
     const text = String(request.body.text || '').trim();
-    const sender = request.body.sender === 'admin' ? 'admin' : 'customer';
-    if (sender === 'admin' && !requireAdmin(request, response)) return;
     if (!text) return response.status(400).json({ error: { error_message: 'Message text is required' } });
     const message = await db.addMessage(row.id, sender, text);
     response.json({ message });

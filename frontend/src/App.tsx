@@ -538,21 +538,25 @@ const CustomerApp = () => {
   const [cardSaved, setCardSaved] = useState(false);
 
   const loadApplication = useCallback(async (id: string) => {
-    const response = await fetch(apiUrl(`/api/advance/applications/${id}`));
+    const response = await fetch(apiUrl(`/api/advance/applications/${id}`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!response.ok) {
       localStorage.removeItem(applicationStorageKey);
       return;
     }
     const data = await response.json();
     setApplication(data.application);
-  }, []);
+  }, [token]);
 
   const loadMessages = useCallback(async (id: string) => {
-    const response = await fetch(apiUrl(`/api/advance/applications/${id}/messages`));
+    const response = await fetch(apiUrl(`/api/advance/applications/${id}/messages`), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!response.ok) return;
     const data = await response.json();
     setMessages(data.messages);
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     const applicationId = localStorage.getItem(applicationStorageKey);
@@ -4012,11 +4016,13 @@ const AdminApp = () => {
   }, [adminHeaders, activeTab]);
 
   const loadMessages = useCallback(async (id: string) => {
-    const response = await fetch(apiUrl(`/api/advance/applications/${id}/messages`));
+    const response = await fetch(apiUrl(`/api/advance/applications/${id}/messages`), {
+      headers: adminHeaders,
+    });
     if (!response.ok) return;
     const data = await response.json();
     setMessages(data.messages);
-  }, []);
+  }, [adminHeaders]);
 
   // Download full transactions CSV (incoming + outgoing). Goes via fetch
   // rather than a plain <a> link because the admin endpoint requires the
