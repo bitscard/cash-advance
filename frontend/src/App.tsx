@@ -4451,20 +4451,35 @@ const AdminApp = () => {
             const totalDenied = applications.filter(a =>
               ["denied", "expired"].includes(a.status)
             ).length;
-            // Due today / overdue = funded users with a pending repayment due ≤ today.
+            // Due today / overdue = users where we ACTUALLY need to act.
+            // Excludes repayments where a charge is already 'processing'
+            // (ACH submitted, just waiting 3-5 business days to settle) or
+            // 'succeeded' (will flip to repaid on webhook). Those don't
+            // need admin attention — they're working as intended.
             const today = new Date().toISOString().slice(0, 10);
-            const dueOrOverdue = applications.filter(a =>
+            const dueOrOverdue = applications.filter(a => {
+              if (a.repayment?.status !== "pending") return false;
+              if (!a.repayment?.due_date || a.repayment.due_date > today) return false;
+              const chargeStatus = a.stripe_charge_status;
+              if (chargeStatus === "processing" || chargeStatus === "succeeded") return false;
+              return true;
+            }).length;
+            // ACH in flight = pending repayments with a charge still
+            // settling. Surfaced as a separate small card so admin can
+            // see what's WAITING without confusing it with what needs
+            // immediate action.
+            const achInFlight = applications.filter(a =>
               a.repayment?.status === "pending" &&
-              a.repayment?.due_date &&
-              a.repayment.due_date <= today
+              a.stripe_charge_status === "processing"
             ).length;
             const cards: { label: string; value: number; color: string; bg: string }[] = [
-              { label: "Total applied",     value: total,         color: "#1e40af", bg: "#dbeafe" },
-              { label: "Total approved",    value: totalApproved, color: "#15803d", bg: "#dcfce7" },
-              { label: "Total funded",      value: totalFunded,   color: "#7c2d12", bg: "#fef3c7" },
-              { label: "Total repaid",      value: totalRepaid,   color: "#166534", bg: "#bbf7d0" },
-              { label: "Total denied",      value: totalDenied,   color: "#991b1b", bg: "#fee2e2" },
-              { label: "Due today/overdue", value: dueOrOverdue,  color: "#9a3412", bg: "#fed7aa" },
+              { label: "Total applied",      value: total,         color: "#1e40af", bg: "#dbeafe" },
+              { label: "Total approved",     value: totalApproved, color: "#15803d", bg: "#dcfce7" },
+              { label: "Total funded",       value: totalFunded,   color: "#7c2d12", bg: "#fef3c7" },
+              { label: "Total repaid",       value: totalRepaid,   color: "#166534", bg: "#bbf7d0" },
+              { label: "Total denied",       value: totalDenied,   color: "#991b1b", bg: "#fee2e2" },
+              { label: "Needs collection",   value: dueOrOverdue,  color: "#9a3412", bg: "#fed7aa" },
+              { label: "ACH in flight",      value: achInFlight,   color: "#3730a3", bg: "#e0e7ff" },
             ];
             return (
               <div className={styles.adminSummaryGrid}>
