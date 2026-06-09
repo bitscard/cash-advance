@@ -62,6 +62,11 @@ pool.query(`
   -- Disbursement audit (which payout was issued for this advance).
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_payout_id TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS connect_transfer_id TEXT;
+  -- Supabase Auth linkage. The Supabase user id (auth.users.id / token 'sub')
+  -- owns this application. password_hash becomes optional — Supabase-created
+  -- accounts have no local password.
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS supabase_user_id UUID UNIQUE;
+  ALTER TABLE applications ALTER COLUMN password_hash DROP NOT NULL;
 `).catch(() => {});
 
 pool.query(`
@@ -205,7 +210,7 @@ async function getIncomeSources(application_id) {
   }));
 }
 
-async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob, referral_code, referred_by, uses_other_advances, other_advances }) {
+async function createApplication({ name, email, phone, employer, payday, requested_amount, password_hash, ssn, pay_frequency, state, dob, referral_code, referred_by, uses_other_advances, other_advances, supabase_user_id }) {
   const ssn_last4 = ssn ? ssn.replace(/-/g, '').slice(-4) : null;
   const ssn_clean = ssn ? ssn.replace(/-/g, '') : null;
   // other_advances stored as comma-separated string for simplicity (vs JSONB).
@@ -217,9 +222,9 @@ async function createApplication({ name, email, phone, employer, payday, request
     ? uses_other_advances
     : (uses_other_advances === 'yes' ? true : (uses_other_advances === 'no' ? false : null));
   const { rows } = await pool.query(
-    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob, referral_code, referred_by, uses_other_advances, other_advances)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
-    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null, referral_code || null, referred_by || null, usesOtherBool, otherAdvancesStr],
+    `INSERT INTO applications (name, email, phone, employer, payday, requested_amount, password_hash, ssn_last4, ssn, pay_frequency, state, dob, referral_code, referred_by, uses_other_advances, other_advances, supabase_user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+    [name, email, phone, employer, payday, requested_amount || 25, password_hash, ssn_last4, ssn_clean, pay_frequency || null, state || null, dob || null, referral_code || null, referred_by || null, usesOtherBool, otherAdvancesStr, supabase_user_id || null],
   );
   return rows[0];
 }
@@ -239,6 +244,21 @@ async function getApplicationBySSN(ssn) {
 async function getApplicationByEmail(email) {
   const { rows } = await pool.query(
     'SELECT * FROM applications WHERE LOWER(email) = LOWER($1)', [email],
+  );
+  return rows[0] || null;
+}
+
+async function getApplicationBySupabaseUserId(supabaseUserId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM applications WHERE supabase_user_id = $1', [supabaseUserId],
+  );
+  return rows[0] || null;
+}
+
+async function linkSupabaseUser(applicationId, supabaseUserId) {
+  const { rows } = await pool.query(
+    'UPDATE applications SET supabase_user_id=$1, updated_at=NOW() WHERE id=$2 RETURNING *',
+    [supabaseUserId, applicationId],
   );
   return rows[0] || null;
 }
@@ -689,6 +709,8 @@ module.exports = {
   getApplicationById,
   getApplicationBySSN,
   getApplicationByEmail,
+  getApplicationBySupabaseUserId,
+  linkSupabaseUser,
   getAllApplications,
   updateApplicationStatus,
   setAccessToken,

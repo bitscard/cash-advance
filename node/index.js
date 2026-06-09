@@ -23,6 +23,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET is required — set it in the environment. Refusing to start.');
 }
+// Supabase access tokens are HS256-signed with this project secret. Optional
+// during the migration: when unset, the Supabase auth path is simply inert and
+// only legacy app-issued JWTs are accepted.
+const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET || '';
 
 // SSNs that bypass both format validation and the dupe check (for testing).
 // Add your own SSN here: TEST_SSNS=123456789,987654321 in .env (dashes optional).
@@ -622,14 +626,49 @@ const requireAdmin = (request, response) => {
   return false;
 };
 
-const requireAuth = (request, response) => {
+// Verifies a Supabase access token (HS256). Returns the claims
+// ({ sub, email, app_metadata, ... }) or null. No response side effects.
+const verifySupabaseToken = (token) => {
+  if (!SUPABASE_JWT_SECRET) return null;
+  try {
+    const payload = jwt.verify(token, SUPABASE_JWT_SECRET, { algorithms: ['HS256'] });
+    if (payload && payload.aud === 'authenticated' && payload.sub) return payload;
+  } catch (_) {
+    // not a Supabase token
+  }
+  return null;
+};
+
+// Authenticates a customer request via EITHER a Supabase access token (new)
+// OR a legacy app-issued JWT (transition). Always resolves to a payload that
+// carries `.applicationId` so existing ownership checks are unchanged:
+//   - Supabase: looked up by supabase_user_id, falling back to the token email
+//     and lazily backfilling the link. applicationId is null if the Supabase
+//     user has no application yet (ownership checks then 403, never 500).
+//   - Legacy: the verified { applicationId } payload.
+// Returns null after sending a 401 on failure. ASYNC — callers must await.
+const requireAuth = async (request, response) => {
   const header = request.headers['authorization'];
   if (!header || !header.startsWith('Bearer ')) {
     response.status(401).json({ error: { error_message: 'Authentication required' } });
     return null;
   }
+  const token = header.slice(7);
+
+  const supa = verifySupabaseToken(token);
+  if (supa) {
+    let app = await db.getApplicationBySupabaseUserId(supa.sub);
+    if (!app && supa.email) {
+      app = await db.getApplicationByEmail(supa.email);
+      if (app && !app.supabase_user_id) {
+        await db.linkSupabaseUser(app.id, supa.sub);
+      }
+    }
+    return { applicationId: app ? app.id : null, supabaseUserId: supa.sub, email: supa.email };
+  }
+
   try {
-    return jwt.verify(header.slice(7), JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET);
   } catch {
     response.status(401).json({ error: { error_message: 'Invalid or expired token' } });
     return null;
@@ -640,9 +679,9 @@ const requireAuth = (request, response) => {
 // application. Sends the appropriate 401/403 and returns false on failure.
 // Used by the customer-facing application/messages reads, which the admin
 // panel also consumes via the same routes.
-const requireOwnerOrAdmin = (request, response, applicationId) => {
+const requireOwnerOrAdmin = async (request, response, applicationId) => {
   if (isAdminRequest(request)) return true;
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return false;
   if (payload.applicationId !== applicationId) {
     response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -767,8 +806,14 @@ app.get('/api/advance/referral/:code', async function (request, response, next) 
 
 app.post('/api/advance/applications', async function (request, response, next) {
   try {
-    const { name, email, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances, address_line1, address_city, address_postal_code } = request.body;
-    if (!password || password.length < 6) {
+    const { name, phone, dob, requested_amount, password, ssn, state, income_sources, referral_code: usedCode, uses_other_advances, other_advances, address_line1, address_city, address_postal_code } = request.body;
+    // Auth mode: a Supabase session (new) carries identity in the access token;
+    // legacy signups send an email + password in the body. The token email is
+    // authoritative when present — never trust body.email for a Supabase user.
+    const authHeader = request.headers['authorization'];
+    const supaUser = authHeader && authHeader.startsWith('Bearer ') ? verifySupabaseToken(authHeader.slice(7)) : null;
+    const email = supaUser ? supaUser.email : request.body.email;
+    if (!supaUser && (!password || password.length < 6)) {
       return response.status(400).json({ error: { error_message: 'Password must be at least 6 characters' } });
     }
     // Phone: must be a valid US number per NANP rules. Defense-in-depth
@@ -851,6 +896,14 @@ app.post('/api/advance/applications', async function (request, response, next) {
       }
     }
 
+    // One application per Supabase user.
+    if (supaUser) {
+      const existingSupa = await db.getApplicationBySupabaseUserId(supaUser.sub);
+      if (existingSupa) {
+        return response.status(409).json({ error: { error_message: 'An application already exists for this account.' } });
+      }
+    }
+
     // Validate referral code if provided
     let referredBy = null;
     let earlyAccess = false;
@@ -870,7 +923,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
 
     // Store primary source fields on applications row for backwards compat
     const primary = income_sources[0];
-    const password_hash = await bcrypt.hash(password, 10);
+    const password_hash = supaUser ? null : await bcrypt.hash(password, 10);
     const newReferralCode = await makeUniqueReferralCode(name || '');
     const row = await db.createApplication({
       name: name || '', email: email || '', phone: phone || '',
@@ -886,6 +939,7 @@ app.post('/api/advance/applications', async function (request, response, next) {
       referred_by: referredBy,
       uses_other_advances,
       other_advances,
+      supabase_user_id: supaUser ? supaUser.sub : null,
     });
     // Save address if provided (required for Connect Custom KYC flow,
     // optional otherwise — backend tolerates nulls).
@@ -904,9 +958,14 @@ app.post('/api/advance/applications', async function (request, response, next) {
     // Mailchimp can still target them separately if you set up a waitlist drip.
     addToMailchimp(name, email, state, eligibleOnSignup ? ['welcome'] : ['welcome', 'waitlist'])
       .catch(err => console.log('[mailchimp welcome] error:', err.message));
-    const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
     const updatedRow = await db.getApplicationById(row.id);
-    response.json({ application: db.publicApp(updatedRow), token });
+    if (supaUser) {
+      // Client already holds the Supabase session; no legacy token to mint.
+      response.json({ application: db.publicApp(updatedRow) });
+    } else {
+      const token = jwt.sign({ applicationId: row.id }, JWT_SECRET, { expiresIn: '30d' });
+      response.json({ application: db.publicApp(updatedRow), token });
+    }
   } catch (err) {
     if (err.code === '23505') {
       return response.status(409).json({ error: { error_message: 'An application with this email already exists. Please log in.' } });
@@ -978,7 +1037,7 @@ function getOfferExpiresAt(date, state) {
 }
 
 app.get('/api/advance/applications/:id', async function (request, response, next) {
-  if (!requireOwnerOrAdmin(request, response, request.params.id)) return;
+  if (!(await requireOwnerOrAdmin(request, response, request.params.id))) return;
   try {
     let row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -992,7 +1051,7 @@ app.get('/api/advance/applications/:id', async function (request, response, next
 });
 
 app.get('/api/advance/applications/:id/messages', async function (request, response, next) {
-  if (!requireOwnerOrAdmin(request, response, request.params.id)) return;
+  if (!(await requireOwnerOrAdmin(request, response, request.params.id))) return;
   try {
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -1008,7 +1067,7 @@ app.post('/api/advance/applications/:id/messages', async function (request, resp
   if (sender === 'admin') {
     if (!requireAdmin(request, response)) return;
   } else {
-    const payload = requireAuth(request, response);
+    const payload = await requireAuth(request, response);
     if (!payload) return;
     if (payload.applicationId !== request.params.id) {
       return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1027,7 +1086,7 @@ app.post('/api/advance/applications/:id/messages', async function (request, resp
 // ── Plaid — bank verification ─────────────────────────────────────────────────
 
 app.post('/api/advance/applications/:id/plaid/link-token', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1068,7 +1127,7 @@ app.post('/api/advance/applications/:id/plaid/link-token', async function (reque
 // Legacy iframe-based flow — exchange public_token directly. Kept for any
 // in-flight applications that still use the standard Link integration.
 app.post('/api/advance/applications/:id/plaid/exchange-token', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1099,7 +1158,7 @@ app.post('/api/advance/applications/:id/plaid/exchange-token', async function (r
 // linkTokenGet, find the public_token, exchange it for an access_token, and
 // save it to the application.
 app.post('/api/advance/applications/:id/plaid/check-completion', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1157,7 +1216,7 @@ app.post('/api/advance/auth/login', async function (request, response, next) {
 });
 
 app.get('/api/advance/auth/me', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   try {
     const row = await db.getApplicationById(payload.applicationId);
@@ -1180,7 +1239,7 @@ const ELIGIBLE_STATES = new Set([
 ]);
 
 app.post('/api/advance/applications/:id/subscription/activate', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1332,7 +1391,7 @@ async function getMembershipProductId() {
   }
 }
 app.post('/api/advance/applications/:id/subscription/checkout-session', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1387,7 +1446,7 @@ app.post('/api/advance/applications/:id/subscription/checkout-session', async fu
 // subscription is active and flips subscription_status to 'active' so the
 // pre-bank onboarding flow can advance past the membership step.
 app.post('/api/advance/applications/:id/subscription/sync', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1421,7 +1480,7 @@ app.post('/api/advance/applications/:id/subscription/sync', async function (requ
 });
 
 app.post('/api/advance/applications/:id/delivery', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1482,7 +1541,7 @@ app.post('/api/advance/applications/:id/delivery', async function (request, resp
 // we keep that as the source of truth — this endpoint can update it
 // if the user typed differently.
 app.patch('/api/advance/applications/:id/address', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -1502,7 +1561,7 @@ app.patch('/api/advance/applications/:id/address', async function (request, resp
 });
 
 app.patch('/api/advance/applications/:id/payout-preference', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2096,7 +2155,7 @@ app.get('/api/advance/admin/applications/:id/referrals', async function (request
 const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 
 app.post('/api/advance/applications/:id/reapply', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2164,7 +2223,7 @@ app.post('/api/advance/admin/applications/:id/repayment', async function (reques
 // ── Stripe card endpoints ──────────────────────────────────────────────────────
 
 app.post('/api/advance/applications/:id/stripe/setup-intent', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2195,7 +2254,7 @@ app.post('/api/advance/applications/:id/stripe/setup-intent', async function (re
 });
 
 app.post('/api/advance/applications/:id/stripe/save-payment-method', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2278,7 +2337,7 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
 // admin marks the application funded and the user picked ACH as payout.
 
 app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2378,7 +2437,7 @@ app.post('/api/advance/applications/:id/stripe/connect/onboarding-link', async f
 });
 
 app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2446,7 +2505,7 @@ app.post('/api/advance/applications/:id/stripe/connect/refresh-status', async fu
 //       there when status='succeeded'), saves it as the chargeable PM
 //       AND extracts the underlying FC account id for transaction reads
 app.post('/api/advance/applications/:id/stripe/fc/create-session', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2536,7 +2595,7 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2584,7 +2643,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/native/complete', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2780,7 +2839,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
 // user / their engineer can see exactly what Stripe is reporting,
 // without needing access to Render logs or Stripe Dashboard.
 app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2922,7 +2981,7 @@ app.get('/api/advance/applications/:id/stripe/fc/diagnose', async function (requ
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/client-event', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
@@ -2948,7 +3007,7 @@ app.post('/api/advance/applications/:id/stripe/fc/client-event', async function 
 });
 
 app.post('/api/advance/applications/:id/stripe/fc/complete', async function (request, response, next) {
-  const payload = requireAuth(request, response);
+  const payload = await requireAuth(request, response);
   if (!payload) return;
   if (payload.applicationId !== request.params.id) {
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
