@@ -86,6 +86,7 @@ interface Application {
   payout_methods: string | null;
   payout_contact: string | null;
   bank_account_number: string | null;
+  bank_holder_name: string | null;
   uses_other_advances: boolean | null;
   other_advances: string[];
   subscription_status: string | null;
@@ -4775,6 +4776,39 @@ const AdminApp = () => {
                       </dd>
                       <dt>Bank</dt>
                       <dd>{selected.plaid_connected ? "✓ Connected" : "Waiting"}</dd>
+                      {/* Bank holder name (from Stripe FC ownership) vs the
+                          signup name — fuzzy match flags potential identity
+                          fraud. Only shown when we have ownership data. */}
+                      {selected.bank_holder_name && (() => {
+                        const signupName = (selected.customer.name || "").toLowerCase().replace(/[^a-z\s]/g, "").trim();
+                        const bankName = selected.bank_holder_name.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+                        // Fuzzy match: are most signup-name word-tokens present (or close)
+                        // in the bank-holder-name? 'Maria Garcia Lopez' vs 'Maria Garcia' = match;
+                        // 'Maria Garcia' vs 'John Smith' = mismatch.
+                        const signupWords = signupName.split(/\s+/).filter(w => w.length >= 2);
+                        const bankWords = bankName.split(/\s+/).filter(w => w.length >= 2);
+                        const matched = signupWords.filter(sw =>
+                          bankWords.some(bw => levenshtein(sw, bw) <= Math.max(1, Math.floor(sw.length / 4)))
+                        ).length;
+                        const looksMatched = signupWords.length > 0 && matched >= Math.min(signupWords.length, 2);
+                        return (
+                          <>
+                            <dt>Bank holder</dt>
+                            <dd>
+                              {looksMatched ? (
+                                <span style={{ color: "#15803d" }}>✓ {selected.bank_holder_name}</span>
+                              ) : (
+                                <>
+                                  <span style={{ color: "#b45309", fontWeight: 700 }}>⚠ {selected.bank_holder_name}</span>
+                                  <div style={{ color: "#92400e", fontSize: "1.15rem", fontStyle: "italic", marginTop: "0.2rem" }}>
+                                    Doesn&apos;t match signup name — investigate before funding
+                                  </div>
+                                </>
+                              )}
+                            </dd>
+                          </>
+                        );
+                      })()}
                       <dt>Card</dt>
                       <dd>{selected.stripe_card_saved ? "✓ On file" : "None"}</dd>
                       <dt>Referral code</dt>

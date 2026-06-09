@@ -2631,7 +2631,7 @@ app.post('/api/advance/applications/:id/stripe/fc/create-session', async functio
       payment_method_options: {
         us_bank_account: {
           financial_connections: {
-            permissions: ['payment_method', 'transactions', 'balances'],
+            permissions: ['payment_method', 'transactions', 'balances', 'ownership'],
             prefetch: ['balances'],
             ...(returnUrl ? { return_url: returnUrl } : {}),
           },
@@ -2680,7 +2680,7 @@ app.post('/api/advance/applications/:id/stripe/fc/native/create-session', async 
     // collectFinancialConnectionsAccounts resolves.
     const session = await stripe.financialConnections.sessions.create({
       account_holder: { type: 'customer', customer: customerId },
-      permissions: ['payment_method', 'transactions', 'balances'],
+      permissions: ['payment_method', 'transactions', 'balances', 'ownership'],
       prefetch: ['balances'],
       filters: {
         countries: ['US'],
@@ -2835,6 +2835,36 @@ app.post('/api/advance/applications/:id/stripe/fc/native/complete', async functi
       } catch (e) {
         console.log('[stripe/fc/native/complete] subscribe failed (non-fatal)', e.message);
       }
+    }
+
+    // Fetch ownership (bank holder name) — costs ~$0.10 per call.
+    // Worth it for fraud detection: comparing the bank holder name
+    // against the signup name catches stolen-identity patterns.
+    // Wrapped in try/catch + setImmediate so a Stripe error or a bank
+    // that doesn't expose ownership can't break the bank-link flow.
+    if (account.id) {
+      setImmediate(async () => {
+        try {
+          await stripe.financialConnections.accounts.subscribe(account.id, {
+            features: ['ownership'],
+          });
+          // The owners list lives at /accounts/{id}/owners; expand
+          // surfaces it inline. Some banks return empty; that's fine.
+          const refreshed = await stripe.financialConnections.accounts.retrieve(account.id, {
+            expand: ['owners'],
+          });
+          const owners = (refreshed.owners && refreshed.owners.data) || [];
+          const ownerName = owners[0] && owners[0].name ? owners[0].name : null;
+          if (ownerName) {
+            await db.saveBankHolderName(row.id, ownerName);
+            console.log('[stripe/fc/native/complete] saved bank holder', { application_id: row.id, name: ownerName });
+          } else {
+            console.log('[stripe/fc/native/complete] no owners data exposed by bank', { application_id: row.id });
+          }
+        } catch (e) {
+          console.log('[stripe/fc/native/complete] ownership fetch failed (non-fatal)', e.message);
+        }
+      });
     }
 
     await db.addMessage(row.id, 'system', 'Bank account connected via Stripe. A reviewer will check your application and respond here.');

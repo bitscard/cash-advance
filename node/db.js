@@ -40,6 +40,7 @@ pool.query(`
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_attempt_count INTEGER DEFAULT 0;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS repayment_last_attempt_at TIMESTAMPTZ;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_account_number TEXT;
+  ALTER TABLE applications ADD COLUMN IF NOT EXISTS bank_holder_name TEXT;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS uses_other_advances BOOLEAN;
   ALTER TABLE applications ADD COLUMN IF NOT EXISTS other_advances TEXT;
   -- Address fields for Stripe Connect Custom KYC (Connect-Custom flow).
@@ -145,6 +146,7 @@ const publicApp = (row) => ({
   repayment_attempt_count: row.repayment_attempt_count || 0,
   repayment_last_attempt_at: row.repayment_last_attempt_at ? new Date(row.repayment_last_attempt_at).toISOString() : null,
   bank_account_number: row.bank_account_number || null,
+  bank_holder_name: row.bank_holder_name || null,
   uses_other_advances: row.uses_other_advances === true,
   other_advances: row.other_advances ? row.other_advances.split(',').map(s => s.trim()).filter(Boolean) : [],
   // Connect Custom (zero-friction payout) status — exposed so admin
@@ -587,6 +589,17 @@ async function saveBankAccountNumber(id, accountNumber) {
   return rows[0] || null;
 }
 
+// Bank holder name pulled from Stripe FC's ownership data. Compared
+// against customer.name in the admin panel to surface name mismatches
+// — a strong fraud signal (stolen identity, family account, etc).
+async function saveBankHolderName(id, name) {
+  const { rows } = await pool.query(
+    `UPDATE applications SET bank_holder_name=$1, updated_at=NOW() WHERE id=$2 RETURNING *`,
+    [name || null, id],
+  );
+  return rows[0] || null;
+}
+
 async function resetRepaymentAttemptCount(id) {
   const { rows } = await pool.query(
     `UPDATE applications SET repayment_attempt_count = 0, updated_at = NOW() WHERE id = $1 RETURNING *`,
@@ -743,6 +756,7 @@ module.exports = {
   bumpRepaymentAttemptCount,
   resetRepaymentAttemptCount,
   saveBankAccountNumber,
+  saveBankHolderName,
   // Connect Custom flow
   saveAddress,
   saveConnectAccount,
