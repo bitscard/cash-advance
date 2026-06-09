@@ -335,19 +335,18 @@ async function getDueMemberships() {
 }
 
 async function getDueApplications() {
-  // ACH-only collection (card fallback removed). Bank PaymentMethod
-  // comes from the FC bank-link at Step 4. Skip rows that:
-  //   - have already maxed out retry attempts (>= 3)
-  //   - had an attempt within the last 23h (don't double-pull while
-  //     the prior ACH is still in flight; ACH settles in 3-5 days)
+  // Single-attempt collection — no retry logic. We only pick rows that
+  // have NEVER been attempted (repayment_attempt_count = 0). Once any
+  // attempt fires (success, processing, or failure), the row is skipped
+  // forever by the cron. Admin can still manually re-charge via the
+  // /admin/applications/:id/charge endpoint if they want to try again.
   const { rows } = await pool.query(
     `SELECT * FROM applications
      WHERE repayment_due_date <= CURRENT_DATE
        AND repayment_status = 'pending'
        AND stripe_payment_method_id IS NOT NULL
        AND stripe_customer_id IS NOT NULL
-       AND COALESCE(repayment_attempt_count, 0) < 5
-       AND (repayment_last_attempt_at IS NULL OR repayment_last_attempt_at < NOW() - INTERVAL '23 hours')`
+       AND COALESCE(repayment_attempt_count, 0) = 0`
   );
   return rows;
 }
