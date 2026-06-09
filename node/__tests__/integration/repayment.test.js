@@ -45,6 +45,8 @@ async function seedDueApp() {
     password: 'test-password', ssn: '111223333', state: 'Georgia',
     income_sources: [{ employer: 'Acme', payday: '2026-06-15', pay_frequency: 'biweekly' }],
   });
+  expect(res.status).toBe(200);
+  expect(res.body.application?.id).toBeDefined();
   const application = res.body.application;
   await db.saveStripeCustomer(application.id, 'cus_test');
   // saveBankAccount sets stripe_payment_method_id, which getDueApplications requires.

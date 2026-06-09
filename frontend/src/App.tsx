@@ -180,6 +180,16 @@ const ADVANCE_TIERS = [25, 50, 75, 100, 150, 200];
 
 const applicationStorageKey = "advance_application_id";
 const userTokenStorageKey = "advance_user_token";
+// Validated invite code, persisted across the Supabase OAuth redirect round-trip
+// (Google sign-up). Without this the redirect back to ?apply=1 drops the gate
+// step and the new application would be created with no referral code.
+const signupReferralStorageKey = "advance_signup_referral";
+// Only restore the persisted referral in the OAuth-return context (?apply=1),
+// so a stale value never pre-fills the gate on a fresh landing visit.
+function readPersistedReferral(): { code: string; referrer_name: string | null } | null {
+  if (!new URLSearchParams(window.location.search).get("apply")) return null;
+  try { return JSON.parse(localStorage.getItem(signupReferralStorageKey) || "null"); } catch { return null; }
+}
 const adminTokenStorageKey = "advance_admin_token";
 const adminJwtStorageKey = "advance_admin_jwt";
 const adminUserStorageKey = "advance_admin_user";
@@ -561,12 +571,15 @@ const CustomerApp = () => {
   const [error, setError] = useState<string | null>(null);
   // ?apply=1 deep-links straight to the gate-code step (e.g. when a signed-in
   // Supabase user with no application yet is routed here from /loan).
-  const [view, setView] = useState<"landing" | "referral" | "signup">(
-    () => (new URLSearchParams(window.location.search).get("apply") ? "referral" : "landing"),
-  );
-  const [gateCode, setGateCode] = useState("");
-  const [gateValid, setGateValid] = useState<boolean | null>(null);
-  const [gateReferrerName, setGateReferrerName] = useState<string | null>(null);
+  const [view, setView] = useState<"landing" | "referral" | "signup">(() => {
+    if (!new URLSearchParams(window.location.search).get("apply")) return "landing";
+    // Returning from Supabase OAuth: skip straight to signup if the invite was
+    // already validated before the redirect; otherwise show the gate step.
+    return readPersistedReferral() ? "signup" : "referral";
+  });
+  const [gateCode, setGateCode] = useState(() => readPersistedReferral()?.code || "");
+  const [gateValid, setGateValid] = useState<boolean | null>(() => (readPersistedReferral() ? true : null));
+  const [gateReferrerName, setGateReferrerName] = useState<string | null>(() => readPersistedReferral()?.referrer_name ?? null);
   const [gateBusy, setGateBusy] = useState(false);
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
@@ -609,7 +622,12 @@ const CustomerApp = () => {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) {
+      // Auth failure (e.g. the bearer stopped authorizing): clear the stored id
+      // AND the in-memory state, so a previous applicant's data isn't left on
+      // screen — same as LoanApp.loadMe.
       localStorage.removeItem(applicationStorageKey);
+      setApplication(null);
+      setMessages([]);
       return;
     }
     const data = await response.json();
@@ -937,6 +955,7 @@ const CustomerApp = () => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.error_message || "Unable to start application");
       localStorage.setItem(applicationStorageKey, data.application.id);
+      localStorage.removeItem(signupReferralStorageKey);
       if (data.token) {
         localStorage.setItem(userTokenStorageKey, data.token);
         setToken(data.token);
@@ -1739,6 +1758,8 @@ const CustomerApp = () => {
                   setGateReferrerName(data.valid ? data.referrer_name : null);
                   if (data.valid) {
                     setForm(f => ({ ...f, referralCode: code }));
+                    // Persist so a Supabase OAuth redirect doesn't lose it.
+                    localStorage.setItem(signupReferralStorageKey, JSON.stringify({ code, referrer_name: data.referrer_name || null }));
                     setView("signup");
                   }
                 } catch {
@@ -3946,14 +3967,16 @@ const AdminApp = () => {
   const adminHeaders = useMemo<Record<string, string>>(
     () => {
       const headers: Record<string, string> = {};
-      // Prefer a Supabase admin session, then the legacy per-user JWT, then the
-      // shared token.
-      if (supabaseToken) {
-        headers["Authorization"] = `Bearer ${supabaseToken}`;
-      } else if (adminJwt) {
+      // Prefer an explicit admin login (legacy per-user JWT, then shared token)
+      // over an ambient Supabase session: a signed-in customer must not shadow a
+      // deliberate admin login. A Supabase *admin* session has no adminJwt/
+      // adminToken, so it still falls through to the bearer below.
+      if (adminJwt) {
         headers["Authorization"] = `Bearer ${adminJwt}`;
       } else if (adminToken) {
         headers["x-admin-token"] = adminToken;
+      } else if (supabaseToken) {
+        headers["Authorization"] = `Bearer ${supabaseToken}`;
       }
       return headers;
     },
@@ -4092,13 +4115,21 @@ const AdminApp = () => {
     setLoginMode("login");
   };
 
-  const isAuthed = Boolean(adminToken || adminJwt || supabaseToken);
+  // A bare Supabase session is NOT proof of admin: a signed-in customer would
+  // otherwise be dropped into an empty admin shell (the server still 401/403s).
+  // Only count it once an admin-authorized response confirms it.
+  const [supabaseAdminOk, setSupabaseAdminOk] = useState(false);
+  const isAuthed = Boolean(adminToken || adminJwt || (supabaseToken && supabaseAdminOk));
 
   const loadApplications = useCallback(async () => {
     const response = await fetch(apiUrl("/api/advance/admin/applications"), {
       headers: adminHeaders,
     });
-    if (!response.ok) return;
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) setSupabaseAdminOk(false);
+      return;
+    }
+    setSupabaseAdminOk(true);
     const data = await response.json();
     setApplications(data.applications);
     // Default selection: keep the current one if still around, otherwise

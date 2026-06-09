@@ -171,7 +171,7 @@ const SupabaseAuthPanel: React.FC<Props> = ({ redirectTo, heading, defaultMode }
             type="button"
             className={styles.bldFootLink}
             style={{ background: "none", border: 0, padding: 0, cursor: "pointer", font: "inherit", display: "block", marginTop: 4 }}
-            onClick={() => { setMode("reset"); setError(null); }}
+            onClick={() => { setMode("reset"); setError(null); setPassword(""); }}
           >
             Forgot password?
           </button>

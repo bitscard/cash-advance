@@ -29,6 +29,8 @@ export function useSupabaseAccessToken(): string | null {
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (active) setAccessToken(data.session?.access_token ?? null);
+    }).catch(() => {
+      // Session fetch failed (network/storage) — stay null; legacy flow applies.
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAccessToken(session?.access_token ?? null);
