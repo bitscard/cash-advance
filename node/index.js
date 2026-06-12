@@ -3298,15 +3298,13 @@ async function fetchFcTransactions(fcAccountId) {
 }
 module.exports.fetchFcTransactions = fetchFcTransactions;
 
-// Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
-// Fails open (ok: true) when balance is unavailable so card-only users are unaffected.
-// Balance check before charging. Prefers Stripe Financial Connections
-// (FC) since that's the new bank-link primitive; falls back to legacy
-// Plaid access_token for any older accounts mid-flight. Fails open
-// (returns ok=true) if balance is unavailable — better to attempt the
-// charge than block legitimate collections on data gaps.
-async function checkOverdraft(row, amountCents) {
-  // Try FC first
+// Reads the connected bank account's balance in cents, or null if it can't
+// be determined. Prefers Stripe Financial Connections (the new bank-link
+// primitive) and falls back to a legacy Plaid access_token for accounts from
+// before the FC migration. Returning null (rather than throwing) lets callers
+// decide how to handle a data gap — collection fails open, auto-deny fails
+// safe by simply not denying.
+async function getBankBalanceCents(row) {
   if (row.stripe_fc_account_id) {
     try {
       // Refresh the balance feature so we get up-to-the-minute data.
@@ -3321,42 +3319,42 @@ async function checkOverdraft(row, amountCents) {
       } catch (refreshErr) {
         // Refresh isn't critical — if it fails, we read whatever cached
         // value Stripe has and proceed.
-        console.log('[overdraft_check fc] refresh failed (non-fatal)', refreshErr.message);
+        console.log('[bank_balance fc] refresh failed (non-fatal)', refreshErr.message);
       }
       const fcAcct = await stripe.financialConnections.accounts.retrieve(row.stripe_fc_account_id);
-      const availableCents = fcAcct.balance?.current?.usd ?? null;
-      console.log(`[overdraft_check fc] available=${availableCents} cents | charge=${amountCents} cents`);
-      if (availableCents === null) return { ok: true };
-      if (availableCents < amountCents) {
-        const avail = (availableCents / 100).toFixed(2);
-        const needed = (amountCents / 100).toFixed(2);
-        return { ok: false, reason: `Payment skipped — bank balance is $${avail} but repayment is $${needed}. We'll retry tomorrow.` };
-      }
-      return { ok: true };
+      return fcAcct.balance?.current?.usd ?? null;
     } catch (e) {
-      console.log('[overdraft_check fc] error (failing open)', e.message);
-      // Fall through to Plaid path or success
+      console.log('[bank_balance fc] error', e.message);
+      // Fall through to Plaid path
     }
   }
   // Legacy Plaid path (for users from before FC migration)
-  if (!row.access_token) return { ok: true };
+  if (!row.access_token) return null;
   try {
     const resp = await client.accountsBalance.get({ access_token: row.access_token });
     const checking = resp.data.accounts.find(a => a.type === 'depository') || resp.data.accounts[0];
-    const availableCents = checking?.balances.available != null
+    return checking?.balances.available != null
       ? Math.round(checking.balances.available * 100) : null;
-    console.log(`[overdraft_check plaid] available=${availableCents} cents | charge=${amountCents} cents`);
-    if (availableCents === null) return { ok: true };
-    if (availableCents < amountCents) {
-      const avail = (availableCents / 100).toFixed(2);
-      const needed = (amountCents / 100).toFixed(2);
-      return { ok: false, reason: `Payment skipped — bank balance is $${avail} but repayment is $${needed}. We'll retry tomorrow.` };
-    }
-    return { ok: true };
   } catch (e) {
-    console.log('[overdraft_check plaid] balance unavailable:', e.message, '— proceeding');
-    return { ok: true };
+    console.log('[bank_balance plaid] unavailable:', e.message);
+    return null;
   }
+}
+
+// Returns { ok: true } if safe to charge, { ok: false, reason } if it would overdraft.
+// Fails open (ok: true) when balance is unavailable so card-only users are
+// unaffected — better to attempt the charge than block legitimate collections
+// on a data gap.
+async function checkOverdraft(row, amountCents) {
+  const availableCents = await getBankBalanceCents(row);
+  console.log(`[overdraft_check] available=${availableCents} cents | charge=${amountCents} cents`);
+  if (availableCents === null) return { ok: true };
+  if (availableCents < amountCents) {
+    const avail = (availableCents / 100).toFixed(2);
+    const needed = (amountCents / 100).toFixed(2);
+    return { ok: false, reason: `Payment skipped — bank balance is $${avail} but repayment is $${needed}. We'll retry tomorrow.` };
+  }
+  return { ok: true };
 }
 
 // Charge amount in cents. Prefer repayment_amount (fee already baked in
@@ -3515,6 +3513,24 @@ async function autoApproveIfEligible(applicationId) {
   // review until we trust the auto-approval signal more.
   if ((row.repayment_count || 0) > 0) {
     return { approved: false, reason: 'repeat customer — manual review' };
+  }
+
+  // Auto-deny: a new applicant whose connected bank is already overdrawn
+  // (negative balance) at apply time. This is a hard reject — an account
+  // in the red is the strongest available signal they can't cover the
+  // advance. Only first-time applicants reach here (repeat customers
+  // returned above), so this is scoped to new people by construction.
+  // Fails safe: if the balance can't be read we do NOT deny, leaving the
+  // application for the normal income check / manual review below.
+  const balanceCents = await getBankBalanceCents(row);
+  if (balanceCents !== null && balanceCents < 0) {
+    const balStr = (Math.abs(balanceCents) / 100).toFixed(2);
+    const updated = await db.updateApplicationStatus(row.id, 'denied');
+    await db.addMessage(row.id, 'system', `Application denied automatically — your connected bank account shows a negative balance (-$${balStr}).`);
+    addToMailchimp(updated?.name || row.name, updated?.email || row.email, updated?.state || row.state, ['denied'])
+      .catch(err => console.log('[mailchimp denied] error:', err.message));
+    console.log('[auto-deny] negative bank balance', { application_id: row.id, balance_cents: balanceCents });
+    return { approved: false, reason: `negative bank balance: -$${balStr}` };
   }
 
   // Safeguard: state must be eligible (sanity — shouldn't have reached
@@ -3996,6 +4012,10 @@ module.exports = {
   addToMailchimp,
   // Cron task body (callable directly without waiting for setInterval)
   sendDueDateReminders,
+  // Auto-decision pipeline — exported so tests can await it (it's fire-and-
+  // forget at the request handlers, so its DB side effects aren't otherwise
+  // observable deterministically)
+  autoApproveIfEligible,
   // Eligibility data
   ELIGIBLE_STATES,
   STATE_TIMEZONES,
