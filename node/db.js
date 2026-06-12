@@ -340,11 +340,16 @@ async function getDueApplications() {
   // attempt fires (success, processing, or failure), the row is skipped
   // forever by the cron. Admin can still manually re-charge via the
   // /admin/applications/:id/charge endpoint if they want to try again.
+  //
+  // Collection is debit-card-only: ACH pulls are disabled, so rows
+  // without a saved debit card (stripe_card_pm_id) are never picked up.
+  // The bank PaymentMethod (stripe_payment_method_id) is for income
+  // verification and payouts, not repayment.
   const { rows } = await pool.query(
     `SELECT * FROM applications
      WHERE repayment_due_date <= CURRENT_DATE
        AND repayment_status = 'pending'
-       AND stripe_payment_method_id IS NOT NULL
+       AND stripe_card_pm_id IS NOT NULL
        AND stripe_customer_id IS NOT NULL
        AND COALESCE(repayment_attempt_count, 0) = 0`
   );

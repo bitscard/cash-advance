@@ -2425,19 +2425,19 @@ const CustomerApp = () => {
   }
 
   // ── Pre-bank onboarding pages ─────────────────────────────────────────────
-  // 6-step linear flow between signup and the main dashboard. Each step has
+  // 5-step linear flow between signup and the main dashboard. Each step has
   // its own gate; the order in this file determines the order users see.
-  //   1. Benefits        — pitch what they're signing up for
-  //   2. Receive money   — pick payout method (PayPal/Cash App/Zelle) + confirm
-  //   3. Trust           — milestone ladder, how trust-building works
-  //   4. Card            — backup repayment card (Stripe). Saving the card
-  //                        ALSO activates the $3.99/mo membership subscription
-  //                        (handled server-side in /stripe/save-payment-method).
-  //   5. Delivery speed  — same-day ($5) vs 3-5 days (free)
-  //   6. Bank            — verify income via Plaid Hosted Link
-  // Eligible users land in subscription_status='pending_payment' at signup;
-  // saving a card flips them to 'active'. Pre-bank screens render for both
-  // states so the user can progress through Steps 1-4 before card save.
+  //   1. Receive money   — pick payout method (PayPal/Cash App/Zelle) + confirm
+  //   2. Bank            — link bank via Stripe Financial Connections
+  //                        (income verification + payouts — NOT repayment)
+  //   3. Debit card      — REQUIRED repayment card. Collection is
+  //                        debit-card-only; ACH pulls are disabled.
+  //   4. Delivery speed  — same-day ($5) vs 3-5 days (free)
+  //   5. Bank (legacy)   — Plaid Hosted Link verification for accounts
+  //                        mid-flight on the old flow (no-op for FC users)
+  // Eligible users land in subscription_status='pending_payment' at signup.
+  // Pre-bank screens render for both states so the user can progress
+  // through the steps before any money moves.
   const preBankActive =
     application.status === "intake" &&
     (application.subscription_status === "active" || application.subscription_status === "pending_payment") &&
@@ -2445,7 +2445,7 @@ const CustomerApp = () => {
 
   // Benefits + Trust pitch screens removed per client — users go straight to action.
 
-  // Step 1 of 4: receive money — single-select PayPal/Cash App/Zelle/ACH
+  // Step 1 of 5: receive money — single-select PayPal/Cash App/Zelle/ACH
   const payoutAlreadySaved = !!(application.payout_methods && application.payout_contact);
   if (preBankActive && (!payoutAlreadySaved || wantsToChangePayout)) {
     const methods: { id: string; name: string; placeholder: string; label: string; logoBg: string; logoText: string; popular?: boolean }[] = [
@@ -2480,8 +2480,9 @@ const CustomerApp = () => {
           animate="visible"
         >
           <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
-            <span className={styles.bldProgressLabel}>1 of 4</span>
+            <span className={styles.bldProgressLabel}>1 of 5</span>
             <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
             <span className={styles.bldProgressDot} />
             <span className={styles.bldProgressDot} />
             <span className={styles.bldProgressDot} />
@@ -2691,11 +2692,12 @@ const CustomerApp = () => {
   // Trust-ladder pitch removed per client. Approval-trust screen below still uses
   // trustScreenSeen as its own gate after approval (different page, kept).
 
-  // Step 2 of 4: bank link via Stripe Financial Connections
-  // ONE bank link powers: repayment debit, income verification, and ACH
-  // payout (if user picked ACH at Step 2). Replaces both the old card
-  // collection step AND the Plaid bank verification step (Step 6 below
-  // becomes a no-op when stripe_fc_account_id is set).
+  // Step 2 of 5: bank link via Stripe Financial Connections
+  // The bank link powers income verification and ACH payout (if user
+  // picked ACH at Step 1). Repayment does NOT come from the bank anymore —
+  // it's charged to the debit card collected at Step 3. Replaces the Plaid
+  // bank verification step (Step 5 below becomes a no-op when
+  // stripe_fc_account_id is set).
   const hasBankPm = !!application.stripe_payment_method_id;
   const hasCardPm = !!application.stripe_card_pm_id;
   const isAchPayout = application.payout_methods === "ACH";
@@ -2704,8 +2706,9 @@ const CustomerApp = () => {
   // link below the Connect Bank button. Click sets a sessionStorage flag
   // that bypasses the step. Real users never see the link (no URL param).
   // Note: skipping bank means the user has no stripe_payment_method_id,
-  // so they can't actually be ACH-charged at repayment time. Fine for
-  // visual / flow testing; not for end-to-end payment testing.
+  // so income verification / payouts won't work. Repayment is unaffected —
+  // it charges the debit card from Step 3. Fine for visual / flow testing;
+  // not for end-to-end payment testing.
   // Read the flag from the URL OR sessionStorage so it survives hard
   // navigations (e.g. clicking "Sign in" goes to /loan and strips ?dev_skip_bank=1).
   // First time we see ?dev_skip_bank=1 in the URL, stash it in session.
@@ -2746,9 +2749,10 @@ const CustomerApp = () => {
           animate="visible"
         >
           <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
-            <span className={styles.bldProgressLabel}>2 of 4</span>
+            <span className={styles.bldProgressLabel}>2 of 5</span>
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
             <span className={styles.bldProgressDot} />
             <span className={styles.bldProgressDot} />
           </motion.div>
@@ -2762,7 +2766,7 @@ const CustomerApp = () => {
           <motion.p className={styles.bldLead} variants={flowChildVariants}>
             {showConnect
               ? "We legally need to verify it's you before we can send money to your bank. Takes about 30 seconds on Stripe's secure form."
-              : "We use your bank to verify income, send your advance, and collect repayment — all from one secure connection."}
+              : "We use your bank to verify your income and send your advance. Repayment never comes from your bank — it's charged to the debit card you add next."}
           </motion.p>
 
           {showFc && (
@@ -2903,13 +2907,76 @@ const CustomerApp = () => {
     );
   }
 
-  // (Removed) The card-collection step. Earlier we required a debit
-  // card before delivery as a backup for the ACH-pull cascade, but the
-  // product decision changed — we're back to ACH-only collection.
-  // chargeRepaymentWithCascade already handles the no-card branch
-  // (Day 0 ACH + daily balance-check ACH retries).
+  // Step 3 of 5: repayment debit card — REQUIRED. Collection is
+  // debit-card-only now (ACH pulls are disabled server-side), so nobody
+  // reaches the delivery step without a verified debit card on file.
+  // The bank link from Step 2 is income verification + payouts only.
+  // Stripe's confirmCardSetup runs a $0 authorization with the issuing
+  // bank, so a card that saves successfully has been verified as real.
+  if (preBankActive && !hasCardPm) {
+    return (
+      <div className={styles.bldPage}>
+        <header className={styles.bldNav}>
+          <div className={styles.bldNavInner}>
+            <a className={styles.bldBrand} href="/">
+              <span className={styles.bldBrandMark}>✓</span>
+              advance<span className={styles.bldBrandDot}>.</span>
+            </a>
+            <button type="button" className={styles.bldNavLink} onClick={handleLogout}>Sign out</button>
+          </div>
+        </header>
 
-  // Step 3 of 4: delivery speed (same-day vs 3-5 days)
+        <motion.main
+          className={styles.bldMain}
+          variants={flowPageVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
+            <span className={styles.bldProgressLabel}>3 of 5</span>
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="done" />
+            <span className={styles.bldProgressDot} data-state="current" />
+            <span className={styles.bldProgressDot} />
+            <span className={styles.bldProgressDot} />
+          </motion.div>
+
+          <motion.span className={styles.bldEyebrow} variants={flowChildVariants}>Repayment card</motion.span>
+          <motion.h1 className={styles.bldH1} variants={flowChildVariants}>
+            Add your <em>debit card.</em>
+          </motion.h1>
+          <motion.p className={styles.bldLead} variants={flowChildVariants}>
+            Repayment is charged to this card on your payday — one charge, no surprise bank pulls. Debit only; credit and prepaid cards are declined.
+          </motion.p>
+
+          <motion.div variants={flowChildVariants}>
+            {stripePromise ? (
+              <Elements stripe={stripePromise}>
+                <DebitCardForm
+                  applicationId={application.id}
+                  authToken={token || ""}
+                  onSaved={(app) => setApplication(app)}
+                />
+              </Elements>
+            ) : (
+              <p className={styles.bldError}>
+                Card entry is unavailable right now — payment configuration is missing. Please try again later.
+              </p>
+            )}
+          </motion.div>
+
+          <motion.div className={styles.bldNote} variants={flowChildVariants} style={{ marginTop: 28 }}>
+            <p className={styles.bldNoteTitle}>🔒 Verified &amp; encrypted by Stripe</p>
+            <p className={styles.bldNoteBody}>
+              Your card details go straight to Stripe — we never see or store the number. We run a $0 verification with your bank to confirm the card is real before saving it.
+            </p>
+          </motion.div>
+        </motion.main>
+      </div>
+    );
+  }
+
+  // Step 4 of 5: delivery speed (same-day vs 3-5 days)
   if (preBankActive && !application.delivery_type) {
     return (
       <div className={styles.bldPage}>
@@ -2930,7 +2997,8 @@ const CustomerApp = () => {
           animate="visible"
         >
           <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
-            <span className={styles.bldProgressLabel}>3 of 4</span>
+            <span className={styles.bldProgressLabel}>4 of 5</span>
+            <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="current" />
@@ -3051,7 +3119,8 @@ const CustomerApp = () => {
           animate="visible"
         >
           <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
-            <span className={styles.bldProgressLabel}>{aiOverlay === "analyzing" ? "Working" : "3 of 4"}</span>
+            <span className={styles.bldProgressLabel}>{aiOverlay === "analyzing" ? "Working" : "4 of 5"}</span>
+            <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state={aiOverlay === "analyzing" ? "current" : "done"} />
@@ -3153,7 +3222,7 @@ const CustomerApp = () => {
     );
   }
 
-  // Step 4 of 4: bank connection (the final gate before review)
+  // Step 5 of 5: bank connection (the final gate before review)
   // SKIPPED for FC users — their bank is already linked at Step 2.
   // Legacy Plaid path stays for users mid-flight on the old flow.
   if (preBankActive && !application.stripe_fc_account_id) {
@@ -3176,7 +3245,8 @@ const CustomerApp = () => {
           animate="visible"
         >
           <motion.div className={styles.bldProgress} variants={flowChildVariants} aria-label="Onboarding progress">
-            <span className={styles.bldProgressLabel}>4 of 4</span>
+            <span className={styles.bldProgressLabel}>5 of 5</span>
+            <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
             <span className={styles.bldProgressDot} data-state="done" />
@@ -3233,8 +3303,9 @@ const CustomerApp = () => {
 
   // ── Authenticated application view ────────────────────────────────────────
   const needsBank = !application.plaid_connected;
-  // needsCard is permanently false — card backup was removed; ACH-only.
-  // Kept as a variable for diff clarity; can be inlined later.
+  // needsCard stays false HERE because the debit card is collected by the
+  // onboarding Step 3 gate above — users can't reach this view without a
+  // card on file. Kept as a variable for diff clarity; can be inlined later.
   const needsCard = false;
 
   // The confirmation view + dashboard view use the bldPage layout
@@ -3388,9 +3459,9 @@ const CustomerApp = () => {
             )}
           </div>
 
-          {/* Card-for-repayment section removed — ACH-only collection.
-              Repayment is debited from the FC-linked bank PaymentMethod
-              that was set up at Step 4. No backup card on file. */}
+          {/* Repayment is charged to the debit card collected at
+              onboarding Step 3 (debit-card-only collection; ACH pulls
+              are disabled). Nothing to collect here. */}
 
           <button
             disabled={!payoutSaved}
@@ -6021,22 +6092,42 @@ const LoanApp = () => {
   );
 };
 
-// ── Save card form ────────────────────────────────────────────────────────────
+// ── Debit card form (repayment card step) ────────────────────────────────────
+// Repayment is debit-card-only, so this form is the required Step 3 of
+// onboarding. confirmCardSetup runs Stripe's $0 authorization with the
+// issuing bank — fake, closed, or expired cards fail right here — and the
+// backend then re-verifies the SetupIntent + enforces debit-only funding
+// before the card is saved.
 
-const SaveCardForm = ({
+const DEBIT_CARD_ELEMENT_OPTIONS = {
+  hidePostalCode: true,
+  style: {
+    base: {
+      color: "#ffffff",
+      fontSize: "17px",
+      fontWeight: "500",
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif',
+      iconColor: "#00d632",
+      "::placeholder": { color: "#6e6e6e" },
+    },
+    invalid: { color: "#ff4d5e", iconColor: "#ff4d5e" },
+  },
+};
+
+const DebitCardForm = ({
   applicationId,
   authToken,
   onSaved,
 }: {
   applicationId: string;
   authToken: string;
-  onSaved: () => void;
+  onSaved: (app: Application) => void;
 }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [cardComplete, setCardComplete] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -6066,17 +6157,19 @@ const SaveCardForm = ({
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-          body: JSON.stringify({ payment_method_id: paymentMethodId }),
+          body: JSON.stringify({
+            payment_method_id: paymentMethodId,
+            setup_intent_id: result.setupIntent.id,
+          }),
         },
       );
+      const saveData = await saveRes.json().catch(() => ({}));
       if (!saveRes.ok) {
         // Surface the backend's actual error message (e.g. the
         // debit-only rejection) instead of a generic "could not save".
-        const saveData = await saveRes.json().catch(() => ({}));
-        throw new Error(saveData.error?.error_message || "Could not save card. Please try again.");
+        throw new Error(saveData.error?.error_message || "Could not save your card. Please try again.");
       }
-      setDone(true);
-      onSaved();
+      onSaved(saveData.application);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -6084,15 +6177,23 @@ const SaveCardForm = ({
     }
   };
 
-  if (done) return <p className={styles.paidNote}>Card saved — we'll charge it automatically on the due date.</p>;
-
   return (
     <form onSubmit={handleSubmit}>
-      <div className={styles.cardElementWrap}>
-        <CardElement options={{ hidePostalCode: true }} />
+      <p className={styles.bldLabel}>Debit card details</p>
+      <div className={styles.bldCardWrap}>
+        <CardElement
+          options={DEBIT_CARD_ELEMENT_OPTIONS}
+          onChange={(e) => setCardComplete(e.complete)}
+        />
       </div>
-      {error && <p className={styles.error}>{error}</p>}
-      <button disabled={isBusy || !stripe}>{isBusy ? "Saving…" : "Save card"}</button>
+      {error && <p className={styles.bldError}>{error}</p>}
+      <button
+        type="submit"
+        className={styles.bldBtn}
+        disabled={isBusy || !stripe || !cardComplete}
+      >
+        {isBusy ? "Verifying your card…" : <>Save my debit card <span aria-hidden="true">→</span></>}
+      </button>
     </form>
   );
 };

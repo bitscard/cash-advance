@@ -5933,6 +5933,22 @@ dd {
   color: var(--bld-text-muted);
 }
 
+/* Stripe CardElement wrapper — debit card step. Matches the bldInput
+   underline aesthetic but as a contained surface so the Stripe iframe
+   (number / expiry / CVC on one line) reads as a single card-shaped field. */
+.bldCardWrap {
+  background: var(--bld-surface);
+  border: 1px solid var(--bld-border);
+  border-radius: 14px;
+  padding: 22px 18px;
+  margin: 4px 0 20px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.bldCardWrap:focus-within {
+  border-color: var(--bld-accent);
+  box-shadow: 0 0 0 3px rgba(0, 214, 50, 0.12);
+}
+
 /* Error message */
 .bldError {
   margin: 0 0 16px;

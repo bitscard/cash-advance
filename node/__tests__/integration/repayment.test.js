@@ -49,8 +49,10 @@ async function seedDueApp() {
   expect(res.body.application?.id).toBeDefined();
   const application = res.body.application;
   await db.saveStripeCustomer(application.id, 'cus_test');
-  // saveBankAccount sets stripe_payment_method_id, which getDueApplications requires.
+  // Bank link (income verification / payouts) — not used for collection.
   await db.saveBankAccount(application.id, 'pm_bank_test', 'fca_test');
+  // Collection is debit-card-only: getDueApplications requires stripe_card_pm_id.
+  await db.saveStripePaymentMethod(application.id, 'pm_card_test');
   // Past due date so getDueApplications() picks it up; status=pending.
   await db.setRepayment(application.id, 30, '2020-01-01', '');
   return application;

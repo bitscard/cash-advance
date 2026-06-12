@@ -2319,34 +2319,69 @@ app.post('/api/advance/applications/:id/stripe/save-payment-method', async funct
     return response.status(403).json({ error: { error_message: 'Forbidden' } });
   }
   try {
-    const { payment_method_id } = request.body;
+    const { payment_method_id, setup_intent_id } = request.body;
     if (!payment_method_id) {
       return response.status(400).json({ error: { error_message: 'payment_method_id is required' } });
     }
-    // Debit-only enforcement. Credit cards are silently accepted by
-    // Stripe Elements; we have to retrieve the PaymentMethod after the
-    // fact and check the card.funding field. Reject + detach if it's
-    // anything other than 'debit'. Reasons documented in the user-facing
-    // error message below.
+    const row = await db.getApplicationById(request.params.id);
+    if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
+
+    // Card validation. This card is now the ONLY repayment rail (ACH
+    // collection is disabled), so every check fails CLOSED:
+    //
+    //   1. The SetupIntent must have succeeded for this exact card.
+    //      confirmCardSetup runs Stripe's $0 authorization with the
+    //      issuing bank, so a succeeded intent means the bank itself
+    //      confirmed the card is real, open, and not expired.
+    //   2. The PaymentMethod must be attached to THIS application's
+    //      Stripe customer. Attachment only happens through a confirmed
+    //      SetupIntent — a raw, never-verified PM id can't pass this.
+    //   3. funding must be 'debit'. Credit/prepaid/unknown cards are
+    //      rejected and detached (Elements accepts them silently, so we
+    //      have to check the funding field after the fact).
+    //   4. The issuer's CVC check must not have outright failed.
+    let pm;
     try {
-      const pm = await stripe.paymentMethods.retrieve(payment_method_id);
-      const funding = pm?.card?.funding;
-      if (funding && funding !== 'debit') {
-        // Detach so the card doesn't sit on the customer record forever.
-        try { await stripe.paymentMethods.detach(payment_method_id); } catch (_) { /* swallow */ }
-        const label = funding === 'credit' ? 'credit card' : funding === 'prepaid' ? 'prepaid card' : `${funding} card`;
-        return response.status(400).json({
-          error: {
-            error_message: `We only accept debit cards for repayment. You tried a ${label} — please use a debit card from your bank.`,
-            funding,
-          },
-        });
-      }
+      pm = await stripe.paymentMethods.retrieve(payment_method_id);
     } catch (e) {
-      console.log('[stripe/save-payment-method] funding check error (failing open)', e.message);
-      // Fail open — if we can't retrieve the PM, assume it's valid.
-      // Saving the wrong card-type once isn't a disaster; the cascade
-      // still tries ACH as a fallback.
+      console.log('[stripe/save-payment-method] PM retrieve failed (rejecting)', e.message);
+      return response.status(400).json({ error: { error_message: 'We could not verify that card with Stripe. Please try again.' } });
+    }
+    if (setup_intent_id) {
+      try {
+        const si = await stripe.setupIntents.retrieve(setup_intent_id);
+        const siPm = typeof si.payment_method === 'string' ? si.payment_method : si.payment_method && si.payment_method.id;
+        if (si.status !== 'succeeded' || siPm !== payment_method_id) {
+          return response.status(400).json({ error: { error_message: 'Card verification did not complete. Please re-enter your card and try again.' } });
+        }
+      } catch (e) {
+        console.log('[stripe/save-payment-method] SetupIntent retrieve failed (rejecting)', e.message);
+        return response.status(400).json({ error: { error_message: 'Card verification did not complete. Please re-enter your card and try again.' } });
+      }
+    }
+    const attachedTo = typeof pm.customer === 'string' ? pm.customer : pm.customer && pm.customer.id;
+    if (!row.stripe_customer_id || attachedTo !== row.stripe_customer_id) {
+      return response.status(400).json({ error: { error_message: 'That card has not been verified for this account. Please re-enter your card and try again.' } });
+    }
+    if (!pm.card) {
+      return response.status(400).json({ error: { error_message: 'Only debit cards are accepted for repayment.' } });
+    }
+    const funding = pm.card.funding;
+    if (funding !== 'debit') {
+      // Detach so the card doesn't sit on the customer record forever.
+      try { await stripe.paymentMethods.detach(payment_method_id); } catch (_) { /* swallow */ }
+      const label = funding === 'credit' ? 'credit card' : funding === 'prepaid' ? 'prepaid card' : `${funding || 'unrecognized'} card`;
+      return response.status(400).json({
+        error: {
+          error_message: `We only accept debit cards for repayment. You tried a ${label} — please use a debit card from your bank.`,
+          funding,
+        },
+      });
+    }
+    const cvcCheck = pm.card.checks && pm.card.checks.cvc_check;
+    if (cvcCheck === 'fail') {
+      try { await stripe.paymentMethods.detach(payment_method_id); } catch (_) { /* swallow */ }
+      return response.status(400).json({ error: { error_message: 'Your bank could not verify the card security code (CVC). Please check the details and try again.' } });
     }
     const updated = await db.saveStripePaymentMethod(request.params.id, payment_method_id);
     if (!updated) return response.status(404).json({ error: { error_message: 'Application not found' } });
@@ -3441,14 +3476,17 @@ async function transitionToFunded(row) {
     }
   }
 
-  // 3. Subscription bootstrap
+  // 3. Subscription bootstrap — bills the DEBIT CARD, not the bank.
+  // ACH pulls are disabled across the board (advance repayment AND the
+  // $3.99 membership), so the card saved at onboarding Step 3 is the
+  // payment method here.
   if (
     !updated.subscription_id &&
     updated.stripe_customer_id &&
-    updated.stripe_payment_method_id
+    updated.stripe_card_pm_id
   ) {
     try {
-      const paymentMethodId = updated.stripe_payment_method_id;
+      const paymentMethodId = updated.stripe_card_pm_id;
       const MEMBERSHIP_PRODUCT_ID = await getMembershipProductId();
       // Anchor the first $3.99 invoice to the user's repayment_due_date
       // so the membership charge fires the SAME DAY as the advance
@@ -3473,10 +3511,7 @@ async function transitionToFunded(row) {
         }],
         default_payment_method: paymentMethodId,
         payment_settings: {
-          payment_method_types: ['us_bank_account'],
-          payment_method_options: {
-            us_bank_account: { verification_method: 'instant' },
-          },
+          payment_method_types: ['card'],
           save_default_payment_method: 'on_subscription',
         },
         billing_cycle_anchor: anchor,
@@ -3700,33 +3735,10 @@ async function tryCardCharge(row, amount, attemptLabel) {
   }
 }
 
-async function tryAchCharge(row, amount, attemptLabel) {
-  if (!row.stripe_payment_method_id) return { ok: false, reason: 'no bank on file' };
-  try {
-    // Note: payment_method_options.us_bank_account.preferred_settlement_speed
-    // was deprecated by Stripe. Same-Day ACH is no longer requestable via
-    // this parameter — standard 3-5 day ACH is what we get. If Stripe ships
-    // a replacement for Same-Day ACH on PaymentIntents, plug it in here.
-    const pi = await stripe.paymentIntents.create({
-      amount, currency: 'usd',
-      customer: row.stripe_customer_id,
-      payment_method: row.stripe_payment_method_id,
-      payment_method_types: ['us_bank_account'],
-      off_session: true, confirm: true,
-      description: `Cash advance repayment — ${row.name} (${attemptLabel})`,
-      metadata: { application_id: row.id, method: 'ach', attempt_label: attemptLabel },
-    });
-    // ACH returns 'processing' immediately; 'succeeded' arrives later via webhook.
-    return { ok: pi.status === 'succeeded' || pi.status === 'processing', pi, method: 'ach', status: pi.status };
-  } catch (e) {
-    return { ok: false, reason: e.message, error: e, method: 'ach' };
-  }
-}
-
-// Single-attempt charge. NO retry logic. If card is on file we try card
-// first; if card fails (or there's no card) we try ACH as a same-attempt
-// fallback. Either succeeds, returns processing, or fails — no further
-// attempts, no cascade, no day-2 / day-3 retries.
+// Single-attempt charge against the debit card on file. NO retry logic
+// and NO ACH — collection is debit-card-only per product direction. The
+// bank link (stripe_payment_method_id) is used for income verification
+// and payouts only; we never pull from the bank account.
 //
 // Caller is responsible for marking the application as repayment_failed
 // when this returns { failed: true }.
@@ -3735,27 +3747,14 @@ async function tryAchCharge(row, amount, attemptLabel) {
 // failed. Admin can still click 'Collect repayment now' to fire another
 // single attempt manually if they choose, but the cron never auto-retries.
 async function chargeRepaymentOnce(row, amount) {
-  const hasCard = !!row.stripe_card_pm_id;
-
-  if (hasCard) {
-    const cardResult = await tryCardCharge(row, amount, 'charge attempt — card');
-    if (cardResult.ok) {
-      return { paid: true, pi: cardResult.pi, method: 'card', message: 'Card charged successfully.' };
-    }
-    // Fall through to ACH as a within-this-same-attempt fallback.
+  if (!row.stripe_card_pm_id) {
+    return { failed: true, reason: 'No debit card on file — collection is debit-card-only (ACH pulls are disabled).' };
   }
-
-  const achResult = await tryAchCharge(
-    row, amount,
-    hasCard ? 'charge attempt — ACH fallback (card failed)' : 'charge attempt — ACH (no card on file)'
-  );
-  if (achResult.ok && achResult.status === 'succeeded') {
-    return { paid: true, pi: achResult.pi, method: 'ach', message: hasCard ? 'Card failed; ACH succeeded.' : 'ACH succeeded.' };
+  const cardResult = await tryCardCharge(row, amount, 'charge attempt — debit card');
+  if (cardResult.ok) {
+    return { paid: true, pi: cardResult.pi, method: 'card', message: 'Debit card charged successfully.' };
   }
-  if (achResult.ok && achResult.status === 'processing') {
-    return { processing: true, pi: achResult.pi, method: 'ach', message: hasCard ? 'Card failed; ACH initiated (pending settlement).' : 'ACH initiated (pending settlement).' };
-  }
-  return { failed: true, reason: hasCard ? 'Card and ACH both failed.' : `ACH failed: ${achResult.reason}` };
+  return { failed: true, reason: `Debit card charge failed: ${cardResult.reason}` };
 }
 
 // Force the user's membership subscription to bill RIGHT NOW.
@@ -3799,9 +3798,9 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
     const row = await db.getApplicationById(request.params.id);
     if (!row) return response.status(404).json({ error: { error_message: 'Application not found' } });
 
-    const hasAnyPm = !!(row.stripe_card_pm_id || row.stripe_payment_method_id);
-    if (!row.stripe_customer_id || !hasAnyPm) {
-      return response.status(400).json({ error: { error_message: 'No payment method on file for this application' } });
+    // Collection is debit-card-only — the bank PM can't be charged anymore.
+    if (!row.stripe_customer_id || !row.stripe_card_pm_id) {
+      return response.status(400).json({ error: { error_message: 'No debit card on file for this application — ACH collection is disabled.' } });
     }
 
     const amount = computeChargeAmountCents(row);
@@ -3818,17 +3817,10 @@ app.post('/api/advance/admin/applications/:id/charge', async function (request, 
       await db.incrementRepaymentCount(row.id);
       await db.resetRepaymentAttemptCount(row.id);
       if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
-      await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully via ${result.method || 'card'}.`);
+      await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected successfully via debit card.`);
       await forceBillSubscriptionNow(row);
       const updated = await db.getApplicationById(request.params.id);
       return response.json({ application: db.publicApp(updated), status: 'paid', method: result.method });
-    }
-    if (result.processing) {
-      if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
-      await db.addMessage(row.id, 'system', `${result.message} ACH typically settles in 3-5 business days.`);
-      await forceBillSubscriptionNow(row);
-      const updated = await db.getApplicationById(request.params.id);
-      return response.json({ application: db.publicApp(updated), status: 'processing' });
     }
     // result.failed → mark as repayment_failed immediately. No automatic
     // retries. Admin can investigate, talk to the user, and click charge
@@ -3854,8 +3846,9 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
     if (row.subscription_id) {
       return response.json({ application: db.publicApp(row), already: true, subscription_id: row.subscription_id });
     }
-    if (!row.stripe_customer_id || !row.stripe_payment_method_id) {
-      return response.status(400).json({ error: { error_message: 'User needs a Stripe customer + bank PaymentMethod before membership can be set up.' } });
+    // Membership bills the debit card — ACH pulls are disabled.
+    if (!row.stripe_customer_id || !row.stripe_card_pm_id) {
+      return response.status(400).json({ error: { error_message: 'User needs a Stripe customer + debit card on file before membership can be set up.' } });
     }
 
     // Anchor the first $3.99 invoice to the user's repayment_due_date
@@ -3876,12 +3869,9 @@ app.post('/api/advance/admin/applications/:id/membership/setup', async function 
           recurring: { interval: 'month' },
         },
       }],
-      default_payment_method: row.stripe_payment_method_id,
+      default_payment_method: row.stripe_card_pm_id,
       payment_settings: {
-        payment_method_types: ['us_bank_account'],
-        payment_method_options: {
-          us_bank_account: { verification_method: 'instant' },
-        },
+        payment_method_types: ['card'],
         save_default_payment_method: 'on_subscription',
       },
       billing_cycle_anchor: anchor,
@@ -3910,8 +3900,9 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
 
     for (const row of due) {
       const amount = computeChargeAmountCents(row);
-      const hasAnyPm = !!(row.stripe_card_pm_id || row.stripe_payment_method_id);
-      if (!hasAnyPm) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No payment method' }); continue; }
+      // Debit-card-only — getDueApplications already filters on
+      // stripe_card_pm_id, this is just belt-and-braces.
+      if (!row.stripe_card_pm_id) { results.push({ id: row.id, name: row.name, status: 'skipped', error: 'No debit card on file' }); continue; }
       try {
         // Single attempt — NO retry logic. If it fails, mark as
         // repayment_failed and move on. Admin can manually re-charge
@@ -3926,14 +3917,9 @@ app.post('/api/advance/admin/run-due-repayments', async function (request, respo
           await db.incrementRepaymentCount(row.id);
           await db.resetRepaymentAttemptCount(row.id);
           if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
-          await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected via ${result.method}.`);
+          await db.addMessage(row.id, 'system', `Payment of $${(amount / 100).toFixed(2)} collected via debit card.`);
           await forceBillSubscriptionNow(row);
           results.push({ id: row.id, name: row.name, status: 'paid', method: result.method });
-        } else if (result.processing) {
-          if (result.pi) await db.saveStripeCharge(row.id, result.pi.id, result.pi.status);
-          await db.addMessage(row.id, 'system', `${result.message} ACH typically settles in 3-5 business days.`);
-          await forceBillSubscriptionNow(row);
-          results.push({ id: row.id, name: row.name, status: 'processing', method: result.method });
         } else {
           // failed → mark immediately. No retry tomorrow.
           await db.updateApplicationStatus(row.id, 'repayment_failed');
