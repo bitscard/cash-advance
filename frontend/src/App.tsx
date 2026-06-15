@@ -644,13 +644,34 @@ const CustomerApp = () => {
     setMessages(data.messages);
   }, [token]);
 
+  // Resume an existing application by token when no id is stored locally. An
+  // explicit sign-out clears applicationStorageKey, so without this a returning
+  // user (Supabase or legacy) would be dropped into a fresh signup instead of
+  // back into their in-progress flow. /auth/me 404s when there's genuinely no
+  // application yet — that's fine, they stay in signup.
+  const loadMe = useCallback(async () => {
+    if (!token) return;
+    const res = await fetch(apiUrl("/api/advance/auth/me"), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.application) {
+      localStorage.setItem(applicationStorageKey, data.application.id);
+      setApplication(data.application);
+      setMessages(data.messages || []);
+    }
+  }, [token]);
+
   useEffect(() => {
     const applicationId = localStorage.getItem(applicationStorageKey);
     if (applicationId) {
       loadApplication(applicationId);
       loadMessages(applicationId);
+    } else if (token) {
+      loadMe();
     }
-  }, [loadApplication, loadMessages]);
+  }, [loadApplication, loadMessages, loadMe, token]);
 
   useEffect(() => {
     if (!application?.id) return;
@@ -5261,6 +5282,11 @@ const LoanApp = () => {
     // 401 (or other auth failure) = bad/expired token → clear it.
     if (!res.ok) { setToken(""); localStorage.removeItem(userTokenStorageKey); return; }
     const data = await res.json();
+    // Onboarding isn't finished while status is still 'intake' (no bank linked
+    // yet — that's the only status the pre-bank flow runs in). This status
+    // screen would strand them with no way to continue, so send them back into
+    // the application flow to resume exactly where they left off.
+    if (data.application?.status === "intake") { window.location.href = "/"; return; }
     setApplication(data.application);
     setMessages(data.messages);
   }, []);
