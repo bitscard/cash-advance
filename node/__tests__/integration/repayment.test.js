@@ -43,14 +43,16 @@ async function seedDueApp() {
     name: 'Test', email: `rep-${Date.now()}-${Math.random()}@example.com`,
     phone: '+15555550100', dob: '1990-01-01', requested_amount: 25,
     password: 'test-password', ssn: '111223333', state: 'Georgia',
-    income_sources: [{ employer: 'Acme', payday: '2026-06-15', pay_frequency: 'biweekly' }],
+    income_sources: [{ employer: 'Acme', payday: global.TEST_FUTURE_PAYDAY, pay_frequency: 'biweekly' }],
   });
   expect(res.status).toBe(200);
   expect(res.body.application?.id).toBeDefined();
   const application = res.body.application;
   await db.saveStripeCustomer(application.id, 'cus_test');
-  // saveBankAccount sets stripe_payment_method_id, which getDueApplications requires.
+  // Bank link (income verification / payouts, and the ACH backup rail).
   await db.saveBankAccount(application.id, 'pm_bank_test', 'fca_test');
+  // Debit card — primary repayment rail for post-card-step users.
+  await db.saveStripePaymentMethod(application.id, 'pm_card_test');
   // Past due date so getDueApplications() picks it up; status=pending.
   await db.setRepayment(application.id, 30, '2020-01-01', '');
   return application;

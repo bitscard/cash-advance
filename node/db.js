@@ -340,11 +340,18 @@ async function getDueApplications() {
   // attempt fires (success, processing, or failure), the row is skipped
   // forever by the cron. Admin can still manually re-charge via the
   // /admin/applications/:id/charge endpoint if they want to try again.
+  //
+  // Collectable via EITHER rail: users onboarded after the debit-card step
+  // have a card (stripe_card_pm_id) and are charged card-first with ACH as
+  // backup; users who connected before the card step are grandfathered and
+  // collected via ACH from their linked bank (stripe_payment_method_id).
+  // Every funded user has at least a bank PM, so the OR covers both cohorts;
+  // chargeRepaymentOnce() picks the rail per row.
   const { rows } = await pool.query(
     `SELECT * FROM applications
      WHERE repayment_due_date <= CURRENT_DATE
        AND repayment_status = 'pending'
-       AND stripe_payment_method_id IS NOT NULL
+       AND (stripe_card_pm_id IS NOT NULL OR stripe_payment_method_id IS NOT NULL)
        AND stripe_customer_id IS NOT NULL
        AND COALESCE(repayment_attempt_count, 0) = 0`
   );

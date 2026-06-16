@@ -28,7 +28,7 @@ const signupBody = (over = {}) => ({
   requested_amount: 25,
   ssn: '222334444',
   state: 'Georgia',
-  income_sources: [{ employer: 'Acme', payday: '2026-06-15', pay_frequency: 'biweekly' }],
+  income_sources: [{ employer: 'Acme', payday: global.TEST_FUTURE_PAYDAY, pay_frequency: 'biweekly' }],
   ...over,
 });
 

@@ -56,7 +56,7 @@ async function createApp() {
     password: 'test-password',
     ssn: '111223333',
     state: 'Georgia',
-    income_sources: [{ employer: 'Acme', payday: '2026-06-15', pay_frequency: 'biweekly' }],
+    income_sources: [{ employer: 'Acme', payday: global.TEST_FUTURE_PAYDAY, pay_frequency: 'biweekly' }],
   });
   return { application: res.body.application, token: res.body.token };
 }
@@ -87,7 +87,7 @@ describe('POST /plaid/link-token', () => {
       name: 'Other', email: `other-${Date.now()}@example.com`, phone: '+15555550101',
       dob: '1990-01-01', requested_amount: 25, password: 'test-password',
       ssn: '222334444', state: 'Georgia',
-      income_sources: [{ employer: 'Acme', payday: '2026-06-15', pay_frequency: 'biweekly' }],
+      income_sources: [{ employer: 'Acme', payday: global.TEST_FUTURE_PAYDAY, pay_frequency: 'biweekly' }],
     });
     const otherToken = other.body.token;
     const res = await request(app)

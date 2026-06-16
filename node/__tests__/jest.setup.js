@@ -34,3 +34,10 @@ process.env.MAILCHIMP_SERVER_PREFIX = process.env.MAILCHIMP_SERVER_PREFIX || '';
 // they want through this list.
 process.env.TEST_SSNS = process.env.TEST_SSNS
   || '111223333,222334444,333445555,444556666,555667777,666778888,777889999';
+
+// Signup rejects a payday in the past ("Payday must be today or later"), so
+// integration tests that POST /applications need a future payday. Computed
+// once here (not hardcoded in each test) so the suite doesn't rot as the
+// calendar advances. NOTE: the unit accrual tests use a fixed date on purpose
+// (their assertions depend on it) and intentionally do NOT use this.
+global.TEST_FUTURE_PAYDAY = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
