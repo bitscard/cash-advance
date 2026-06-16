@@ -77,7 +77,15 @@ const SupabaseAuthPanel: React.FC<Props> = ({ redirectTo, heading, defaultMode }
     setError(null);
     try {
       if (mode === "signup") {
-        const { data, error } = await sb.auth.signUp({ email, password });
+        // emailRedirectTo must match the OAuth redirect (the apply flow), or the
+        // confirmation link falls back to the project Site URL (the landing
+        // page) — dropping the user out of onboarding and forcing them to
+        // re-enter their invite code. Send them straight back into the flow.
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: redirectTo || window.location.origin },
+        });
         if (error) throw error;
         // Auto-confirm projects return a session (onAuthStateChange handles it);
         // otherwise show the "check your email" screen.

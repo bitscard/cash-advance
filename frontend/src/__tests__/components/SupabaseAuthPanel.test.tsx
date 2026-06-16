@@ -55,8 +55,14 @@ describe("SupabaseAuthPanel", () => {
     fireEvent.change(screen.getByPlaceholderText("Your password"), { target: { value: "pw123456" } });
     // Now the submit button reads "Create account →".
     fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+    // signUp must carry emailRedirectTo so the confirmation link returns into
+    // the app (falls back to the origin when no redirectTo prop is given).
     await waitFor(() =>
-      expect(signUp).toHaveBeenCalledWith({ email: "c@d.com", password: "pw123456" }),
+      expect(signUp).toHaveBeenCalledWith({
+        email: "c@d.com",
+        password: "pw123456",
+        options: { emailRedirectTo: window.location.origin },
+      }),
     );
   });
 

@@ -664,11 +664,16 @@ const CustomerApp = () => {
   }, [token]);
 
   useEffect(() => {
+    // Wait for the token before any authenticated load. On a mid-onboarding
+    // reload (notably the mobile bank-link redirect return), the Supabase token
+    // arrives a tick after mount; firing loadApplication() without it would
+    // 401 and wipe the stored application id, stranding the user on landing.
+    if (!token) return;
     const applicationId = localStorage.getItem(applicationStorageKey);
     if (applicationId) {
       loadApplication(applicationId);
       loadMessages(applicationId);
-    } else if (token) {
+    } else {
       loadMe();
     }
   }, [loadApplication, loadMessages, loadMe, token]);
@@ -1400,6 +1405,31 @@ const CustomerApp = () => {
 
   // ── Landing ──────────────────────────────────────────────────────────────────
   if (!application) {
+    // Resuming an in-progress application (a stored id exists but it hasn't
+    // re-fetched yet) — e.g. returning from the mobile bank-link redirect, or
+    // any mid-onboarding refresh. Show a loader and let the load/resume effects
+    // drop the user back on their current step, instead of flashing the public
+    // landing page (which read as being bounced out of the flow after the bank
+    // connected). Cleared automatically once the app loads, or if the stored id
+    // proves invalid (loadApplication clears it on a real auth failure).
+    if (typeof window !== "undefined" && localStorage.getItem(applicationStorageKey)) {
+      return (
+        <div className={styles.bldPage}>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
+              </a>
+              <a href="/loan" className={styles.bldNavLink}>Sign in</a>
+            </div>
+          </header>
+          <main className={styles.bldMain} style={{ textAlign: "center" }}>
+            <p className={styles.bldLead}>Resuming your application…</p>
+          </main>
+        </div>
+      );
+    }
     if (view === "landing") {
       const goSignup = () => setView("referral");
       const goSignIn = () => { window.location.href = "/loan"; };
