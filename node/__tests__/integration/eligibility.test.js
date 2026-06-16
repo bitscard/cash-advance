@@ -36,7 +36,7 @@ function makeSignupPayload(overrides = {}) {
     ssn: '111223333', // in TEST_SSNS allowlist
     state: 'Georgia',
     income_sources: [
-      { employer: 'Acme Corp', payday: '2026-06-15', pay_frequency: 'biweekly' },
+      { employer: 'Acme Corp', payday: global.TEST_FUTURE_PAYDAY, pay_frequency: 'biweekly' },
     ],
     ...overrides,
   };

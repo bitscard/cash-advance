@@ -17,7 +17,7 @@ async function seed(overrides = {}) {
     name: 'Test', email: `reapply-${Date.now()}-${Math.random()}@example.com`,
     phone: '+15555550100', dob: '1990-01-01', requested_amount: 25,
     password: 'test-password', ssn: '111223333', state: 'Georgia',
-    income_sources: [{ employer: 'Acme', payday: '2026-06-15', pay_frequency: 'biweekly' }],
+    income_sources: [{ employer: 'Acme', payday: global.TEST_FUTURE_PAYDAY, pay_frequency: 'biweekly' }],
     ...overrides,
   });
   return { application: res.body.application, token: res.body.token };
