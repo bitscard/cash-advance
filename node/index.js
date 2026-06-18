@@ -897,6 +897,11 @@ app.get('/api/advance/referral/:code', async function (request, response, next) 
     if (MASTER_CODES.has(normalized)) {
       return response.json({ valid: true, referrer_name: null });
     }
+    // Influencer codes (admin-created, data-driven master codes)
+    const influencer = await db.getActiveInfluencerCode(normalized);
+    if (influencer) {
+      return response.json({ valid: true, referrer_name: influencer.name || null });
+    }
     // Personal codes only activate after the referrer has gotten their first advance
     const referrer = await db.getApplicationByReferralCode(normalized);
     if (!referrer || !referrer.delivery_type) return response.json({ valid: false });
@@ -1010,6 +1015,10 @@ app.post('/api/advance/applications', async function (request, response, next) {
     if (usedCode) {
       const normalized = usedCode.toLowerCase().replace(/\s+/g, '').trim();
       if (MASTER_CODES.has(normalized)) {
+        referredBy = normalized;
+        earlyAccess = true;
+      } else if (await db.getActiveInfluencerCode(normalized)) {
+        // Influencer code — tracked as referred_by, same as a master code.
         referredBy = normalized;
         earlyAccess = true;
       } else {
@@ -1711,6 +1720,56 @@ app.get('/api/advance/admin/applications', async function (request, response, ne
   try {
     const rows = await db.getAllApplications();
     response.json({ applications: rows.map(db.publicApp) });
+  } catch (err) { next(err); }
+});
+
+// ── Influencer codes (admin) ────────────────────────────────────────────────
+// List all codes with signup/funded attribution counts.
+app.get('/api/advance/admin/influencer-codes', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    response.json({ codes: await db.listInfluencerCodesWithStats() });
+  } catch (err) { next(err); }
+});
+
+// Create a vanity code. Rejected if it collides with a master code or an
+// existing user's personal referral code, so attribution stays unambiguous.
+app.post('/api/advance/admin/influencer-codes', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const { code, name } = request.body || {};
+    const normalized = db.normalizeCode(code);
+    if (!normalized) return response.status(400).json({ error: { error_message: 'A code is required.' } });
+    if (!/^[a-z0-9_-]+$/.test(normalized)) {
+      return response.status(400).json({ error: { error_message: 'Code may only contain letters, numbers, hyphens and underscores.' } });
+    }
+    if (!name || !String(name).trim()) {
+      return response.status(400).json({ error: { error_message: 'An influencer name is required.' } });
+    }
+    if (MASTER_CODES.has(normalized)) {
+      return response.status(409).json({ error: { error_message: 'That code is a reserved master code.' } });
+    }
+    if (await db.getApplicationByReferralCode(normalized)) {
+      return response.status(409).json({ error: { error_message: 'That code is already in use as a user referral code.' } });
+    }
+    const created = await db.createInfluencerCode(normalized, String(name).trim());
+    if (!created) return response.status(409).json({ error: { error_message: 'That influencer code already exists.' } });
+    response.json({ code: created });
+  } catch (err) { next(err); }
+});
+
+// Activate / deactivate a code (deactivated codes stop validating but keep
+// their historical attribution).
+app.patch('/api/advance/admin/influencer-codes/:code', async function (request, response, next) {
+  if (!requireAdmin(request, response)) return;
+  try {
+    const { active } = request.body || {};
+    if (typeof active !== 'boolean') {
+      return response.status(400).json({ error: { error_message: 'active (boolean) is required.' } });
+    }
+    const updated = await db.setInfluencerCodeActive(request.params.code, active);
+    if (!updated) return response.status(404).json({ error: { error_message: 'Influencer code not found.' } });
+    response.json({ code: updated });
   } catch (err) { next(err); }
 });
 

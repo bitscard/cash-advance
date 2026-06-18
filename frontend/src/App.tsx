@@ -582,6 +582,12 @@ const CustomerApp = () => {
   const [gateValid, setGateValid] = useState<boolean | null>(() => (readPersistedReferral() ? true : null));
   const [gateReferrerName, setGateReferrerName] = useState<string | null>(() => readPersistedReferral()?.referrer_name ?? null);
   const [gateBusy, setGateBusy] = useState(false);
+  // An influencer/referral link bakes the code into the URL (/?ref=<code>),
+  // so the invite-code screen is skipped. True while we validate that code on
+  // load; we render a brief loader instead of flashing the landing page.
+  const [refValidating, setRefValidating] = useState(
+    () => Boolean(new URLSearchParams(window.location.search).get("ref")),
+  );
   const [isDateFocused, setIsDateFocused] = useState(false);
   const [token, setToken] = useState<string>(() => localStorage.getItem(userTokenStorageKey) || "");
   // When a Supabase session exists, use its access token for all API calls.
@@ -686,6 +692,48 @@ const CustomerApp = () => {
     }, 4000);
     return () => window.clearInterval(interval);
   }, [application?.id, loadApplication, loadMessages]);
+
+  // Baked-in invite link: /?ref=<code>. Validate the code, and on success skip
+  // the invite-code screen and drop the user straight on signup with the code
+  // recorded (persisted so the Supabase redirect round-trip keeps it, and
+  // tracked as referred_by at signup). An unrecognized/inactive code falls back
+  // to the normal gate so a bad link can't create an untracked signup.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (!ref) return;
+    let cancelled = false;
+    const code = ref.toLowerCase().replace(/\s+/g, "").trim();
+    (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/advance/referral/${encodeURIComponent(code)}`));
+        const data = await res.json();
+        if (cancelled) return;
+        if (data.valid) {
+          setGateCode(code);
+          setGateValid(true);
+          setGateReferrerName(data.referrer_name || null);
+          setForm(f => ({ ...f, referralCode: code }));
+          localStorage.setItem(signupReferralStorageKey, JSON.stringify({ code, referrer_name: data.referrer_name || null }));
+          setView("signup");
+        } else {
+          setView("referral");
+          setError("That invite link wasn't recognized — enter your code to continue.");
+        }
+      } catch {
+        if (!cancelled) setView("referral");
+      } finally {
+        if (cancelled) return;
+        setRefValidating(false);
+        // Drop ?ref but keep ?apply=1 so a refresh / Supabase redirect stays in
+        // the flow and restores the persisted code.
+        const next = new URL(window.location.href);
+        next.searchParams.delete("ref");
+        next.searchParams.set("apply", "1");
+        window.history.replaceState({}, "", next.pathname + next.search);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleLogout = () => {
     void signOutSupabase();
@@ -1405,6 +1453,25 @@ const CustomerApp = () => {
 
   // ── Landing ──────────────────────────────────────────────────────────────────
   if (!application) {
+    // Validating a baked-in invite link (/?ref=<code>) — show a loader rather
+    // than flashing the landing/gate while we check the code.
+    if (refValidating) {
+      return (
+        <div className={styles.bldPage}>
+          <header className={styles.bldNav}>
+            <div className={styles.bldNavInner}>
+              <a className={styles.bldBrand} href="/" onClick={(e) => { e.preventDefault(); setView("landing"); }}>
+                <span className={styles.bldBrandMark}>✓</span>
+                advance<span className={styles.bldBrandDot}>.</span>
+              </a>
+            </div>
+          </header>
+          <main className={styles.bldMain} style={{ textAlign: "center" }}>
+            <p className={styles.bldLead}>Checking your invite link…</p>
+          </main>
+        </div>
+      );
+    }
     // Resuming an in-progress application (a stored id exists but it hasn't
     // re-fetched yet) — e.g. returning from the mobile bank-link redirect, or
     // any mid-onboarding refresh. Show a loader and let the load/resume effects
@@ -3951,6 +4018,114 @@ const CustomerApp = () => {
   );
 };
 
+// Influencer codes admin panel. Create vanity codes, copy the shareable
+// /?ref=<code> link, see signups + funded counts per code, and deactivate.
+const InfluencerCodesPanel = ({ adminHeaders }: { adminHeaders: Record<string, string> }) => {
+  type Row = { code: string; name: string; active: boolean; signups: number; funded: number };
+  const [codes, setCodes] = useState<Row[]>([]);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(apiUrl("/api/advance/admin/influencer-codes"), { headers: adminHeaders });
+      if (!res.ok) return;
+      const data = await res.json();
+      setCodes(data.codes || []);
+    } catch { /* ignore — transient */ }
+  }, [adminHeaders]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl("/api/advance/admin/influencer-codes"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...adminHeaders },
+        body: JSON.stringify({ code, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.error_message || "Could not create code");
+      setCode("");
+      setName("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = async (c: string, active: boolean) => {
+    try {
+      await fetch(apiUrl(`/api/advance/admin/influencer-codes/${encodeURIComponent(c)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...adminHeaders },
+        body: JSON.stringify({ active }),
+      });
+      await load();
+    } catch { /* ignore */ }
+  };
+
+  const copyLink = (c: string) => {
+    const url = `${window.location.origin}/?ref=${encodeURIComponent(c)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(c);
+      setTimeout(() => setCopied(null), 1500);
+    }).catch(() => {});
+  };
+
+  const cell: React.CSSProperties = { padding: "0.6rem 0.8rem", borderBottom: "1px solid var(--border, #eee)", fontSize: "1.3rem", textAlign: "left" };
+  const btn: React.CSSProperties = { fontSize: "1.15rem", padding: "0.3rem 0.7rem", cursor: "pointer" };
+
+  return (
+    <section style={{ margin: "1.5rem 0", padding: "1.4rem", border: "1px solid var(--border, #e5e5e5)", borderRadius: 12 }}>
+      <h2 style={{ margin: "0 0 0.4rem" }}>Influencer codes</h2>
+      <p style={{ color: "var(--muted)", fontSize: "1.25rem", margin: "0 0 1rem" }}>
+        Create a code, share <code>{window.location.origin}/?ref=&lt;code&gt;</code>. Anyone using the link skips the invite screen; signups are attributed here.
+      </p>
+      <form onSubmit={create} style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", alignItems: "center", marginBottom: "1rem" }}>
+        <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="code (e.g. mrbeast)" style={{ flex: "1 1 140px", padding: "0.5rem" }} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Influencer name" style={{ flex: "1 1 180px", padding: "0.5rem" }} />
+        <button disabled={busy || !code.trim() || !name.trim()} style={btn}>{busy ? "Adding…" : "Add code"}</button>
+      </form>
+      {error && <p style={{ color: "#c0392b", fontSize: "1.25rem", margin: "0 0 0.8rem" }}>{error}</p>}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {["Code", "Name", "Signups", "Funded", "Link", "Status"].map(h => (
+                <th key={h} style={{ ...cell, color: "var(--muted)", fontWeight: 600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {codes.map(r => (
+              <tr key={r.code} style={{ opacity: r.active ? 1 : 0.5 }}>
+                <td style={cell}><strong>{r.code}</strong></td>
+                <td style={cell}>{r.name}</td>
+                <td style={cell}>{r.signups}</td>
+                <td style={cell}>{r.funded}</td>
+                <td style={cell}><button type="button" onClick={() => copyLink(r.code)} style={btn}>{copied === r.code ? "Copied!" : "Copy link"}</button></td>
+                <td style={cell}><button type="button" onClick={() => toggle(r.code, !r.active)} style={btn}>{r.active ? "Deactivate" : "Activate"}</button></td>
+              </tr>
+            ))}
+            {codes.length === 0 && (
+              <tr><td style={{ ...cell, color: "var(--muted)" }} colSpan={6}>No influencer codes yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+};
+
 // ── Admin app ─────────────────────────────────────────────────────────────────
 
 const AdminApp = () => {
@@ -4558,6 +4733,7 @@ const AdminApp = () => {
       )}
       {isAuthed && (
         <>
+          <InfluencerCodesPanel adminHeaders={adminHeaders} />
           {/* Summary stats — six high-level numbers admin glances at first.
               On mobile these stack into a single column; on desktop they
               flow as a responsive grid of mini-cards above the inbox. */}

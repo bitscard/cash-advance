@@ -151,3 +151,12 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_login_at   TIMESTAMPTZ
 );
+
+-- influencer_codes — admin-created invite codes shared via /?ref=<code>.
+-- Data-driven equivalent of the hardcoded MASTER_CODES.
+CREATE TABLE IF NOT EXISTS influencer_codes (
+  code        TEXT        PRIMARY KEY,
+  name        TEXT        NOT NULL,
+  active      BOOLEAN     NOT NULL DEFAULT TRUE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

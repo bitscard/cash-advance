@@ -105,6 +105,20 @@ pool.query(`
   );
 `).catch(() => {});
 
+// influencer_codes — admin-created invite codes handed to influencers as a
+// baked-in link (/?ref=<code>). They behave like the hardcoded MASTER_CODES
+// (skip the invite gate, recorded on applications.referred_by for attribution)
+// but are data-driven so new ones can be added without a deploy. `code` is
+// stored normalized (lowercase, no spaces) so it matches the referral lookups.
+pool.query(`
+  CREATE TABLE IF NOT EXISTS influencer_codes (
+    code        TEXT        PRIMARY KEY,
+    name        TEXT        NOT NULL,
+    active      BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`).catch(() => {});
+
 const fmtDate = (v) => {
   if (!v) return null;
   if (typeof v === 'string') return v.slice(0, 10);
@@ -467,6 +481,51 @@ async function getApplicationByReferralCode(code) {
   return rows[0] || null;
 }
 
+// ── Influencer codes ────────────────────────────────────────────────────────
+// Codes are stored + looked up normalized (lowercase, no spaces).
+const normalizeCode = (code) => String(code || '').toLowerCase().replace(/\s+/g, '').trim();
+
+async function getActiveInfluencerCode(code) {
+  const { rows } = await pool.query(
+    'SELECT * FROM influencer_codes WHERE code = $1 AND active = TRUE LIMIT 1',
+    [normalizeCode(code)],
+  );
+  return rows[0] || null;
+}
+
+async function createInfluencerCode(code, name) {
+  const normalized = normalizeCode(code);
+  const { rows } = await pool.query(
+    `INSERT INTO influencer_codes (code, name) VALUES ($1, $2)
+     ON CONFLICT (code) DO NOTHING RETURNING *`,
+    [normalized, name || normalized],
+  );
+  return rows[0] || null; // null when the code already existed
+}
+
+async function setInfluencerCodeActive(code, active) {
+  const { rows } = await pool.query(
+    'UPDATE influencer_codes SET active = $2 WHERE code = $1 RETURNING *',
+    [normalizeCode(code), !!active],
+  );
+  return rows[0] || null;
+}
+
+// All codes with attribution counts: how many applications used the code
+// (signups) and how many of those reached a funded advance (delivery_type set).
+async function listInfluencerCodesWithStats() {
+  const { rows } = await pool.query(
+    `SELECT ic.code, ic.name, ic.active, ic.created_at,
+            COUNT(a.id)::int AS signups,
+            COUNT(a.id) FILTER (WHERE a.delivery_type IS NOT NULL)::int AS funded
+     FROM influencer_codes ic
+     LEFT JOIN applications a ON a.referred_by = ic.code
+     GROUP BY ic.code, ic.name, ic.active, ic.created_at
+     ORDER BY ic.created_at DESC`,
+  );
+  return rows;
+}
+
 async function getReferredUsers(referral_code) {
   if (!referral_code) return [];
   const { rows } = await pool.query(
@@ -724,6 +783,12 @@ module.exports = {
   createApplication,
   getApplicationByReferralCode,
   getReferredUsers,
+  // Influencer codes
+  normalizeCode,
+  getActiveInfluencerCode,
+  createInfluencerCode,
+  setInfluencerCodeActive,
+  listInfluencerCodesWithStats,
   saveLimitFreeze,
   createIncomeSources,
   getIncomeSources,
