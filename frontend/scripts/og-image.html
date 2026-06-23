@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Inter, system-ui, sans-serif;
+    background:
+      radial-gradient(1100px 600px at 78% -10%, rgba(99,102,241,0.28), transparent 60%),
+      radial-gradient(800px 500px at 0% 110%, rgba(16,185,129,0.18), transparent 55%),
+      #0B0B0F;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    padding: 72px 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 18px; }
+  .logo {
+    width: 64px; height: 64px; border-radius: 16px;
+    background: #fff; color: #0B0B0F;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; font-weight: 800;
+  }
+  .brand-name { font-size: 30px; font-weight: 700; letter-spacing: -0.5px; }
+  .headline {
+    font-size: 84px; font-weight: 800; line-height: 1.02;
+    letter-spacing: -2.5px; max-width: 900px;
+  }
+  .headline .accent {
+    background: linear-gradient(90deg, #a5b4fc, #6ee7b7);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { margin-top: 22px; font-size: 30px; color: #b9b9c6; font-weight: 500; }
+  .props { display: flex; gap: 14px; }
+  .pill {
+    font-size: 24px; font-weight: 600; color: #e8e8ef;
+    padding: 14px 24px; border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <div class="logo">A</div>
+    <div class="brand-name">Advance by Bits</div>
+  </div>
+
+  <div>
+    <div class="headline">Get your wages<br /><span class="accent">before payday.</span></div>
+    <div class="sub">Up to $300, instantly. No credit check. No interest.</div>
+  </div>
+
+  <div class="props">
+    <div class="pill">No credit check</div>
+    <div class="pill">0% interest</div>
+    <div class="pill">No late fees</div>
+    <div class="pill">No collections</div>
+  </div>
+</body>
+</html>

@@ -4,6 +4,7 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 import { motion } from "framer-motion";
 
 import { apiUrl } from "./api";
+import { applyRouteSeo } from "./seo";
 import styles from "./App.module.css";
 
 // Shared motion variants for pre-bank flow screens. Page fades + slides up,
@@ -527,6 +528,9 @@ const ResetPassword = () => {
 
 const App = () => {
   const path = window.location.pathname;
+  useEffect(() => {
+    applyRouteSeo(window.location.pathname);
+  }, [path]);
   if (path === ADMIN_PATH) return <AdminApp />;
   if (path === "/reset-password") return <ResetPassword />;
   if (path === "/loan") return <LoanApp />;

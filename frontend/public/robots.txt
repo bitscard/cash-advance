@@ -1,0 +1,17 @@
+# https://advance.getbits.app/robots.txt
+# Marketing pages are open to crawlers; the app, auth, and OAuth
+# return routes carry no SEO value and are kept out of the index.
+
+User-agent: *
+Allow: /$
+Allow: /terms
+Allow: /privacy
+Allow: /story
+Disallow: /loan
+Disallow: /reset-password
+Disallow: /consent
+Disallow: /oauth-return
+Disallow: /*?apply=
+Disallow: /*?ref=
+
+Sitemap: https://advance.getbits.app/sitemap.xml
