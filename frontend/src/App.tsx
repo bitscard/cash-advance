@@ -4194,19 +4194,24 @@ const AdminApp = () => {
 
   // Status → tab bucket mapping. Anything not in these sets falls into
   // 'intake' as a safe default (e.g. unknown future status values).
+  const FUNDED_CURRENT_STATUSES = new Set(["funded", "repayment_scheduled", "repaid", "repayment_failed", "subscription_failed", "written_off"]);
   const TAB_STATUSES: Record<AdminTab, Set<string>> = {
     intake: new Set(["intake", "bank_connected", "reviewing"]),
     approved: new Set(["approved"]),
     denied: new Set(["denied", "expired"]),
-    funded: new Set(["funded", "repayment_scheduled", "repaid", "repayment_failed", "subscription_failed", "written_off"]),
+    funded: FUNDED_CURRENT_STATUSES,
   };
+  const hasFundedHistory = (application: Application) =>
+    FUNDED_CURRENT_STATUSES.has(application.status) || application.repayment_count > 0;
   const tabFor = (status: string): AdminTab => {
     if (TAB_STATUSES.approved.has(status)) return "approved";
     if (TAB_STATUSES.denied.has(status)) return "denied";
     if (TAB_STATUSES.funded.has(status)) return "funded";
     return "intake";
   };
-  const tabApplications = applications.filter(a => tabFor(a.status) === activeTab);
+  const tabApplications = applications.filter(a =>
+    activeTab === "funded" ? hasFundedHistory(a) : tabFor(a.status) === activeTab
+  );
   // Distinct referral codes within the current tab. 'organic' represents
   // users who came through with no code at all (referred_by is null).
   const referralOptionsInTab = Array.from(
@@ -4219,7 +4224,7 @@ const AdminApp = () => {
     intake: applications.filter(a => tabFor(a.status) === "intake").length,
     approved: applications.filter(a => tabFor(a.status) === "approved").length,
     denied: applications.filter(a => tabFor(a.status) === "denied").length,
-    funded: applications.filter(a => tabFor(a.status) === "funded").length,
+    funded: applications.filter(hasFundedHistory).length,
   };
 
   // Days-until-due helper. Returns null if no due date set.
@@ -4258,6 +4263,9 @@ const AdminApp = () => {
 
   // Friendly due-date phrase for the Funded tab.
   const dueDatePhrase = (app: Application): string => {
+    if (!app.repayment && app.repayment_count > 0) {
+      return `Paid back; current status: ${statusLabel[app.status]}`;
+    }
     if (!app.repayment) return "No repayment scheduled";
     const days = daysUntilDue(app.repayment.due_date);
     if (days === null) return "Due date unknown";
@@ -4747,10 +4755,8 @@ const AdminApp = () => {
             const totalApproved = applications.filter(a =>
               ["approved", "funded", "repayment_scheduled", "repaid"].includes(a.status)
             ).length;
-            const totalFunded = applications.filter(a =>
-              ["funded", "repayment_scheduled", "repaid"].includes(a.status)
-            ).length;
-            const totalRepaid = applications.filter(a => a.status === "repaid").length;
+            const totalFunded = applications.filter(hasFundedHistory).length;
+            const totalRepaid = applications.filter(a => a.status === "repaid" || a.repayment_count > 0).length;
             const totalDenied = applications.filter(a =>
               ["denied", "expired"].includes(a.status)
             ).length;
